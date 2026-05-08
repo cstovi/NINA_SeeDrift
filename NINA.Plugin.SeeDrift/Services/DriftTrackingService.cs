@@ -71,10 +71,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : e.TargetLabel;
 
                 AccumulateFromParsed(raHours, decDeg, objectName, e.ExposureUtc, e.Path, label, importTrace,
-                    out var sample, out var clearedTrace);
+                    suppressAutoReset: true,
+                    out var sample, out _);
 
-                if (clearedTrace)
-                    built.Clear();
                 built.Add(sample);
             }
 
@@ -83,7 +82,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 Samples.ReplaceAll(built);
             });
 
-            Logger.Info($"SeeDrift: replay loaded {built.Count}/{entries.Count} FITS files from {folderPath}");
+            Logger.Info($"SeeDrift: replay loaded {built.Count}/{entries.Count} FITS from {folderPath}");
         }
 
         private static void CopyTrace(TraceState from, TraceState to) {
@@ -127,6 +126,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 Application.Current?.Dispatcher.Invoke(() => {
                     AccumulateFromParsed(raHours, decDeg, objectName, exposureUtc, path, label, _trace,
+                        suppressAutoReset: false,
                         out var sample, out var clearedTrace);
 
                     if (clearedTrace)
@@ -140,6 +140,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>Shared drift math for live capture and folder replay.</summary>
+        /// <param name="suppressAutoReset">Folder replay passes true so OBJECT header quirks do not clear the trace mid-folder.</param>
         private void AccumulateFromParsed(
             double raHours,
             double decDeg,
@@ -148,11 +149,12 @@ namespace NINA.Plugin.SeeDrift.Services {
             string path,
             string label,
             TraceState st,
+            bool suppressAutoReset,
             out DriftSample sample,
             out bool clearedTrace) {
 
             clearedTrace = false;
-            if (_plugin.Settings.AutoResetOnTargetChange && objectName != null && st.LastObjectName != null
+            if (!suppressAutoReset && _plugin.Settings.AutoResetOnTargetChange && objectName != null && st.LastObjectName != null
                 && !string.Equals(st.LastObjectName, objectName, StringComparison.OrdinalIgnoreCase)) {
                 clearedTrace = true;
                 st.RefRaHours = null;

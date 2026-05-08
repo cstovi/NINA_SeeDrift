@@ -2,7 +2,7 @@
 
 ## Overview
 
-SeeDrift listens for **saved LIGHT** images and computes **ΔRA** and **ΔDec** in **arcseconds** relative to the **first accepted frame** after you click **Reset trace** (or after an automatic reset when the FITS **OBJECT** name changes, if that option is enabled).
+SeeDrift listens for **saved LIGHT** images and plots **FITS RA / Dec** (degrees) in frame order so you can follow how pointing moved. After **Reset trace**, live capture still uses the first accepted frame as reference for internal offsets and HTML export options.
 
 Use it to visualize tracking drift and to see whether **dither** produces visible steps in RA and/or Dec (sharp jumps vs slow drift).
 
@@ -15,7 +15,7 @@ See [README.md](../README.md). Only the plugin **DLL** is copied into NINA’s p
 | Setting | Meaning |
 |--------|---------|
 | **Only record Seestar cameras** | Requires **Seestar** in the camera name (`ICameraMediator`) or in FITS **INSTRUME**. Turn off to record all cameras that write coordinates. |
-| **Reset trace when FITS OBJECT name changes** | Clears the trace when the **OBJECT** keyword changes between frames (cheap target-change detection). |
+| **Reset trace when FITS OBJECT name changes** | **Live** saves only: clears the trace when **OBJECT** changes between frames. Does **not** apply to **Import FITS folder** (replay always draws one continuous path through every file). |
 | **Default folder** | Starting folder for **Export HTML…** |
 
 ## Workflow
@@ -29,7 +29,7 @@ See [README.md](../README.md). Only the plugin **DLL** is copied into NINA’s p
 
 ### Offline replay
 
-1. Click **Import FITS folder…** and select a directory that contains your lights (not subfolders). The current trace is cleared and replaced by replayed frames.
+1. Click **Import FITS folder…** and select a directory that contains your lights (not subfolders). The current trace is cleared and replaced by replayed frames — **every** readable light is plotted in order.
 2. Files are ordered by **DATE-OBS** / **DATE** / **EXPSTART** when those keywords exist; otherwise by file creation time and name.
 3. Files with **IMAGETYP** / **OBSTYPE** set to something other than light-style imaging are skipped when those keywords are present.
 

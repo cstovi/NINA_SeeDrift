@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Import FITS folder** no longer clears the replay when **Reset trace when OBJECT changes** is on but **OBJECT** strings differ slightly between files (replay now ignores that option so every frame in the folder is plotted).
+
 ## [0.2.0] — 2026-05-08
 
 ### Added
