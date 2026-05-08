@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
 using System.Windows;
 using NINA.Core.Utility;
 using NINA.Equipment.Model;
@@ -12,7 +11,8 @@ using NINA.Plugin.SeeDrift.Utility;
 namespace NINA.Plugin.SeeDrift.Services {
 
     /// <summary>
-    /// Accumulates drift samples from saved LIGHT frames via <see cref="IImageSaveMediator.ImageSaved"/>.
+    /// Accumulates drift samples from saved LIGHT frames via <see cref="IImageSaveMediator.ImageSaved"/>
+    /// or from offline FITS folder replay.
     /// </summary>
     public sealed class DriftTrackingService : IDisposable {
         private readonly SeeDriftPlugin _plugin;
@@ -42,6 +42,24 @@ namespace NINA.Plugin.SeeDrift.Services {
             });
         }
 
+        /// <summary>
+        /// Clears the trace and loads all qualifying FITS in the folder (non-recursive), sorted by DATE-OBS when present.
+        /// </summary>
+        public void ImportFitsFolder(string folderPath) {
+            if (_disposed || string.IsNullOrWhiteSpace(folderPath))
+                return;
+            if (!Directory.Exists(folderPath))
+                return;
+
+            ResetSession();
+
+            var entries = FitsFolderImport.EnumerateSorted(folderPath);
+            foreach (var e in entries)
+                TryAppendSampleFromFits(e.Path, e.ExposureUtc, e.TargetLabel);
+
+            Logger.Info($"SeeDrift: replay loaded {entries.Count} FITS files from {folderPath}");
+        }
+
         private void OnImageSaved(object? sender, ImageSavedEventArgs e) {
             try {
                 if (_disposed) return;
@@ -53,16 +71,29 @@ namespace NINA.Plugin.SeeDrift.Services {
                 if (string.IsNullOrEmpty(path) || !File.Exists(path))
                     return;
 
+                var targetFromSequence = e.MetaData?.Target?.Name?.Trim();
+                var fallbackTarget = !string.IsNullOrEmpty(targetFromSequence)
+                    ? targetFromSequence!
+                    : "Unknown";
+
+                TryAppendSampleFromFits(path, ToUtc(e.MetaData?.Image?.ExposureStart), fallbackTarget);
+            } catch (Exception ex) {
+                Logger.Error($"SeeDrift: error handling saved image: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Parses RA/Dec from FITS, applies Seestar filter, updates reference frame and samples (must run from any thread — marshals to UI).
+        /// </summary>
+        private void TryAppendSampleFromFits(string path, DateTime exposureUtc, string targetLabel) {
+            try {
                 if (!FitsCoordinates.TryReadCoordinates(path, out var raHours, out var decDeg, out var objectName, out var instrument))
                     return;
 
                 if (_plugin.Settings.OnlySeestarCameras && !IsSeestarCamera(instrument))
                     return;
 
-                var targetFromSequence = e.MetaData?.Target?.Name?.Trim();
-                var targetLabel = !string.IsNullOrEmpty(targetFromSequence)
-                    ? targetFromSequence!
-                    : (!string.IsNullOrEmpty(objectName) ? objectName! : "Unknown");
+                var label = !string.IsNullOrEmpty(objectName) ? objectName! : targetLabel;
 
                 Application.Current?.Dispatcher.Invoke(() => {
                     if (_plugin.Settings.AutoResetOnTargetChange && objectName != null && _lastObjectName != null
@@ -86,9 +117,9 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                     var sample = new DriftSample {
                         FrameIndex = _nextFrameIndex++,
-                        ExposureStartUtc = ToUtc(e.MetaData?.Image?.ExposureStart),
+                        ExposureStartUtc = exposureUtc.Kind == DateTimeKind.Utc ? exposureUtc : exposureUtc.ToUniversalTime(),
                         FileName = Path.GetFileName(path),
-                        TargetName = targetLabel,
+                        TargetName = label,
                         DeltaRaArcSec = dRa,
                         DeltaDecArcSec = dDec,
                         RawRaHours = raHours,
@@ -98,7 +129,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     Samples.Add(sample);
                 });
             } catch (Exception ex) {
-                Logger.Error($"SeeDrift: error handling saved image: {ex.Message}");
+                Logger.Error($"SeeDrift: append sample failed for {path}: {ex.Message}");
             }
         }
 

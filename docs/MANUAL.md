@@ -20,10 +20,18 @@ See [README.md](../README.md). Only the plugin **DLL** is copied into NINA’s p
 
 ## Workflow
 
+### Live
+
 1. Open the **SeeDrift** dockable on the Imaging tab.
 2. Click **Reset trace** before or during a run if you want a fresh reference frame.
 3. Accumulate lights; the plot updates per saved frame.
 4. Use **Export HTML…** to save an offline copy (needs network once for Chart.js CDN unless you host scripts locally).
+
+### Offline replay
+
+1. Click **Import FITS folder…** and select a directory that contains your lights (not subfolders). The current trace is cleared and replaced by replayed frames.
+2. Files are ordered by **DATE-OBS** / **DATE** / **EXPSTART** when those keywords exist; otherwise by file creation time and name.
+3. Files with **IMAGETYP** / **OBSTYPE** set to something other than light-style imaging are skipped when those keywords are present.
 
 ## Technical notes
 

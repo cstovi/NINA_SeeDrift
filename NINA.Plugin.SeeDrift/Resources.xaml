@@ -20,6 +20,7 @@
             <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,6">
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <Button Content="Reset trace" Command="{Binding ResetCommand}" Margin="0,0,8,0" Padding="8,4"/>
+                    <Button Content="Import FITS folder…" Command="{Binding ImportFolderCommand}" Margin="0,0,8,0" Padding="8,4"/>
                     <Button Content="Export HTML…" Command="{Binding ExportHtmlCommand}" Padding="8,4"/>
                 </StackPanel>
                 <TextBlock DockPanel.Dock="Right" Text="{Binding SampleCount, StringFormat=Frames: {0}}"

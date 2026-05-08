@@ -12,6 +12,18 @@ namespace NINA.Plugin.SeeDrift.Utility {
     /// </summary>
     internal static class FitsCoordinates {
 
+        /// <summary>Reads primary HDU keyword/value pairs (single header pass).</summary>
+        public static bool TryReadPrimaryHeader(string filePath, out Dictionary<string, string> cards) {
+            cards = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try {
+                using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                cards = ReadPrimaryHeaderDictionary(fs);
+                return cards.Count > 0;
+            } catch {
+                return false;
+            }
+        }
+
         public static bool TryReadCoordinates(string filePath,
             out double raHours, out double decDeg,
             out string? objectName, out string? instrument) {
@@ -20,28 +32,80 @@ namespace NINA.Plugin.SeeDrift.Utility {
             objectName = null;
             instrument = null;
 
-            try {
-                using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                var cards = ReadPrimaryHeaderDictionary(fs);
-                if (cards.Count == 0)
-                    return false;
+            if (!TryReadPrimaryHeader(filePath, out var cards))
+                return false;
 
+            return TryParsePointing(cards, out raHours, out decDeg, out objectName, out instrument);
+        }
+
+        /// <summary>Parses DATE-OBS / DATE / EXPSTART when present (UTC best-effort).</summary>
+        public static bool TryParseObservationUtc(Dictionary<string, string> cards, out DateTime utc) {
+            utc = default;
+            foreach (var key in new[] { "DATE-OBS", "DATE", "EXPSTART", "OBSTIME" }) {
+                if (!cards.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
+                    continue;
+                raw = raw.Trim().Trim('\'', '"');
+                if (DateTime.TryParse(raw, CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)) {
+                    utc = parsed.Kind == DateTimeKind.Utc ? parsed : parsed.ToUniversalTime();
+                    return true;
+                }
+                if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)) {
+                    utc = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Excludes obvious calibration frames when IMAGETYP / OBSTYPE is set; includes unknown types so folders without keywords still load.
+        /// </summary>
+        public static bool PassesLightFilterForReplay(Dictionary<string, string> cards) {
+            static bool CalKeyword(string v) {
+                v = v.Trim('\'', '"').Trim();
+                return v.Equals("BIAS", StringComparison.OrdinalIgnoreCase)
+                    || v.Equals("DARK", StringComparison.OrdinalIgnoreCase)
+                    || v.Equals("FLAT", StringComparison.OrdinalIgnoreCase)
+                    || v.Equals("CALIBRATION", StringComparison.OrdinalIgnoreCase)
+                    || v.Equals("CALIB", StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (cards.TryGetValue("IMAGETYP", out var im) && !string.IsNullOrWhiteSpace(im)) {
+                var v = im.Trim('\'', '"').Trim();
+                if (CalKeyword(v))
+                    return false;
+            }
+            if (cards.TryGetValue("OBSTYPE", out var ob) && !string.IsNullOrWhiteSpace(ob)) {
+                var v = ob.Trim('\'', '"').Trim();
+                if (CalKeyword(v))
+                    return false;
+            }
+            return true;
+        }
+
+        internal static bool TryParsePointing(Dictionary<string, string> cards,
+            out double raHours, out double decDeg,
+            out string? objectName, out string? instrument) {
+            raHours = 0;
+            decDeg = 0;
+            objectName = null;
+            instrument = null;
+
+            try {
                 if (cards.TryGetValue("OBJECT", out var obj))
                     objectName = obj.Trim();
                 if (cards.TryGetValue("INSTRUME", out var ins))
                     instrument = ins.Trim();
 
-                // Prefer WCS CRVAL if clearly degrees / RA Dec.
                 if (TryCrval(cards, out raHours, out decDeg))
                     return true;
 
-                // OBJCTRA / OBJCTDEC strings (hours / degrees sexagesimal or decimal).
                 if (cards.TryGetValue("OBJCTRA", out var ora) && cards.TryGetValue("OBJCTDEC", out var odec)) {
                     if (TryParseRaHours(ora, out raHours) && TryParseDecDeg(odec, out decDeg))
                         return true;
                 }
 
-                // Generic RA / DEC numeric (heuristic; devices vary).
                 if (cards.TryGetValue("RA", out var rsa) && cards.TryGetValue("DEC", out var rdec)) {
                     if (double.TryParse(rsa.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rvRa)
                         && double.TryParse(rdec.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rvDec)) {
@@ -72,18 +136,14 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 return false;
 
             cards.TryGetValue("CTYPE1", out var ct1);
-            cards.TryGetValue("CTYPE2", out var ct2);
             var t1 = ct1 ?? "";
-            var t2 = ct2 ?? "";
 
-            // Equatorial degrees is common for imaging stacks with RA---TAN / DEC--TAN.
             if (t1.IndexOf("RA", StringComparison.OrdinalIgnoreCase) >= 0 && v1 <= 360.0 && v1 >= -360.0) {
                 raHours = v1 / 15.0;
                 decDeg = v2;
                 return true;
             }
 
-            // Already hours / degrees pair on some devices (fallback).
             if (Math.Abs(v1) <= 24.0 && Math.Abs(v2) <= 90.0) {
                 raHours = v1;
                 decDeg = v2;
@@ -130,8 +190,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static bool TryParseRaHours(string s, out double hours) {
             hours = 0;
             s = s.Trim();
-            if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var dec))
-            {
+            if (double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var dec)) {
                 hours = dec;
                 return dec >= 0 && dec <= 24.0;
             }

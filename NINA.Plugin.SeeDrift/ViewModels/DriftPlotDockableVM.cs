@@ -31,16 +31,18 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
             PlotModel = BuildEmptyModel();
             _tracker.Samples.CollectionChanged += (_, _) =>
-                Application.Current?.Dispatcher.Invoke(RefreshPlot);
+                System.Windows.Application.Current?.Dispatcher.Invoke(RefreshPlot);
 
             ResetCommand = new RelayCommand(_ => _tracker.ResetSession());
             ExportHtmlCommand = new RelayCommand(_ => ExportHtml());
+            ImportFolderCommand = new RelayCommand(_ => ImportFitsFolder());
 
             RefreshPlot();
         }
 
         public ICommand ResetCommand { get; }
         public ICommand ExportHtmlCommand { get; }
+        public ICommand ImportFolderCommand { get; }
 
         private PlotModel _plotModel = null!;
         public PlotModel PlotModel {
@@ -115,6 +117,25 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             }
         }
 
+        private void ImportFitsFolder() {
+            try {
+                using var dlg = new System.Windows.Forms.FolderBrowserDialog {
+                    Description = "Select folder containing FITS lights (.fits / .fit / .fts)",
+                    UseDescriptionForTitle = true
+                };
+                var initial = _plugin.HtmlExportFolder;
+                if (!string.IsNullOrWhiteSpace(initial) && Directory.Exists(initial))
+                    dlg.SelectedPath = initial;
+
+                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK || string.IsNullOrWhiteSpace(dlg.SelectedPath))
+                    return;
+
+                _tracker.ImportFitsFolder(dlg.SelectedPath);
+            } catch (Exception ex) {
+                Logger.Error($"SeeDrift folder import failed: {ex.Message}");
+            }
+        }
+
         private void ExportHtml() {
             if (_tracker.Samples.Count == 0)
                 return;
@@ -123,7 +144,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 if (string.IsNullOrWhiteSpace(folder))
                     folder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
-                var dlg = new SaveFileDialog {
+                var dlg = new Microsoft.Win32.SaveFileDialog {
                     Title = "Export SeeDrift HTML",
                     Filter = "HTML|*.html",
                     FileName = $"SeeDrift_{DateTime.Now:yyyyMMdd_HHmmss}.html",

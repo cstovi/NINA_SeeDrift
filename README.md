@@ -1,6 +1,6 @@
 # SeeDrift — NINA plugin
 
-Plots **RA/Dec drift** for **Seestar** (and optionally other cameras) from **saved LIGHT** frames: offsets in arcseconds relative to the first frame in the current trace. Includes a **live dockable** chart (OxyPlot) and **HTML export** (Chart.js).
+Plots **RA/Dec drift** for **Seestar** (and optionally other cameras) from **saved LIGHT** frames: offsets in arcseconds relative to the first frame in the current trace. Includes a **live dockable** chart (OxyPlot), **offline FITS folder replay**, and **HTML export** (Chart.js).
 
 ## Requirements
 
@@ -20,9 +20,17 @@ The csproj includes a post-build copy to that folder when NINA is not locking th
 
 ## Usage
 
+### Live imaging
+
 1. Open **Imaging** → dock **SeeDrift** (Tools/Info panel depending on NINA layout).
 2. Run your sequence; each saved **LIGHT** updates the trace (ΔRA and ΔDec vs frame index).
 3. **Reset trace** clears the reference frame; **Export HTML…** saves the same data as a standalone HTML file.
+
+### Offline testing (no camera)
+
+1. Open **SeeDrift**.
+2. Click **Import FITS folder…** and choose a folder with existing lights (`.fits` / `.fit` / `.fts`, non-recursive). The trace resets and replays files sorted by **DATE-OBS** when present.
+3. Use **Export HTML…** if you want a report file.
 
 Coordinates are read from each FITS primary header (`CRVAL` / `OBJCTRA`+`OBJCTDEC` / `RA`+`DEC`). If headers do not move frame-to-frame, the plot stays flat until metadata or optional plate solving is added.
 
