@@ -38,6 +38,11 @@ namespace NINA.Plugin.SeeDrift.Services {
         private readonly TraceState _trace = new();
         private bool _disposed;
 
+        // Live pixel-registration state (reset on Arm / ResetCurrentTrace).
+        private double[,]? _prevLiveCrop;
+        private double _liveCumX;
+        private double _liveCumY;
+
         public ObservableDriftSamples Samples { get; } = new();
 
         /// <summary>Completed targets accumulated this session (oldest first).</summary>
@@ -123,6 +128,9 @@ namespace NINA.Plugin.SeeDrift.Services {
             _trace.RefDecDeg = null;
             _trace.NextFrameIndex = 0;
             _trace.RefTargetName = null;
+            _prevLiveCrop = null;
+            _liveCumX = 0;
+            _liveCumY = 0;
         }
 
         private void CaptureCurrentTraceToCompleted() {
@@ -334,6 +342,29 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : targetLabel;
 
+                // Pixel registration: compute shift off the UI thread (image I/O is slow).
+                double? pixX = null;
+                double? pixY = null;
+                if (_plugin.Settings.FolderImportPlotMode == FolderPlotMode.PixelRegistration) {
+                    var cropSize = Math.Clamp(_plugin.Settings.RegistrationCropSize, 64, 4096);
+                    if (FitsImageCrop.TryLoadCentralCrop(path, cropSize, out var crop) && crop != null) {
+                        if (_prevLiveCrop == null) {
+                            // First armed frame — this is the origin.
+                            _prevLiveCrop = crop;
+                            _liveCumX = 0;
+                            _liveCumY = 0;
+                        } else {
+                            if (PhaseCorrelation.TryEstimateShift(_prevLiveCrop, crop, out var dy, out var dx)) {
+                                _liveCumX += dx;
+                                _liveCumY += dy;
+                            }
+                            _prevLiveCrop = crop;
+                        }
+                        pixX = _liveCumX;
+                        pixY = _liveCumY;
+                    }
+                }
+
                 Application.Current?.Dispatcher.Invoke(() => {
                     // Auto-capture + reset when the OBJECT name changes (e.g. missing Stop between targets).
                     if (_trace.RefRaHours.HasValue
@@ -347,7 +378,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                         ResetCurrentTrace();
                     }
 
-                    AccumulateFromParsed(raHours, decDeg, exposureUtc, path, label, _trace, null, null, out var sample);
+                    AccumulateFromParsed(raHours, decDeg, exposureUtc, path, label, _trace, pixX, pixY, out var sample);
                     Samples.Add(sample);
                 });
             } catch (Exception ex) {

@@ -77,14 +77,21 @@ namespace NINA.Plugin.SeeDrift {
                 _folderImportPlotMode = value;
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(FolderImportUsesPixelRegistration));
+                RaisePropertyChanged(nameof(FolderImportUsesHeaderCoordinates));
                 SyncSettingsFromProperties();
             }
         }
 
-        /// <summary>UI helper for folder import mode (<see cref="FolderPlotMode"/>).</summary>
+        /// <summary>UI helper — true when pixel registration mode is selected.</summary>
         public bool FolderImportUsesPixelRegistration {
             get => FolderImportPlotMode == FolderPlotMode.PixelRegistration;
             set => FolderImportPlotMode = value ? FolderPlotMode.PixelRegistration : FolderPlotMode.FitsHeaderCoordinates;
+        }
+
+        /// <summary>UI helper — true when FITS header coordinates mode is selected.</summary>
+        public bool FolderImportUsesHeaderCoordinates {
+            get => FolderImportPlotMode == FolderPlotMode.FitsHeaderCoordinates;
+            set => FolderImportPlotMode = value ? FolderPlotMode.FitsHeaderCoordinates : FolderPlotMode.PixelRegistration;
         }
 
         private int _registrationCropSize = 800;

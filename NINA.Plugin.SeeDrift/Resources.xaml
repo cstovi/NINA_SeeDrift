@@ -59,6 +59,33 @@
 
     <DataTemplate x:Key="SeeDrift_Options" DataType="{x:Type local:SeeDriftPlugin}">
         <StackPanel Margin="8" MaxWidth="560">
+
+            <TextBlock Text="Drift source" FontWeight="Bold" Margin="0,0,0,6"/>
+            <StackPanel Margin="0,0,0,4">
+                <RadioButton Content="FITS header coordinates (fast, uses RA/Dec from headers)"
+                             IsChecked="{Binding FolderImportUsesHeaderCoordinates}"
+                             Margin="0,0,0,4"/>
+                <RadioButton Content="Pixel registration (slower, reads image data — more accurate for Seestar)"
+                             IsChecked="{Binding FolderImportUsesPixelRegistration}"
+                             Margin="0,0,0,4"/>
+            </StackPanel>
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="160"/>
+                    <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Registration crop (px):" VerticalAlignment="Center" Margin="0,0,8,0"
+                           IsEnabled="{Binding FolderImportUsesPixelRegistration}"/>
+                <TextBox Grid.Column="1"
+                         Text="{Binding RegistrationCropSize, UpdateSourceTrigger=PropertyChanged}"
+                         IsEnabled="{Binding FolderImportUsesPixelRegistration}"
+                         VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="  px (centre crop compared frame-to-frame)"
+                           VerticalAlignment="Center" Foreground="#888" FontSize="11"
+                           IsEnabled="{Binding FolderImportUsesPixelRegistration}"/>
+            </Grid>
+
             <TextBlock Text="HTML export" FontWeight="Bold" Margin="0,0,0,6"/>
             <Grid Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
