@@ -4,7 +4,7 @@ using System.Windows;
 
 [assembly: AssemblyTitle("SeeDrift")]
 [assembly: AssemblyMetadata("MinimumApplicationVersion", "3.2.0.9001")]
-[assembly: AssemblyMetadata("FeaturedImageURL", "https://i.ibb.co/dJf1KNtz/seedrift.jpg")]
+[assembly: AssemblyMetadata("FeaturedImageURL", "https://i.ibb.co/PsM1CDGS/Screenshot-2026-05-08-203201.png")]
 [assembly: AssemblyMetadata("ChangelogURL", "https://github.com/cstovi/NINA_SeeDrift/releases")]
 [assembly: AssemblyDescription("Plots Seestar frame-to-frame RA/Dec drift from saved lights — live dockable chart plus HTML export.")]
 [assembly: AssemblyMetadata("ShortDescription", "Live drift plot and HTML report from FITS coordinates on each saved light frame.")]
