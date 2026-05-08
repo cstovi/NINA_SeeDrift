@@ -65,7 +65,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 var dotSize = 2.0;
                 var dotColor = OxyColor.FromAColor(160, OxyColor.FromRgb(130, 180, 255));
 
-                // Faint connecting line so the drift direction is still readable.
+                // Y is negated for display: FITS rows increase downward, so positive
+                // cumulative Y (stars shifted to higher row numbers) appears DOWN on the
+                // plot, matching the natural orientation of the sensor.
+                static double PlotY(double y) => -y;
+
                 var pathLine = new LineSeries {
                     Title           = "Pixel drift path",
                     Color           = OxyColor.FromAColor(55, dotColor),
@@ -75,10 +79,9 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 foreach (var s in ordered)
                     pathLine.Points.Add(new DataPoint(
                         s.CumulativePixelX!.Value,
-                        s.CumulativePixelY!.Value));
+                        PlotY(s.CumulativePixelY!.Value)));
                 model.Series.Add(pathLine);
 
-                // All frame dots — uniform colour, drawn on top of the line.
                 var scatter = new ScatterSeries {
                     Title          = "Frames",
                     MarkerType     = MarkerType.Circle,
@@ -89,10 +92,9 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 foreach (var s in ordered)
                     scatter.Points.Add(new ScatterPoint(
                         s.CumulativePixelX!.Value,
-                        s.CumulativePixelY!.Value));
+                        PlotY(s.CumulativePixelY!.Value)));
                 model.Series.Add(scatter);
 
-                // Start (frame 1 = reference) in green.
                 if (ordered.Count > 0) {
                     var first = ordered[0];
                     var startDot = new ScatterSeries {
@@ -105,11 +107,10 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     };
                     startDot.Points.Add(new ScatterPoint(
                         first.CumulativePixelX!.Value,
-                        first.CumulativePixelY!.Value));
+                        PlotY(first.CumulativePixelY!.Value)));
                     model.Series.Add(startDot);
                 }
 
-                // End frame in orange.
                 if (ordered.Count > 1) {
                     var last = ordered[^1];
                     var endDot = new ScatterSeries {
@@ -122,7 +123,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     };
                     endDot.Points.Add(new ScatterPoint(
                         last.CumulativePixelX!.Value,
-                        last.CumulativePixelY!.Value));
+                        PlotY(last.CumulativePixelY!.Value)));
                     model.Series.Add(endDot);
                 }
 
@@ -226,28 +227,30 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             var xAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Bottom);
             var yAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Left);
 
+            // Update Y axis label to reflect the display convention.
+            yAxis.Title = "Cumulative Y (px, ↓ = sensor down)";
+
             if (samples.Count == 0) {
                 xAxis.Minimum = -1; xAxis.Maximum = 1;
                 yAxis.Minimum = -1; yAxis.Maximum = 1;
                 return;
             }
 
+            // Y is negated for display (positive sensor shift = down on screen).
             var xs = samples.Select(s => s.CumulativePixelX!.Value).ToList();
-            var ys = samples.Select(s => s.CumulativePixelY!.Value).ToList();
+            var ys = samples.Select(s => -s.CumulativePixelY!.Value).ToList();
+            const double padRatio = 0.10;
+            const double minSpanPx = 4.0;
+
             var minX = xs.Min(); var maxX = xs.Max();
             var minY = ys.Min(); var maxY = ys.Max();
-            var midX = (minX + maxX) / 2.0;
-            var midY = (minY + maxY) / 2.0;
+            var spanX = Math.Max(maxX - minX, minSpanPx);
+            var spanY = Math.Max(maxY - minY, minSpanPx);
 
-            // Use equal scale: both axes span the same pixel range so 1 px in X = 1 px
-            // in Y. Add 15% padding around the larger dimension.
-            const double padFactor = 1.15;
-            var halfSpan = Math.Max(Math.Max(maxX - minX, maxY - minY), 4.0) / 2.0 * padFactor;
-
-            xAxis.Minimum = midX - halfSpan;
-            xAxis.Maximum = midX + halfSpan;
-            yAxis.Minimum = midY - halfSpan;
-            yAxis.Maximum = midY + halfSpan;
+            xAxis.Minimum = minX - spanX * padRatio;
+            xAxis.Maximum = maxX + spanX * padRatio;
+            yAxis.Minimum = minY - spanY * padRatio;
+            yAxis.Maximum = maxY + spanY * padRatio;
         }
 
         private void WarnIfFlatTrace(bool pixelPlot) {
@@ -323,7 +326,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             });
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Left,
-                Title = pixelPlot ? "Cumulative Y (px)" : "ΔDec (arcsec)",
+                Title = pixelPlot ? "Cumulative Y (px, ↓ = sensor down)" : "ΔDec (arcsec)",
                 TitleColor = OxyColor.FromRgb(200, 210, 230),
                 AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
