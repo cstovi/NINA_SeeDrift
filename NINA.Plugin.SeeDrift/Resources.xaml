@@ -22,6 +22,8 @@
                     <Button Content="Reset" Command="{Binding ResetCommand}" Margin="0,0,8,0" Padding="8,4"/>
                     <Button Content="Import FITS folder…" Command="{Binding ImportFolderCommand}" Margin="0,0,8,0" Padding="8,4"/>
                     <Button Content="Save report now" Command="{Binding SaveReportNowCommand}" Padding="8,4"/>
+                    <TextBlock Text="{Binding DriftModeLabel, StringFormat=' · {0}'}"
+                               VerticalAlignment="Center" Foreground="#888" Margin="8,0,0,0" FontSize="11"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
                     <Ellipse Width="8" Height="8" Margin="0,0,5,0" VerticalAlignment="Center">
@@ -63,9 +65,11 @@
             <TextBlock Text="Drift source" FontWeight="Bold" Margin="0,0,0,6"/>
             <StackPanel Margin="0,0,0,4">
                 <RadioButton Content="FITS header coordinates (fast, uses RA/Dec from headers)"
+                             GroupName="DriftSourceMode"
                              IsChecked="{Binding FolderImportUsesHeaderCoordinates}"
                              Margin="0,0,0,4"/>
                 <RadioButton Content="Pixel registration (slower, reads image data — more accurate for Seestar)"
+                             GroupName="DriftSourceMode"
                              IsChecked="{Binding FolderImportUsesPixelRegistration}"
                              Margin="0,0,0,4"/>
             </StackPanel>

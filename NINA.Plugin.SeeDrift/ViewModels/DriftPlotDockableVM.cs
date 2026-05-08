@@ -60,6 +60,12 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             _tracker.Samples.CollectionChanged += (_, _) =>
                 System.Windows.Application.Current?.Dispatcher.Invoke(() => RaisePropertyChanged(nameof(IsArmed)));
 
+            // Keep the mode label in sync when the user changes the option.
+            _plugin.PropertyChanged += (_, e) => {
+                if (e.PropertyName == nameof(SeeDriftPlugin.FolderImportPlotMode))
+                    System.Windows.Application.Current?.Dispatcher.Invoke(() => RaisePropertyChanged(nameof(DriftModeLabel)));
+            };
+
             RefreshPlot();
         }
 
@@ -68,6 +74,10 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
         public ICommand ImportFolderCommand { get; }
 
         public bool IsArmed => _tracker.IsArmed;
+
+        public string DriftModeLabel => _plugin.FolderImportPlotMode == Models.FolderPlotMode.PixelRegistration
+            ? "pixel reg"
+            : "header coords";
 
         private PlotModel _plotModel = null!;
         public PlotModel PlotModel {
