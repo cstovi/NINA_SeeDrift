@@ -43,16 +43,6 @@
                            TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
                 <CheckBox Grid.Column="1" IsChecked="{Binding FolderImportUsesPixelRegistration}" VerticalAlignment="Center"/>
             </Grid>
-            <Grid Margin="0,0,0,12"
-                  Visibility="{Binding FolderImportUsesPixelRegistration, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="180"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Registration crop (px):" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="1" Text="{Binding RegistrationCropSize, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
-            </Grid>
-
             <TextBlock Text="HTML export" FontWeight="Bold" Margin="0,0,0,6"/>
             <Grid Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
