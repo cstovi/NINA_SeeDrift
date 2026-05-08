@@ -4,6 +4,8 @@ using System.Windows;
 
 [assembly: AssemblyTitle("SeeDrift")]
 [assembly: AssemblyMetadata("MinimumApplicationVersion", "3.2.0.9001")]
+[assembly: AssemblyMetadata("FeaturedImageURL", "https://i.ibb.co/dJf1KNtz/seedrift.jpg")]
+[assembly: AssemblyMetadata("ChangelogURL", "https://github.com/cstovi/NINA_SeeDrift/releases")]
 [assembly: AssemblyDescription("Plots Seestar frame-to-frame RA/Dec drift from saved lights — live dockable chart plus HTML export.")]
 [assembly: AssemblyMetadata("ShortDescription", "Live drift plot and HTML report from FITS coordinates on each saved light frame.")]
 [assembly: AssemblyMetadata("LongDescription", @"SeeDrift listens for saved LIGHT images and plots offsets in arcseconds relative to the first frame of the current run (or after Reset). Use it to see tracking drift and whether mount dither steps appear in both RA and Dec.
