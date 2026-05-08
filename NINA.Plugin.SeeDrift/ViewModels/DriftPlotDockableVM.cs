@@ -31,7 +31,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
             Title = "SeeDrift";
 
-            PlotModel = BuildEmptyModel();
+            PlotModel = BuildEmptyModel(0);
             _tracker.Samples.CollectionChanged += (_, _) =>
                 System.Windows.Application.Current?.Dispatcher.Invoke(RefreshPlot);
 
@@ -53,13 +53,14 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
         }
 
         private void RefreshPlot() {
-            var model = BuildEmptyModel();
+            var n = _tracker.Samples.Count;
+            var model = BuildEmptyModel(n);
             var pathSeries = new LineSeries {
                 Title = "Frame order (FITS RA/Dec)",
                 Color = OxyColor.FromRgb(100, 200, 255),
                 StrokeThickness = 1.75,
                 MarkerType = MarkerType.Circle,
-                MarkerSize = 3.5,
+                MarkerSize = n > 100 ? 2.25 : 3.5,
                 MarkerFill = OxyColor.FromRgb(100, 200, 255),
                 MarkerStroke = OxyColors.Transparent
             };
@@ -137,14 +138,18 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 "Prefer per-frame solved RA/DEC, or turn off Seestar-only if headers lack INSTRUME.");
         }
 
-        private static PlotModel BuildEmptyModel() {
+        private static PlotModel BuildEmptyModel(int frameCount) {
             var gridMajor = OxyColor.FromAColor(55, OxyColor.FromRgb(180, 180, 190));
             var gridMinor = OxyColor.FromAColor(35, OxyColor.FromRgb(140, 140, 155));
             var axisLine = OxyColor.FromRgb(95, 95, 105);
 
             var m = new PlotModel {
-                Title = "Pointing path (FITS RA / Dec, consecutive frames)",
+                Title = "Pointing path — RA° vs Dec° per FITS frame",
+                Subtitle = frameCount > 0
+                    ? $"{frameCount} markers · line connects frames in time order (DATE-OBS / capture order)"
+                    : "",
                 TitleColor = OxyColor.FromRgb(230, 230, 235),
+                SubtitleColor = OxyColor.FromRgb(170, 175, 185),
                 Background = OxyColor.FromRgb(26, 26, 30),
                 TextColor = OxyColor.FromRgb(210, 210, 218),
                 PlotAreaBorderColor = OxyColor.FromRgb(58, 58, 66)

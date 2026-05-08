@@ -60,13 +60,19 @@ namespace NINA.Plugin.SeeDrift.Services {
             var entries = FitsFolderImport.EnumerateSorted(folderPath);
             var importTrace = new TraceState();
             var built = new List<DriftSample>(entries.Count);
+            var skippedParse = 0;
+            var skippedSeestar = 0;
 
             foreach (var e in entries) {
-                if (!FitsCoordinates.TryReadCoordinates(e.Path, out var raHours, out var decDeg, out var objectName, out var instrument))
+                if (!FitsCoordinates.TryReadCoordinates(e.Path, out var raHours, out var decDeg, out var objectName, out var instrument)) {
+                    skippedParse++;
                     continue;
+                }
 
-                if (_plugin.Settings.OnlySeestarCameras && !IsSeestarCamera(instrument))
+                if (!PassesSeestarFilter(instrument, folderReplay: true)) {
+                    skippedSeestar++;
                     continue;
+                }
 
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : e.TargetLabel;
 
@@ -82,7 +88,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 Samples.ReplaceAll(built);
             });
 
-            Logger.Info($"SeeDrift: replay loaded {built.Count}/{entries.Count} FITS from {folderPath}");
+            Logger.Info(
+                $"SeeDrift: replay {built.Count}/{entries.Count} FITS from {folderPath} (skipped: no coords {skippedParse}, Seestar filter {skippedSeestar})");
         }
 
         private static void CopyTrace(TraceState from, TraceState to) {
@@ -119,7 +126,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 if (!FitsCoordinates.TryReadCoordinates(path, out var raHours, out var decDeg, out var objectName, out var instrument))
                     return;
 
-                if (_plugin.Settings.OnlySeestarCameras && !IsSeestarCamera(instrument))
+                if (!PassesSeestarFilter(instrument, folderReplay: false))
                     return;
 
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : targetLabel;
@@ -193,12 +200,22 @@ namespace NINA.Plugin.SeeDrift.Services {
             return v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime();
         }
 
-        private bool IsSeestarCamera(string? instrument) {
+        /// <summary>
+        /// Live: connected Seestar camera passes; else FITS INSTRUME must contain Seestar when filter is on.
+        /// Folder replay: same, but if INSTRUME is missing we still accept (no camera / stripped keyword — cannot infer non-Seestar).
+        /// </summary>
+        private bool PassesSeestarFilter(string? instrument, bool folderReplay) {
+            if (!_plugin.Settings.OnlySeestarCameras)
+                return true;
+
             try {
                 var camName = _plugin.CameraMediator.GetInfo()?.Name ?? "";
                 if (camName.IndexOf("Seestar", StringComparison.OrdinalIgnoreCase) >= 0)
                     return true;
             } catch { }
+
+            if (folderReplay && string.IsNullOrWhiteSpace(instrument))
+                return true;
 
             return !string.IsNullOrEmpty(instrument)
                 && instrument.IndexOf("Seestar", StringComparison.OrdinalIgnoreCase) >= 0;

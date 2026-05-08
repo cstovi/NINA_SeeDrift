@@ -14,7 +14,7 @@ See [README.md](../README.md). Only the plugin **DLL** is copied into NINA’s p
 
 | Setting | Meaning |
 |--------|---------|
-| **Only record Seestar cameras** | Requires **Seestar** in the camera name (`ICameraMediator`) or in FITS **INSTRUME**. Turn off to record all cameras that write coordinates. |
+| **Only record Seestar cameras** | **Live:** requires **Seestar** in the camera name (`ICameraMediator`) or in FITS **INSTRUME**. **Folder replay:** if **INSTRUME** is absent, frames are still accepted (the plugin cannot infer the camera from FITS alone). Turn off to record every camera. |
 | **Reset trace when FITS OBJECT name changes** | **Live** saves only: clears the trace when **OBJECT** changes between frames. Does **not** apply to **Import FITS folder** (replay always draws one continuous path through every file). |
 | **Default folder** | Starting folder for **Export HTML…** |
 
