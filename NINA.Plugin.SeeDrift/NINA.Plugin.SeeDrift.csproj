@@ -12,7 +12,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="NINA.Plugin" Version="3.2.0.9001" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
@@ -20,10 +19,6 @@
 
   <Target Name="CopyToNina" AfterTargets="Build">
     <Copy SourceFiles="$(OutputPath)NINA.Plugin.SeeDrift.dll"
-          DestinationFolder="$(LOCALAPPDATA)\NINA\Plugins\3.0.0\SeeDrift"
-          SkipUnchangedFiles="true"
-          ContinueOnError="true" />
-    <Copy SourceFiles="$(OutputPath)MathNet.Numerics.dll"
           DestinationFolder="$(LOCALAPPDATA)\NINA\Plugins\3.0.0\SeeDrift"
           SkipUnchangedFiles="true"
           ContinueOnError="true" />
