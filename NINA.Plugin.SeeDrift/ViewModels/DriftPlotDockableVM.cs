@@ -13,6 +13,7 @@ using NINA.Profile.Interfaces;
 using NINA.WPF.Base.ViewModel;
 using OxyPlot;
 using OxyPlot.Axes;
+using OxyPlot.Legends;
 using OxyPlot.Series;
 
 namespace NINA.Plugin.SeeDrift.ViewModels {
@@ -377,7 +378,18 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 MinorGridlineColor = gridMinor,
                 TicklineColor = axisLine
             });
-            m.IsLegendVisible = true;
+            m.Legends.Add(new Legend {
+                LegendPosition           = LegendPosition.TopRight,
+                LegendBackground         = OxyColor.FromAColor(160, OxyColor.FromRgb(26, 26, 30)),
+                LegendBorder             = OxyColor.FromRgb(70, 70, 80),
+                LegendBorderThickness    = 1,
+                LegendTextColor          = OxyColor.FromRgb(210, 210, 218),
+                LegendTitleColor         = OxyColor.FromRgb(210, 210, 218),
+                LegendFontSize           = 11,
+                LegendItemSpacing        = 4,
+                LegendMargin             = 8,
+                LegendPadding            = 6,
+            });
             return m;
         }
 
