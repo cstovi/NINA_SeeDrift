@@ -19,7 +19,15 @@ namespace NINA.Plugin.SeeDrift.Services {
             public double? RefRaHours;
             public double? RefDecDeg;
             public int NextFrameIndex;
+            public string? RefTargetName;
         }
+
+        /// <summary>
+        /// If the new frame's pointing is further than this from the current reference,
+        /// treat it as a new target and auto-reset the live trace.
+        /// 0.5° = 1800 arcsec covers any realistic dither/drift scenario.
+        /// </summary>
+        private const double LiveAutoResetThresholdArcSec = 1800.0;
 
         private readonly SeeDriftPlugin _plugin;
         private readonly IImageSaveMediator _imageSaveMediator;
@@ -209,6 +217,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             to.RefRaHours = from.RefRaHours;
             to.RefDecDeg = from.RefDecDeg;
             to.NextFrameIndex = from.NextFrameIndex;
+            to.RefTargetName = from.RefTargetName;
         }
 
         private void OnImageSaved(object? sender, ImageSavedEventArgs e) {
@@ -241,6 +250,31 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : targetLabel;
 
                 Application.Current?.Dispatcher.Invoke(() => {
+                    // Auto-reset when the target name changes or the scope has slewed
+                    // further than the live reset threshold from the current reference.
+                    if (_trace.RefRaHours.HasValue) {
+                        var nameChanged = !string.IsNullOrEmpty(_trace.RefTargetName)
+                            && !string.IsNullOrEmpty(label)
+                            && !string.Equals(_trace.RefTargetName, label, StringComparison.OrdinalIgnoreCase);
+
+                        AstrometryMath.DeltaArcSec(_trace.RefRaHours.Value, _trace.RefDecDeg!.Value,
+                            raHours, decDeg, out var dRa, out var dDec);
+                        var distArcSec = Math.Sqrt(dRa * dRa + dDec * dDec);
+                        var positionJumped = distArcSec > LiveAutoResetThresholdArcSec;
+
+                        if (nameChanged || positionJumped) {
+                            var reason = nameChanged
+                                ? $"target changed to \"{label}\""
+                                : $"slew detected ({distArcSec / 3600.0:F2}°)";
+                            Logger.Info($"SeeDrift: auto-reset live trace — {reason}");
+                            Samples.Clear();
+                            _trace.RefRaHours = null;
+                            _trace.RefDecDeg = null;
+                            _trace.NextFrameIndex = 0;
+                            _trace.RefTargetName = null;
+                        }
+                    }
+
                     AccumulateFromParsed(raHours, decDeg, exposureUtc, path, label, _trace, null, null, out var sample);
                     Samples.Add(sample);
                 });
@@ -263,6 +297,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (st.RefRaHours == null || st.RefDecDeg == null) {
                 st.RefRaHours = raHours;
                 st.RefDecDeg = decDeg;
+                st.RefTargetName = label;
             }
 
             AstrometryMath.DeltaArcSec(st.RefRaHours.Value, st.RefDecDeg.Value, raHours, decDeg,
