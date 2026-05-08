@@ -53,7 +53,7 @@
                 </StackPanel>
             </DockPanel>
             <TextBlock Grid.Row="1" Text="{Binding LastSummary}" TextWrapping="Wrap" Foreground="#CCC" Margin="0,0,0,8"/>
-            <oxy:PlotView Grid.Row="2" Model="{Binding PlotModel}" MinHeight="240"/>
+            <oxy:PlotView Grid.Row="2" Model="{Binding PlotModel}" Controller="{Binding PlotController}" MinHeight="240"/>
         </Grid>
     </DataTemplate>
 

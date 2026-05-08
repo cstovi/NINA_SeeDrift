@@ -25,6 +25,21 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
         private bool _warnedFlatTrace;
         private string? _lastImportFolder;
 
+        // Expose a controller with a generous snap radius so hovering near (not
+        // exactly on) a small dot still fires the tracker tooltip.
+        public IPlotController PlotController { get; } = BuildController();
+
+        private static IPlotController BuildController() {
+            var c = new PlotController();
+            c.UnbindMouseMove();
+            c.BindMouseMove(new DelegatePlotCommand<OxyMouseEventArgs>(
+                (view, ctrl, args) =>
+                    ctrl.AddMouseManipulator(view,
+                        new TrackerManipulator(view) { Snap = false, PointsOnly = true, FiresDistance = 30.0 },
+                        args)));
+            return c;
+        }
+
         [ImportingConstructor]
         public DriftPlotDockableVM(IProfileService profileService, SeeDriftPlugin plugin)
             : base(profileService) {
