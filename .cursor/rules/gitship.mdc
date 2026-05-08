@@ -1,21 +1,29 @@
 ---
-description: GitShip — commits (and optional push) should land when work is finished; hooks auto-commit on agent stop.
+description: GitShip — commits, pushes, docs parity; Cursor hook auto-commit/push on agent stop.
 alwaysApply: true
 ---
 
-# GitShip — commit, push, version
+# GitShip — commit, push, version, docs
 
-**Rollback depends on commits.** This repo uses a Cursor **hook** (`.cursor/hooks/gitship-commit.ps1` on `stop`) that **auto-commits** any pending changes when an agent run completes, using message `cursor(gitship): sync workspace edits …` when you did not commit manually first. After a successful commit, if **`origin`** exists, it runs **`git push`** (and `git push -u origin HEAD` once if needed).
+**Rollback depends on commits.** Canonical/shared GitShip rules (including documentation scaffold guidance) live in **`NINA_shared/gitship.mdc`** — update that file when improving GitShip for all See\* plugins.
 
-## Agent behavior
+This repo uses a Cursor **`stop`** hook (`.cursor/hooks/gitship-commit.ps1`): after an agent run finishes, it **auto-commits** pending changes as `cursor(gitship): sync workspace edits …` if nothing was committed yet, then **`git push`** when **`origin`** exists.
 
-1. Prefer **one logical commit per change** with a **clear imperative subject** when you commit during the session (these messages beat the hook’s generic sync message).
-2. Before ending a turn that modified files: run `git status`. If there are meaningful changes, **commit** (and **push** if `origin` exists and network is allowed) unless the user asked to hold commits.
-3. Respect `.gitignore`. Do **not** commit secrets.
-4. If **git_write** / **network** is blocked: print exact `git` commands for the user.
-5. If you commit manually and **origin** is set, **push** when the session allows (`git push` or `git push -u origin HEAD` the first time).
+## Agent behavior (mandatory)
+
+1. Prefer **clear imperative commit subjects** when you commit during the session (better than the hook’s generic message).
+
+2. **Before ending a turn** that modified project files: run `git status`. **Commit and push** when meaningful changes exist unless the user asked to hold commits.
+
+3. **Documentation parity** — same rules as **SeeDark** / **NINA_shared/gitship.mdc**: when behavior, install, options, or version changes, **update or create** `README.md`, `CHANGELOG.md`, `docs/MANUAL.md` (and `CLAUDE.md` / `docs/*.md` as applicable) **in the same session**. If a file is missing but users need it, **scaffold** with real sections—not empty files.
+
+4. Respect `.gitignore`. Do **not** commit secrets.
+
+5. If **git_write** / **network** is blocked: print exact `git` commands for the user.
+
+6. **Versioning:** bump **AssemblyVersion** / plugin version when shipping meaningful releases; follow project conventions.
 
 ## Do not
 
 - Force-push to shared branches.
-- Leave finished features uncommitted when the hook is off or skipped.
+- Ship user-visible changes without aligned docs when GitShip says to document them.
