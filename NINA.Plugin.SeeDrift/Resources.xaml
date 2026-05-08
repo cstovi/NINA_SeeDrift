@@ -33,27 +33,6 @@
 
     <DataTemplate x:Key="SeeDrift_Options" DataType="{x:Type local:SeeDriftPlugin}">
         <StackPanel Margin="8" MaxWidth="560">
-            <TextBlock Text="Tracking" FontWeight="Bold" Margin="0,0,0,6"/>
-            <!-- Explicit labels: NINA styles CheckBoxes as switches and may hide Content beside the thumb. -->
-            <Grid Margin="0,0,0,8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Only record Seestar cameras (camera name or INSTRUME contains Seestar)"
-                           TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                <CheckBox Grid.Column="1" IsChecked="{Binding OnlySeestarCameras}" VerticalAlignment="Center"/>
-            </Grid>
-            <Grid Margin="0,0,0,12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Reset trace when FITS OBJECT name changes"
-                           TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                <CheckBox Grid.Column="1" IsChecked="{Binding AutoResetOnTargetChange}" VerticalAlignment="Center"/>
-            </Grid>
-
             <TextBlock Text="HTML export" FontWeight="Bold" Margin="0,0,0,6"/>
             <Grid Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>

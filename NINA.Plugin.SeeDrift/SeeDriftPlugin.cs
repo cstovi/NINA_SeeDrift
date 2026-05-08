@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using NINA.Equipment.Interfaces.Mediator;
 using NINA.Plugin;
 using NINA.Plugin.Interfaces;
 using NINA.Plugin.SeeDrift.Services;
@@ -22,7 +21,6 @@ namespace NINA.Plugin.SeeDrift {
         protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
-        public ICameraMediator CameraMediator { get; }
         public IImageSaveMediator ImageSaveMediator { get; }
         public IProfileService ProfileService { get; }
 
@@ -31,19 +29,15 @@ namespace NINA.Plugin.SeeDrift {
 
         [ImportingConstructor]
         public SeeDriftPlugin(
-            ICameraMediator cameraMediator,
             IImageSaveMediator imageSaveMediator,
             IProfileService profileService) {
-            CameraMediator = cameraMediator;
             ImageSaveMediator = imageSaveMediator;
             ProfileService = profileService;
 
             Settings = SeeDriftSettings.Load();
-            DriftTracker = new DriftTrackingService(this, ImageSaveMediator);
+            DriftTracker = new DriftTrackingService(ImageSaveMediator);
 
             _isInitializing = true;
-            OnlySeestarCameras = Settings.OnlySeestarCameras;
-            AutoResetOnTargetChange = Settings.AutoResetOnTargetChange;
             HtmlExportFolder = Settings.HtmlExportFolder;
             _isInitializing = false;
         }
@@ -57,25 +51,11 @@ namespace NINA.Plugin.SeeDrift {
             if (_isInitializing || _isSyncing) return;
             _isSyncing = true;
             try {
-                Settings.OnlySeestarCameras = _onlySeestarCameras;
-                Settings.AutoResetOnTargetChange = _autoResetOnTargetChange;
                 Settings.HtmlExportFolder = _htmlExportFolder;
                 Settings.Save();
             } finally {
                 _isSyncing = false;
             }
-        }
-
-        private bool _onlySeestarCameras = true;
-        public bool OnlySeestarCameras {
-            get => _onlySeestarCameras;
-            set { _onlySeestarCameras = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
-        }
-
-        private bool _autoResetOnTargetChange = true;
-        public bool AutoResetOnTargetChange {
-            get => _autoResetOnTargetChange;
-            set { _autoResetOnTargetChange = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
         }
 
         private string _htmlExportFolder = "";

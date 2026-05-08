@@ -1,6 +1,6 @@
 # SeeDrift — NINA plugin
 
-Plots **RA/Dec drift** for **Seestar** (and optionally other cameras) from **saved LIGHT** frames: offsets in arcseconds relative to the first frame in the current trace. Includes a **live dockable** chart (OxyPlot), **offline FITS folder replay**, and **HTML export** (Chart.js).
+Plots **RA/Dec drift** from **saved LIGHT** frames (any camera): offsets in arcseconds relative to the first frame in the current trace. Includes a **live dockable** chart (OxyPlot), **offline FITS folder replay**, and **HTML export** (Chart.js).
 
 ## Requirements
 

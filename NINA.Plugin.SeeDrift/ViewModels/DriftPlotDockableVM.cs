@@ -135,7 +135,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             _warnedFlatTrace = true;
             Logger.Warning(
                 "SeeDrift: all frames share identical pointing in FITS headers (often fixed CRVAL/OBJCT). " +
-                "Prefer per-frame solved RA/DEC, or turn off Seestar-only if headers lack INSTRUME.");
+                "Prefer per-frame solved RA/DEC in metadata if you expect dither or tracking motion.");
         }
 
         private static PlotModel BuildEmptyModel(int frameCount) {

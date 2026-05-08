@@ -14,9 +14,9 @@ See [README.md](../README.md). Only the plugin **DLL** is copied into NINA’s p
 
 | Setting | Meaning |
 |--------|---------|
-| **Only record Seestar cameras** | **Live:** requires **Seestar** in the camera name (`ICameraMediator`) or in FITS **INSTRUME**. **Folder replay:** if **INSTRUME** is absent, frames are still accepted (the plugin cannot infer the camera from FITS alone). Turn off to record every camera. |
-| **Reset trace when FITS OBJECT name changes** | **Live** saves only: clears the trace when **OBJECT** changes between frames. Does **not** apply to **Import FITS folder** (replay always draws one continuous path through every file). |
 | **Default folder** | Starting folder for **Export HTML…** |
+
+Session discipline (**one scope / one target run**, separate folders for replay) is up to you. Use **Reset trace** when you want a new reference frame or before a new session.
 
 ## Workflow
 
@@ -43,5 +43,5 @@ See [README.md](../README.md). Only the plugin **DLL** is copied into NINA’s p
 | Symptom | Likely cause |
 |--------|----------------|
 | Flat line at zero | Header coordinates identical every frame; verify with a FITS viewer or add plate-based positions in a future version. |
-| No points | Not saving **LIGHT** frames; **Seestar-only** filter excludes your camera; FITS path unreadable at save time. |
+| No points | Not saving **LIGHT** frames; FITS path unreadable at save time; coordinates missing from primary header. |
 | Plugin DLL not updating | NINA still has the DLL locked — close NINA and rebuild/copy. |

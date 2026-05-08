@@ -5,9 +5,6 @@ using Newtonsoft.Json;
 namespace NINA.Plugin.SeeDrift {
 
     public class SeeDriftSettings {
-        public bool OnlySeestarCameras { get; set; } = true;
-        public bool AutoResetOnTargetChange { get; set; } = true;
-
         /// <summary>Folder for HTML exports (Save dialog default).</summary>
         public string HtmlExportFolder { get; set; } = "";
 

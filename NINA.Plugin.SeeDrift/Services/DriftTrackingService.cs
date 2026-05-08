@@ -18,19 +18,16 @@ namespace NINA.Plugin.SeeDrift.Services {
         private sealed class TraceState {
             public double? RefRaHours;
             public double? RefDecDeg;
-            public string? LastObjectName;
             public int NextFrameIndex;
         }
 
-        private readonly SeeDriftPlugin _plugin;
         private readonly IImageSaveMediator _imageSaveMediator;
         private readonly TraceState _trace = new();
         private bool _disposed;
 
         public ObservableDriftSamples Samples { get; } = new();
 
-        public DriftTrackingService(SeeDriftPlugin plugin, IImageSaveMediator imageSaveMediator) {
-            _plugin = plugin;
+        public DriftTrackingService(IImageSaveMediator imageSaveMediator) {
             _imageSaveMediator = imageSaveMediator;
             _imageSaveMediator.ImageSaved += OnImageSaved;
         }
@@ -40,7 +37,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                 Samples.Clear();
                 _trace.RefRaHours = null;
                 _trace.RefDecDeg = null;
-                _trace.LastObjectName = null;
                 _trace.NextFrameIndex = 0;
             });
         }
@@ -61,24 +57,16 @@ namespace NINA.Plugin.SeeDrift.Services {
             var importTrace = new TraceState();
             var built = new List<DriftSample>(entries.Count);
             var skippedParse = 0;
-            var skippedSeestar = 0;
 
             foreach (var e in entries) {
-                if (!FitsCoordinates.TryReadCoordinates(e.Path, out var raHours, out var decDeg, out var objectName, out var instrument)) {
+                if (!FitsCoordinates.TryReadCoordinates(e.Path, out var raHours, out var decDeg, out var objectName, out _)) {
                     skippedParse++;
-                    continue;
-                }
-
-                if (!PassesSeestarFilter(instrument, folderReplay: true)) {
-                    skippedSeestar++;
                     continue;
                 }
 
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : e.TargetLabel;
 
-                AccumulateFromParsed(raHours, decDeg, objectName, e.ExposureUtc, e.Path, label, importTrace,
-                    suppressAutoReset: true,
-                    out var sample, out _);
+                AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, out var sample);
 
                 built.Add(sample);
             }
@@ -89,13 +77,12 @@ namespace NINA.Plugin.SeeDrift.Services {
             });
 
             Logger.Info(
-                $"SeeDrift: replay {built.Count}/{entries.Count} FITS from {folderPath} (skipped: no coords {skippedParse}, Seestar filter {skippedSeestar})");
+                $"SeeDrift: replay {built.Count}/{entries.Count} FITS from {folderPath} (skipped: no coords {skippedParse})");
         }
 
         private static void CopyTrace(TraceState from, TraceState to) {
             to.RefRaHours = from.RefRaHours;
             to.RefDecDeg = from.RefDecDeg;
-            to.LastObjectName = from.LastObjectName;
             to.NextFrameIndex = from.NextFrameIndex;
         }
 
@@ -123,22 +110,13 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         private void TryAppendSampleFromFits(string path, DateTime exposureUtc, string targetLabel) {
             try {
-                if (!FitsCoordinates.TryReadCoordinates(path, out var raHours, out var decDeg, out var objectName, out var instrument))
-                    return;
-
-                if (!PassesSeestarFilter(instrument, folderReplay: false))
+                if (!FitsCoordinates.TryReadCoordinates(path, out var raHours, out var decDeg, out var objectName, out _))
                     return;
 
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : targetLabel;
 
                 Application.Current?.Dispatcher.Invoke(() => {
-                    AccumulateFromParsed(raHours, decDeg, objectName, exposureUtc, path, label, _trace,
-                        suppressAutoReset: false,
-                        out var sample, out var clearedTrace);
-
-                    if (clearedTrace)
-                        Samples.Clear();
-
+                    AccumulateFromParsed(raHours, decDeg, exposureUtc, path, label, _trace, out var sample);
                     Samples.Add(sample);
                 });
             } catch (Exception ex) {
@@ -147,30 +125,14 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>Shared drift math for live capture and folder replay.</summary>
-        /// <param name="suppressAutoReset">Folder replay passes true so OBJECT header quirks do not clear the trace mid-folder.</param>
-        private void AccumulateFromParsed(
+        private static void AccumulateFromParsed(
             double raHours,
             double decDeg,
-            string? objectName,
             DateTime exposureUtc,
             string path,
             string label,
             TraceState st,
-            bool suppressAutoReset,
-            out DriftSample sample,
-            out bool clearedTrace) {
-
-            clearedTrace = false;
-            if (!suppressAutoReset && _plugin.Settings.AutoResetOnTargetChange && objectName != null && st.LastObjectName != null
-                && !string.Equals(st.LastObjectName, objectName, StringComparison.OrdinalIgnoreCase)) {
-                clearedTrace = true;
-                st.RefRaHours = null;
-                st.RefDecDeg = null;
-                st.NextFrameIndex = 0;
-            }
-
-            if (objectName != null)
-                st.LastObjectName = objectName;
+            out DriftSample sample) {
 
             if (st.RefRaHours == null || st.RefDecDeg == null) {
                 st.RefRaHours = raHours;
@@ -198,27 +160,6 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (dt == null) return DateTime.UtcNow;
             var v = dt.Value;
             return v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime();
-        }
-
-        /// <summary>
-        /// Live: connected Seestar camera passes; else FITS INSTRUME must contain Seestar when filter is on.
-        /// Folder replay: same, but if INSTRUME is missing we still accept (no camera / stripped keyword — cannot infer non-Seestar).
-        /// </summary>
-        private bool PassesSeestarFilter(string? instrument, bool folderReplay) {
-            if (!_plugin.Settings.OnlySeestarCameras)
-                return true;
-
-            try {
-                var camName = _plugin.CameraMediator.GetInfo()?.Name ?? "";
-                if (camName.IndexOf("Seestar", StringComparison.OrdinalIgnoreCase) >= 0)
-                    return true;
-            } catch { }
-
-            if (folderReplay && string.IsNullOrWhiteSpace(instrument))
-                return true;
-
-            return !string.IsNullOrEmpty(instrument)
-                && instrument.IndexOf("Seestar", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public void Dispose() {
