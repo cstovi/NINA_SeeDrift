@@ -31,10 +31,10 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
         private static IPlotController BuildController() {
             var c = new PlotController();
-            c.UnbindMouseMove();
-            c.BindMouseMove(new DelegatePlotCommand<OxyMouseEventArgs>(
+            c.UnbindMouseEnter();
+            c.BindMouseEnter(new DelegatePlotCommand<OxyMouseEventArgs>(
                 (view, ctrl, args) =>
-                    ctrl.AddMouseManipulator(view,
+                    ctrl.AddHoverManipulator(view,
                         new TrackerManipulator(view) { Snap = false, PointsOnly = true, FiresDistance = 30.0 },
                         args)));
             return c;
