@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Windows.Input;
-using Microsoft.Win32;
 using NINA.Core.Utility;
 using NINA.Equipment.Interfaces.ViewModel;
 using NINA.Plugin.SeeDrift.Models;
@@ -37,15 +36,20 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 System.Windows.Application.Current?.Dispatcher.Invoke(RefreshPlot);
 
             ResetCommand = new RelayCommand(_ => _tracker.ResetSession());
-            ExportHtmlCommand = new RelayCommand(_ => ExportHtml());
+            SaveReportNowCommand = new RelayCommand(_ => _tracker.SaveReportNow());
             ImportFolderCommand = new RelayCommand(_ => ImportFitsFolder());
+
+            _tracker.Samples.CollectionChanged += (_, _) =>
+                System.Windows.Application.Current?.Dispatcher.Invoke(() => RaisePropertyChanged(nameof(IsArmed)));
 
             RefreshPlot();
         }
 
         public ICommand ResetCommand { get; }
-        public ICommand ExportHtmlCommand { get; }
+        public ICommand SaveReportNowCommand { get; }
         public ICommand ImportFolderCommand { get; }
+
+        public bool IsArmed => _tracker.IsArmed;
 
         private PlotModel _plotModel = null!;
         public PlotModel PlotModel {
@@ -456,35 +460,6 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 _tracker.ImportFitsFolder(dlg.SelectedPath);
             } catch (Exception ex) {
                 Logger.Error($"SeeDrift folder import failed: {ex.Message}");
-            }
-        }
-
-        private void ExportHtml() {
-            if (_tracker.Samples.Count == 0)
-                return;
-            try {
-                var folder = _plugin.HtmlExportFolder;
-                if (string.IsNullOrWhiteSpace(folder))
-                    folder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-
-                var pixel = _tracker.Samples[0].IsPixelPath;
-                var dlg = new Microsoft.Win32.SaveFileDialog {
-                    Title = "Export SeeDrift HTML",
-                    Filter = "HTML|*.html",
-                    FileName = pixel
-                        ? $"SeeDrift_pixels_{DateTime.Now:yyyyMMdd_HHmmss}.html"
-                        : $"SeeDrift_{DateTime.Now:yyyyMMdd_HHmmss}.html",
-                    InitialDirectory = Directory.Exists(folder) ? folder : Environment.CurrentDirectory
-                };
-                if (dlg.ShowDialog() != true)
-                    return;
-
-                var chartTitle = pixel ? "SeeDrift — cumulative pixel path" : "SeeDrift — pointing path";
-                HtmlReportExporter.WriteReport(dlg.FileName, _tracker.Samples.ToList(), chartTitle);
-                _plugin.HtmlExportFolder = Path.GetDirectoryName(dlg.FileName) ?? folder;
-                _plugin.SyncSettingsFromProperties();
-            } catch (Exception ex) {
-                Logger.Error($"SeeDrift HTML export failed: {ex.Message}");
             }
         }
     }

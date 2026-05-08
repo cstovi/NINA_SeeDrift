@@ -19,12 +19,38 @@
             </Grid.RowDefinitions>
             <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,6">
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                    <Button Content="Reset trace" Command="{Binding ResetCommand}" Margin="0,0,8,0" Padding="8,4"/>
+                    <Button Content="Reset" Command="{Binding ResetCommand}" Margin="0,0,8,0" Padding="8,4"/>
                     <Button Content="Import FITS folder…" Command="{Binding ImportFolderCommand}" Margin="0,0,8,0" Padding="8,4"/>
-                    <Button Content="Export HTML…" Command="{Binding ExportHtmlCommand}" Padding="8,4"/>
+                    <Button Content="Save report now" Command="{Binding SaveReportNowCommand}" Padding="8,4"/>
                 </StackPanel>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding SampleCount, StringFormat=Frames: {0}}"
-                           VerticalAlignment="Center" Foreground="#AAA" Margin="12,0,0,0"/>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <Ellipse Width="8" Height="8" Margin="0,0,5,0" VerticalAlignment="Center">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="#555"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsArmed}" Value="True">
+                                        <Setter Property="Fill" Value="#4caf50"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock VerticalAlignment="Center" Foreground="#AAA">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="Not recording"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsArmed}" Value="True">
+                                        <Setter Property="Text" Value="Recording"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="{Binding SampleCount, StringFormat=' · {0} frames'}"
+                               VerticalAlignment="Center" Foreground="#AAA" Margin="2,0,0,0"/>
+                </StackPanel>
             </DockPanel>
             <TextBlock Grid.Row="1" Text="{Binding LastSummary}" TextWrapping="Wrap" Foreground="#CCC" Margin="0,0,0,8"/>
             <oxy:PlotView Grid.Row="2" Model="{Binding PlotModel}" MinHeight="240"/>

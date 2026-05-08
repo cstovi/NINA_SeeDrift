@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using NINA.Core.Utility;
 using NINA.Equipment.Model;
@@ -13,8 +14,18 @@ namespace NINA.Plugin.SeeDrift.Services {
     /// <summary>
     /// Accumulates drift samples from saved LIGHT frames via <see cref="IImageSaveMediator.ImageSaved"/>
     /// or from offline FITS folder replay.
+    /// Live recording is opt-in: call <see cref="Arm"/> (via the SeeDrift Start sequence instruction)
+    /// before frames are recorded, and <see cref="Disarm"/> (via SeeDrift Stop) to save and finish.
     /// </summary>
     public sealed class DriftTrackingService : IDisposable {
+
+        /// <summary>One completed target's worth of samples, captured when Disarm or a name-change fires.</summary>
+        public sealed class CompletedTarget {
+            public string Name { get; init; } = "";
+            public DateTime StoppedUtc { get; init; }
+            public IReadOnlyList<DriftSample> Samples { get; init; } = Array.Empty<DriftSample>();
+        }
+
         private sealed class TraceState {
             public double? RefRaHours;
             public double? RefDecDeg;
@@ -22,19 +33,18 @@ namespace NINA.Plugin.SeeDrift.Services {
             public string? RefTargetName;
         }
 
-        /// <summary>
-        /// If the new frame's pointing is further than this from the current reference,
-        /// treat it as a new target and auto-reset the live trace.
-        /// 0.5° = 1800 arcsec covers any realistic dither/drift scenario.
-        /// </summary>
-        private const double LiveAutoResetThresholdArcSec = 1800.0;
-
         private readonly SeeDriftPlugin _plugin;
         private readonly IImageSaveMediator _imageSaveMediator;
         private readonly TraceState _trace = new();
         private bool _disposed;
 
         public ObservableDriftSamples Samples { get; } = new();
+
+        /// <summary>Completed targets accumulated this session (oldest first).</summary>
+        public List<CompletedTarget> CompletedTargets { get; } = new();
+
+        /// <summary>True when live recording is active (armed by Start instruction or Save report now).</summary>
+        public bool IsArmed { get; private set; }
 
         /// <summary>Plate scale derived from XPIXSZ+FOCALLEN of the first imported FITS, or null.</summary>
         public double? PlateScaleArcSecPerPx { get; private set; }
@@ -54,17 +64,90 @@ namespace NINA.Plugin.SeeDrift.Services {
             _imageSaveMediator.ImageSaved += OnImageSaved;
         }
 
+        // ------------------------------------------------------------------
+        // Arm / Disarm (sequence instruction API + dockable Save button)
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Arms live recording. Resets the current trace so frame 1 of the new
+        /// target becomes the origin. Called by the SeeDrift Start instruction.
+        /// </summary>
+        public void Arm() {
+            Application.Current?.Dispatcher.Invoke(() => {
+                ResetCurrentTrace();
+                IsArmed = true;
+                Logger.Info("SeeDrift: armed — live recording started");
+            });
+        }
+
+        /// <summary>
+        /// Captures the current live trace into <see cref="CompletedTargets"/>, writes / overwrites
+        /// the nightly HTML report, then disarms. Called by the SeeDrift Stop instruction.
+        /// </summary>
+        public void Disarm() {
+            Application.Current?.Dispatcher.Invoke(() => {
+                CaptureCurrentTraceToCompleted();
+                IsArmed = false;
+                WriteNightReport();
+                Logger.Info("SeeDrift: disarmed — live recording stopped");
+            });
+        }
+
+        /// <summary>
+        /// Saves whatever has been accumulated so far without disarming, then resets the current
+        /// trace so the next frame starts a fresh origin. Used by the "Save report now" dockable button.
+        /// </summary>
+        public void SaveReportNow() {
+            Application.Current?.Dispatcher.Invoke(() => {
+                CaptureCurrentTraceToCompleted();
+                WriteNightReport();
+                ResetCurrentTrace();
+            });
+        }
+
         public void ResetSession() {
             Application.Current?.Dispatcher.Invoke(() => {
-                Samples.Clear();
-                _trace.RefRaHours = null;
-                _trace.RefDecDeg = null;
-                _trace.NextFrameIndex = 0;
+                ResetCurrentTrace();
+                CompletedTargets.Clear();
+                IsArmed = false;
                 PlateScaleArcSecPerPx = null;
                 JumpCount = 0;
                 LogCorrelatedCount = 0;
                 LogWasFound = false;
             });
+        }
+
+        private void ResetCurrentTrace() {
+            Samples.Clear();
+            _trace.RefRaHours = null;
+            _trace.RefDecDeg = null;
+            _trace.NextFrameIndex = 0;
+            _trace.RefTargetName = null;
+        }
+
+        private void CaptureCurrentTraceToCompleted() {
+            if (Samples.Count < 2) return;
+            CompletedTargets.Add(new CompletedTarget {
+                Name       = _trace.RefTargetName ?? "Unknown",
+                StoppedUtc = DateTime.UtcNow,
+                Samples    = Samples.ToList()
+            });
+        }
+
+        private void WriteNightReport() {
+            if (CompletedTargets.Count == 0) return;
+            try {
+                var folder = _plugin.HtmlExportFolder;
+                if (string.IsNullOrWhiteSpace(folder))
+                    folder = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SeeDrift");
+                Directory.CreateDirectory(folder);
+                var path = Path.Combine(folder, $"SeeDrift_night_{DateTime.Now:yyyyMMdd}.html");
+                HtmlReportExporter.WriteNightReport(CompletedTargets, path);
+                Logger.Info($"SeeDrift: night report saved → {path}");
+            } catch (Exception ex) {
+                Logger.Error($"SeeDrift: failed to write night report: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -244,35 +327,24 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         private void TryAppendSampleFromFits(string path, DateTime exposureUtc, string targetLabel) {
             try {
+                if (!IsArmed) return;
+
                 if (!FitsCoordinates.TryReadCoordinates(path, out var raHours, out var decDeg, out var objectName, out _))
                     return;
 
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : targetLabel;
 
                 Application.Current?.Dispatcher.Invoke(() => {
-                    // Auto-reset when the target name changes or the scope has slewed
-                    // further than the live reset threshold from the current reference.
-                    if (_trace.RefRaHours.HasValue) {
-                        var nameChanged = !string.IsNullOrEmpty(_trace.RefTargetName)
-                            && !string.IsNullOrEmpty(label)
-                            && !string.Equals(_trace.RefTargetName, label, StringComparison.OrdinalIgnoreCase);
+                    // Auto-capture + reset when the OBJECT name changes (e.g. missing Stop between targets).
+                    if (_trace.RefRaHours.HasValue
+                        && !string.IsNullOrEmpty(_trace.RefTargetName)
+                        && !string.IsNullOrEmpty(label)
+                        && !string.Equals(_trace.RefTargetName, label, StringComparison.OrdinalIgnoreCase)) {
 
-                        AstrometryMath.DeltaArcSec(_trace.RefRaHours.Value, _trace.RefDecDeg!.Value,
-                            raHours, decDeg, out var dRa, out var dDec);
-                        var distArcSec = Math.Sqrt(dRa * dRa + dDec * dDec);
-                        var positionJumped = distArcSec > LiveAutoResetThresholdArcSec;
-
-                        if (nameChanged || positionJumped) {
-                            var reason = nameChanged
-                                ? $"target changed to \"{label}\""
-                                : $"slew detected ({distArcSec / 3600.0:F2}°)";
-                            Logger.Info($"SeeDrift: auto-reset live trace — {reason}");
-                            Samples.Clear();
-                            _trace.RefRaHours = null;
-                            _trace.RefDecDeg = null;
-                            _trace.NextFrameIndex = 0;
-                            _trace.RefTargetName = null;
-                        }
+                        Logger.Info($"SeeDrift: target changed to \"{label}\" — auto-capturing current trace");
+                        CaptureCurrentTraceToCompleted();
+                        WriteNightReport();
+                        ResetCurrentTrace();
                     }
 
                     AccumulateFromParsed(raHours, decDeg, exposureUtc, path, label, _trace, null, null, out var sample);
