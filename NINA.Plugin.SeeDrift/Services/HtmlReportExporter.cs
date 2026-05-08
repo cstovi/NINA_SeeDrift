@@ -53,7 +53,6 @@ new Chart(ctx, {
   options: {
     responsive: true,
     maintainAspectRatio: true,
-    aspectRatio: 1,
     scales: {
       x: {
         title: { display: true, text: 'ΔRA (arcsec)', color: '#bbb' },

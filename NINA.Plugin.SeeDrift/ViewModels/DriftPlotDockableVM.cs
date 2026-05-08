@@ -67,7 +67,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             foreach (var s in _tracker.Samples.OrderBy(x => x.FrameIndex))
                 pathSeries.Points.Add(new DataPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
 
-            ApplySquareArcSecAxes(model, _tracker.Samples);
+            ApplyIndependentArcSecAxes(model, _tracker.Samples);
 
             model.Series.Add(pathSeries);
 
@@ -79,9 +79,10 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
         }
 
         /// <summary>
-        /// Same scale on X and Y so arcsecond drift matches sky geometry (square plot).
+        /// Independent scales on X and Y so small RA drift stays visible when Dec drift is much larger
+        /// (equal scales would squash RA into a vertical hairline).
         /// </summary>
-        private static void ApplySquareArcSecAxes(PlotModel model,
+        private static void ApplyIndependentArcSecAxes(PlotModel model,
             ObservableCollection<DriftSample> samples) {
             var xAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Bottom);
             var yAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Left);
@@ -99,12 +100,13 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
             var maxAbsRa = samples.Max(s => Math.Abs(s.DeltaRaArcSec));
             var maxAbsDec = samples.Max(s => Math.Abs(s.DeltaDecArcSec));
-            var half = Math.Max(Math.Max(maxAbsRa, maxAbsDec), minHalfExtentArcSec) * padFactor;
+            var halfRa = Math.Max(maxAbsRa, minHalfExtentArcSec) * padFactor;
+            var halfDec = Math.Max(maxAbsDec, minHalfExtentArcSec) * padFactor;
 
-            xAxis.Minimum = -half;
-            xAxis.Maximum = half;
-            yAxis.Minimum = -half;
-            yAxis.Maximum = half;
+            xAxis.Minimum = -halfRa;
+            xAxis.Maximum = halfRa;
+            yAxis.Minimum = -halfDec;
+            yAxis.Maximum = halfDec;
         }
 
         private void WarnIfFlatTrace() {
