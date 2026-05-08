@@ -1,5 +1,5 @@
 using System;
-using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using NINA.Core.Utility;
@@ -15,16 +15,19 @@ namespace NINA.Plugin.SeeDrift.Services {
     /// or from offline FITS folder replay.
     /// </summary>
     public sealed class DriftTrackingService : IDisposable {
+        private sealed class TraceState {
+            public double? RefRaHours;
+            public double? RefDecDeg;
+            public string? LastObjectName;
+            public int NextFrameIndex;
+        }
+
         private readonly SeeDriftPlugin _plugin;
         private readonly IImageSaveMediator _imageSaveMediator;
+        private readonly TraceState _trace = new();
         private bool _disposed;
 
-        private double? _refRaHours;
-        private double? _refDecDeg;
-        private string? _lastObjectName;
-        private int _nextFrameIndex;
-
-        public ObservableCollection<DriftSample> Samples { get; } = new();
+        public ObservableDriftSamples Samples { get; } = new();
 
         public DriftTrackingService(SeeDriftPlugin plugin, IImageSaveMediator imageSaveMediator) {
             _plugin = plugin;
@@ -35,15 +38,16 @@ namespace NINA.Plugin.SeeDrift.Services {
         public void ResetSession() {
             Application.Current?.Dispatcher.Invoke(() => {
                 Samples.Clear();
-                _refRaHours = null;
-                _refDecDeg = null;
-                _lastObjectName = null;
-                _nextFrameIndex = 0;
+                _trace.RefRaHours = null;
+                _trace.RefDecDeg = null;
+                _trace.LastObjectName = null;
+                _trace.NextFrameIndex = 0;
             });
         }
 
         /// <summary>
         /// Clears the trace and loads all qualifying FITS in the folder (non-recursive), sorted by DATE-OBS when present.
+        /// Builds samples off the UI thread, then applies one collection reset so every frame appears on the plot.
         /// </summary>
         public void ImportFitsFolder(string folderPath) {
             if (_disposed || string.IsNullOrWhiteSpace(folderPath))
@@ -54,10 +58,39 @@ namespace NINA.Plugin.SeeDrift.Services {
             ResetSession();
 
             var entries = FitsFolderImport.EnumerateSorted(folderPath);
-            foreach (var e in entries)
-                TryAppendSampleFromFits(e.Path, e.ExposureUtc, e.TargetLabel);
+            var importTrace = new TraceState();
+            var built = new List<DriftSample>(entries.Count);
 
-            Logger.Info($"SeeDrift: replay loaded {entries.Count} FITS files from {folderPath}");
+            foreach (var e in entries) {
+                if (!FitsCoordinates.TryReadCoordinates(e.Path, out var raHours, out var decDeg, out var objectName, out var instrument))
+                    continue;
+
+                if (_plugin.Settings.OnlySeestarCameras && !IsSeestarCamera(instrument))
+                    continue;
+
+                var label = !string.IsNullOrEmpty(objectName) ? objectName! : e.TargetLabel;
+
+                AccumulateFromParsed(raHours, decDeg, objectName, e.ExposureUtc, e.Path, label, importTrace,
+                    out var sample, out var clearedTrace);
+
+                if (clearedTrace)
+                    built.Clear();
+                built.Add(sample);
+            }
+
+            Application.Current?.Dispatcher.Invoke(() => {
+                CopyTrace(importTrace, _trace);
+                Samples.ReplaceAll(built);
+            });
+
+            Logger.Info($"SeeDrift: replay loaded {built.Count}/{entries.Count} FITS files from {folderPath}");
+        }
+
+        private static void CopyTrace(TraceState from, TraceState to) {
+            to.RefRaHours = from.RefRaHours;
+            to.RefDecDeg = from.RefDecDeg;
+            to.LastObjectName = from.LastObjectName;
+            to.NextFrameIndex = from.NextFrameIndex;
         }
 
         private void OnImageSaved(object? sender, ImageSavedEventArgs e) {
@@ -82,9 +115,6 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
         }
 
-        /// <summary>
-        /// Parses RA/Dec from FITS, applies Seestar filter, updates reference frame and samples (must run from any thread — marshals to UI).
-        /// </summary>
         private void TryAppendSampleFromFits(string path, DateTime exposureUtc, string targetLabel) {
             try {
                 if (!FitsCoordinates.TryReadCoordinates(path, out var raHours, out var decDeg, out var objectName, out var instrument))
@@ -96,41 +126,63 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : targetLabel;
 
                 Application.Current?.Dispatcher.Invoke(() => {
-                    if (_plugin.Settings.AutoResetOnTargetChange && objectName != null && _lastObjectName != null
-                        && !string.Equals(_lastObjectName, objectName, StringComparison.OrdinalIgnoreCase)) {
+                    AccumulateFromParsed(raHours, decDeg, objectName, exposureUtc, path, label, _trace,
+                        out var sample, out var clearedTrace);
+
+                    if (clearedTrace)
                         Samples.Clear();
-                        _refRaHours = null;
-                        _refDecDeg = null;
-                        _nextFrameIndex = 0;
-                    }
-
-                    if (objectName != null)
-                        _lastObjectName = objectName;
-
-                    if (_refRaHours == null || _refDecDeg == null) {
-                        _refRaHours = raHours;
-                        _refDecDeg = decDeg;
-                    }
-
-                    AstrometryMath.DeltaArcSec(_refRaHours.Value, _refDecDeg.Value, raHours, decDeg,
-                        out var dRa, out var dDec);
-
-                    var sample = new DriftSample {
-                        FrameIndex = _nextFrameIndex++,
-                        ExposureStartUtc = exposureUtc.Kind == DateTimeKind.Utc ? exposureUtc : exposureUtc.ToUniversalTime(),
-                        FileName = Path.GetFileName(path),
-                        TargetName = label,
-                        DeltaRaArcSec = dRa,
-                        DeltaDecArcSec = dDec,
-                        RawRaHours = raHours,
-                        RawDecDeg = decDeg
-                    };
 
                     Samples.Add(sample);
                 });
             } catch (Exception ex) {
                 Logger.Error($"SeeDrift: append sample failed for {path}: {ex.Message}");
             }
+        }
+
+        /// <summary>Shared drift math for live capture and folder replay.</summary>
+        private void AccumulateFromParsed(
+            double raHours,
+            double decDeg,
+            string? objectName,
+            DateTime exposureUtc,
+            string path,
+            string label,
+            TraceState st,
+            out DriftSample sample,
+            out bool clearedTrace) {
+
+            clearedTrace = false;
+            if (_plugin.Settings.AutoResetOnTargetChange && objectName != null && st.LastObjectName != null
+                && !string.Equals(st.LastObjectName, objectName, StringComparison.OrdinalIgnoreCase)) {
+                clearedTrace = true;
+                st.RefRaHours = null;
+                st.RefDecDeg = null;
+                st.NextFrameIndex = 0;
+            }
+
+            if (objectName != null)
+                st.LastObjectName = objectName;
+
+            if (st.RefRaHours == null || st.RefDecDeg == null) {
+                st.RefRaHours = raHours;
+                st.RefDecDeg = decDeg;
+            }
+
+            AstrometryMath.DeltaArcSec(st.RefRaHours.Value, st.RefDecDeg.Value, raHours, decDeg,
+                out var dRa, out var dDec);
+
+            var utc = exposureUtc.Kind == DateTimeKind.Utc ? exposureUtc : exposureUtc.ToUniversalTime();
+
+            sample = new DriftSample {
+                FrameIndex = st.NextFrameIndex++,
+                ExposureStartUtc = utc,
+                FileName = Path.GetFileName(path),
+                TargetName = label,
+                DeltaRaArcSec = dRa,
+                DeltaDecArcSec = dDec,
+                RawRaHours = raHours,
+                RawDecDeg = decDeg
+            };
         }
 
         private static DateTime ToUtc(DateTime? dt) {
