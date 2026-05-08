@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using NINA.Plugin;
 using NINA.Plugin.Interfaces;
+using NINA.Plugin.SeeDrift.Models;
 using NINA.Plugin.SeeDrift.Services;
 using NINA.Profile.Interfaces;
 using NINA.WPF.Base.Interfaces.Mediator;
@@ -35,10 +36,12 @@ namespace NINA.Plugin.SeeDrift {
             ProfileService = profileService;
 
             Settings = SeeDriftSettings.Load();
-            DriftTracker = new DriftTrackingService(ImageSaveMediator);
+            DriftTracker = new DriftTrackingService(this, ImageSaveMediator);
 
             _isInitializing = true;
             HtmlExportFolder = Settings.HtmlExportFolder;
+            FolderImportPlotMode = Settings.FolderImportPlotMode;
+            RegistrationCropSize = Settings.RegistrationCropSize;
             _isInitializing = false;
         }
 
@@ -52,6 +55,8 @@ namespace NINA.Plugin.SeeDrift {
             _isSyncing = true;
             try {
                 Settings.HtmlExportFolder = _htmlExportFolder;
+                Settings.FolderImportPlotMode = _folderImportPlotMode;
+                Settings.RegistrationCropSize = _registrationCropSize;
                 Settings.Save();
             } finally {
                 _isSyncing = false;
@@ -62,6 +67,37 @@ namespace NINA.Plugin.SeeDrift {
         public string HtmlExportFolder {
             get => _htmlExportFolder;
             set { _htmlExportFolder = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
+        }
+
+        private FolderPlotMode _folderImportPlotMode = FolderPlotMode.FitsHeaderCoordinates;
+        public FolderPlotMode FolderImportPlotMode {
+            get => _folderImportPlotMode;
+            set {
+                if (_folderImportPlotMode == value) return;
+                _folderImportPlotMode = value;
+                RaisePropertyChanged();
+                RaisePropertyChanged(nameof(FolderImportUsesPixelRegistration));
+                SyncSettingsFromProperties();
+            }
+        }
+
+        /// <summary>UI helper for folder import mode (<see cref="FolderPlotMode"/>).</summary>
+        public bool FolderImportUsesPixelRegistration {
+            get => FolderImportPlotMode == FolderPlotMode.PixelRegistration;
+            set => FolderImportPlotMode = value ? FolderPlotMode.PixelRegistration : FolderPlotMode.FitsHeaderCoordinates;
+        }
+
+        private int _registrationCropSize = 800;
+        public int RegistrationCropSize {
+            get => _registrationCropSize;
+            set {
+                var v = value;
+                if (v < 64) v = 64;
+                if (v > 4096) v = 4096;
+                _registrationCropSize = v;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
         }
     }
 }

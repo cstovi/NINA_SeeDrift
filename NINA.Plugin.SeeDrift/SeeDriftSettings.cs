@@ -2,11 +2,19 @@ using System;
 using System.IO;
 using Newtonsoft.Json;
 
+using NINA.Plugin.SeeDrift.Models;
+
 namespace NINA.Plugin.SeeDrift {
 
     public class SeeDriftSettings {
         /// <summary>Folder for HTML exports (Save dialog default).</summary>
         public string HtmlExportFolder { get; set; } = "";
+
+        /// <summary>How offline folder import builds the trace.</summary>
+        public FolderPlotMode FolderImportPlotMode { get; set; } = FolderPlotMode.FitsHeaderCoordinates;
+
+        /// <summary>Central crop edge length for phase correlation (pixels).</summary>
+        public int RegistrationCropSize { get; set; } = 800;
 
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

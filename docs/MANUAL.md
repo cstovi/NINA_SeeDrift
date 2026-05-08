@@ -2,18 +2,20 @@
 
 ## Overview
 
-SeeDrift listens for **saved LIGHT** images and plots **FITS RA / Dec** (degrees) in frame order so you can follow how pointing moved. After **Reset trace**, live capture still uses the first accepted frame as reference for internal offsets and HTML export options.
+SeeDrift listens for **saved LIGHT** images and plots pointing in frame order: **FITS RA / Dec** (degrees) by default, or **cumulative pixel shifts** from phase correlation when you enable that mode for **folder import**. After **Reset trace**, live capture still uses the first accepted frame as reference for internal offsets and HTML export options.
 
 Use it to visualize tracking drift and to see whether **dither** produces visible steps in RA and/or Dec (sharp jumps vs slow drift).
 
 ## Installation
 
-See [README.md](../README.md). Only the plugin **DLL** is copied into NINA’s plugin folder; dependencies come from NINA.
+See [README.md](../README.md). Copy the plugin **and** **MathNet.Numerics.dll** into NINA’s plugin folder; other dependencies come from NINA.
 
 ## Options (Plugins → SeeDrift)
 
 | Setting | Meaning |
 |--------|---------|
+| **Plot cumulative pixel shifts** | **Folder import only:** when enabled, measures frame-to-frame shifts on a central square crop (phase correlation) and plots **cumulative pixel X/Y** (detector coordinates). When off, folder import uses **FITS header** RA/Dec (fast). Live capture always uses header coordinates. |
+| **Registration crop (px)** | Edge length of the central crop for phase correlation (64–4096, default 800). |
 | **Default folder** | Starting folder for **Export HTML…** |
 
 Session discipline (**one scope / one target run**, separate folders for replay) is up to you. Use **Reset trace** when you want a new reference frame or before a new session.
@@ -29,13 +31,15 @@ Session discipline (**one scope / one target run**, separate folders for replay)
 
 ### Offline replay
 
-1. Click **Import FITS folder…** and select a directory that contains your lights (not subfolders). The current trace is cleared and replaced by replayed frames — **every** readable light is plotted in order.
-2. Files are sorted by observation time when present (**DATE-OBS** first, then **DATE** / **EXPSTART** / **OBSTIME**); otherwise by file creation time and path. Each point uses **RA** and **Dec** (hours/degrees as applicable) parsed from that file’s **primary HDU header** — see technical notes for keyword precedence. Many subs can share the same header coordinates, so markers **stack** and only distinct sky positions are visible.
-3. Files with **IMAGETYP** / **OBSTYPE** set to something other than light-style imaging are skipped when those keywords are present.
+1. Optional: in **Plugins → SeeDrift**, enable **Plot cumulative pixel shifts** and set **Registration crop** if you want the detector-space path (slower).
+2. Click **Import FITS folder…** and select a directory that contains your lights (not subfolders). The current trace is cleared and replaced by replayed frames — **every** readable light is plotted in order.
+3. Files are sorted by observation time when present (**DATE-OBS** first, then **DATE** / **EXPSTART** / **OBSTIME**); otherwise by file creation time and path. **Header mode:** many subs can share the same header coordinates, so markers **stack**. **Pixel mode:** path reflects motion in **pixel space**; subs with identical shift still add vertices (line segments may have zero length).
+4. Files with **IMAGETYP** / **OBSTYPE** set to something other than light-style imaging are skipped when those keywords are present.
 
 ## Technical notes
 
-- **Position source:** primary HDU FITS keywords (`CRVAL1/2`, `OBJCTRA`/`OBJCTDEC`, or `RA`/`DEC`). If these do not update each sub, offsets stay near zero.
+- **Header RA/Dec:** primary HDU FITS keywords (`CRVAL1/2`, `OBJCTRA`/`OBJCTDEC`, or `RA`/`DEC`). If these do not update each sub, the header plot looks flat or stacked.
+- **Pixel registration:** uncompressed primary image data only; central crop; normalized phase correlation (integer pixel shifts). Not identical to external tools’ sub-pixel tuning but matches the intent of a cumulative **detector** trail.
 - **RA wrap:** handled when computing deltas in arcseconds (small-angle approximation with cos(Dec)).
 
 ## Troubleshooting

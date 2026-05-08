@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Folder import — pixel path:** optional **phase correlation** on central image crops (like a Python `phase_cross_correlation` stack). Plots **cumulative Δx/Δy in detector pixels** starting at (0,0). Slower; shows dither/drift when FITS **RA/Dec** headers do not. Uses **Math.NET** FFT. Uncompressed primary HDU only.
+- **Dither log overlay:** extension point only (`DitherLogOverlay` placeholder) for a future iteration.
+
 ### Removed
 
 - Plugin options **Only record Seestar cameras** and **Reset trace when FITS OBJECT name changes**. SeeDrift always records saved **LIGHT** frames with readable pointing keywords; the trace does not auto-clear when **OBJECT** changes — use **Reset trace** or separate folders/sessions as needed.

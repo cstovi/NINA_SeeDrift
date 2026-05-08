@@ -11,5 +11,13 @@ namespace NINA.Plugin.SeeDrift.Models {
         public double DeltaDecArcSec { get; init; }
         public double RawRaHours { get; init; }
         public double RawDecDeg { get; init; }
+
+        /// <summary>Cumulative detector X shift in pixels (folder import + pixel registration mode).</summary>
+        public double? CumulativePixelX { get; init; }
+
+        /// <summary>Cumulative detector Y shift in pixels (down positive).</summary>
+        public double? CumulativePixelY { get; init; }
+
+        public bool IsPixelPath => CumulativePixelX.HasValue && CumulativePixelY.HasValue;
     }
 }

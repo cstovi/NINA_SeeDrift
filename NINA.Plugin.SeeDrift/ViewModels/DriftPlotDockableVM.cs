@@ -31,7 +31,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
             Title = "SeeDrift";
 
-            PlotModel = BuildEmptyModel(0);
+            PlotModel = BuildEmptyModel(0, false);
             _tracker.Samples.CollectionChanged += (_, _) =>
                 System.Windows.Application.Current?.Dispatcher.Invoke(RefreshPlot);
 
@@ -53,10 +53,14 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
         }
 
         private void RefreshPlot() {
-            var n = _tracker.Samples.Count;
-            var model = BuildEmptyModel(n);
+            var samples = _tracker.Samples;
+            var n = samples.Count;
+            var pixelPlot = n > 0 && samples[0].IsPixelPath;
+            var model = BuildEmptyModel(n, pixelPlot);
             var pathSeries = new LineSeries {
-                Title = "RA° / Dec° from FITS primary header",
+                Title = pixelPlot
+                    ? "Cumulative pixel shift (phase correlation)"
+                    : "RA° / Dec° from FITS primary header",
                 Color = OxyColor.FromRgb(100, 200, 255),
                 StrokeThickness = 1.75,
                 MarkerType = MarkerType.Circle,
@@ -65,15 +69,21 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 MarkerStroke = OxyColors.Transparent
             };
 
-            // X/Y = RA° / Dec° from each FITS primary header; folder import order matches DATE-OBS sort (see FitsFolderImport).
-            foreach (var s in _tracker.Samples.OrderBy(x => x.FrameIndex))
-                pathSeries.Points.Add(new DataPoint(RaHoursToDegrees(s.RawRaHours), s.RawDecDeg));
+            foreach (var s in samples.OrderBy(x => x.FrameIndex)) {
+                if (pixelPlot)
+                    pathSeries.Points.Add(new DataPoint(s.CumulativePixelX!.Value, s.CumulativePixelY!.Value));
+                else
+                    pathSeries.Points.Add(new DataPoint(RaHoursToDegrees(s.RawRaHours), s.RawDecDeg));
+            }
 
-            ApplyPointingAxes(model, _tracker.Samples);
+            if (pixelPlot)
+                ApplyPixelAxes(model, samples);
+            else
+                ApplyPointingAxes(model, samples);
 
             model.Series.Add(pathSeries);
 
-            WarnIfFlatTrace();
+            WarnIfFlatTrace(pixelPlot);
 
             PlotModel = model;
             RaisePropertyChanged(nameof(SampleCount));
@@ -82,7 +92,6 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
         private static double RaHoursToDegrees(double raHours) => raHours * 15.0;
 
-        /// <summary>Pad around min/max RA° and Dec° so the path uses the plot area (independent scales).</summary>
         private static void ApplyPointingAxes(PlotModel model,
             ObservableCollection<DriftSample> samples) {
             var xAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Bottom);
@@ -116,16 +125,56 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             yAxis.Maximum = maxDec + padDec;
         }
 
-        private void WarnIfFlatTrace() {
+        private static void ApplyPixelAxes(PlotModel model, ObservableCollection<DriftSample> samples) {
+            var xAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Bottom);
+            var yAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Left);
+            const double padRatio = 0.08;
+            const double minSpanPx = 2.0;
+
+            if (samples.Count == 0) {
+                xAxis.Minimum = -1;
+                xAxis.Maximum = 1;
+                yAxis.Minimum = -1;
+                yAxis.Maximum = 1;
+                return;
+            }
+
+            var xs = samples.Select(s => s.CumulativePixelX!.Value).ToList();
+            var ys = samples.Select(s => s.CumulativePixelY!.Value).ToList();
+            var minX = xs.Min();
+            var maxX = xs.Max();
+            var minY = ys.Min();
+            var maxY = ys.Max();
+            var spanX = Math.Max(maxX - minX, minSpanPx);
+            var spanY = Math.Max(maxY - minY, minSpanPx);
+            var padX = spanX * padRatio;
+            var padY = spanY * padRatio;
+
+            xAxis.Minimum = minX - padX;
+            xAxis.Maximum = maxX + padX;
+            yAxis.Minimum = minY - padY;
+            yAxis.Maximum = maxY + padY;
+        }
+
+        private void WarnIfFlatTrace(bool pixelPlot) {
             var samples = _tracker.Samples;
             if (samples.Count == 0)
                 _warnedFlatTrace = false;
             if (samples.Count < 3)
                 return;
-            var raDeg = samples.Select(s => RaHoursToDegrees(s.RawRaHours)).ToList();
-            var raRange = raDeg.Max() - raDeg.Min();
-            var decRange = samples.Max(s => s.RawDecDeg) - samples.Min(s => s.RawDecDeg);
-            var flat = raRange < 1e-12 && decRange < 1e-12;
+
+            bool flat;
+            if (pixelPlot) {
+                var xs = samples.Select(s => s.CumulativePixelX!.Value).ToList();
+                var ys = samples.Select(s => s.CumulativePixelY!.Value).ToList();
+                flat = xs.Max() - xs.Min() < 1e-9 && ys.Max() - ys.Min() < 1e-9;
+            } else {
+                var raDeg = samples.Select(s => RaHoursToDegrees(s.RawRaHours)).ToList();
+                var raRange = raDeg.Max() - raDeg.Min();
+                var decRange = samples.Max(s => s.RawDecDeg) - samples.Min(s => s.RawDecDeg);
+                flat = raRange < 1e-12 && decRange < 1e-12;
+            }
+
             if (!flat) {
                 _warnedFlatTrace = false;
                 return;
@@ -133,21 +182,35 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             if (_warnedFlatTrace)
                 return;
             _warnedFlatTrace = true;
-            Logger.Warning(
-                "SeeDrift: all frames share identical pointing in FITS headers (often fixed CRVAL/OBJCT). " +
-                "Prefer per-frame solved RA/DEC in metadata if you expect dither or tracking motion.");
+            if (pixelPlot) {
+                Logger.Warning("SeeDrift: cumulative pixel path is numerically flat — check data or crop size.");
+            } else {
+                Logger.Warning(
+                    "SeeDrift: all frames share identical pointing in FITS headers (often fixed CRVAL/OBJCT). " +
+                    "Prefer per-frame solved RA/DEC in metadata if you expect dither or tracking motion, or use pixel registration for folder import.");
+            }
         }
 
-        private static PlotModel BuildEmptyModel(int frameCount) {
+        private static PlotModel BuildEmptyModel(int frameCount, bool pixelPlot) {
             var gridMajor = OxyColor.FromAColor(55, OxyColor.FromRgb(180, 180, 190));
             var gridMinor = OxyColor.FromAColor(35, OxyColor.FromRgb(140, 140, 155));
             var axisLine = OxyColor.FromRgb(95, 95, 105);
 
+            string subtitle;
+            if (frameCount <= 0)
+                subtitle = "";
+            else if (pixelPlot)
+                subtitle =
+                    $"{frameCount} frames · cumulative Δx/Δy in pixels (phase correlation on central crop) · order = DATE-OBS when in header";
+            else
+                subtitle =
+                    $"{frameCount} frames · RA° & Dec° from each primary header · order (live = save order; folder = DATE-OBS when present) · identical coords overlap";
+
             var m = new PlotModel {
-                Title = "Pointing path — RA° vs Dec° per FITS frame",
-                Subtitle = frameCount > 0
-                    ? $"{frameCount} frames · RA° & Dec° from each primary header · frame order (live = save order; folder import = DATE-OBS when present) · identical coords overlap"
-                    : "",
+                Title = pixelPlot
+                    ? "Detector path — cumulative pixel shifts"
+                    : "Pointing path — RA° vs Dec° per FITS frame",
+                Subtitle = subtitle,
                 TitleColor = OxyColor.FromRgb(230, 230, 235),
                 SubtitleColor = OxyColor.FromRgb(170, 175, 185),
                 Background = OxyColor.FromRgb(26, 26, 30),
@@ -156,7 +219,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             };
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Bottom,
-                Title = "RA (°)",
+                Title = pixelPlot ? "Cumulative X (px)" : "RA (°)",
                 TitleColor = OxyColor.FromRgb(200, 210, 230),
                 AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
@@ -167,7 +230,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             });
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Left,
-                Title = "Dec (°)",
+                Title = pixelPlot ? "Cumulative Y (px)" : "Dec (°)",
                 TitleColor = OxyColor.FromRgb(200, 210, 230),
                 AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
@@ -188,6 +251,9 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     return "No frames yet.";
                 var first = _tracker.Samples[0];
                 var last = _tracker.Samples[^1];
+                if (first.IsPixelPath) {
+                    return $"Pixel path start ({first.CumulativePixelX:F2}, {first.CumulativePixelY:F2}) px → end ({last.CumulativePixelX:F2}, {last.CumulativePixelY:F2}) px · {last.TargetName}";
+                }
                 var ra0 = RaHoursToDegrees(first.RawRaHours);
                 var ra1 = RaHoursToDegrees(last.RawRaHours);
                 return $"Start RA {ra0:F4}° Dec {first.RawDecDeg:F4}° → end RA {ra1:F4}° Dec {last.RawDecDeg:F4}° · {last.TargetName}";
@@ -221,16 +287,20 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 if (string.IsNullOrWhiteSpace(folder))
                     folder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
+                var pixel = _tracker.Samples[0].IsPixelPath;
                 var dlg = new Microsoft.Win32.SaveFileDialog {
                     Title = "Export SeeDrift HTML",
                     Filter = "HTML|*.html",
-                    FileName = $"SeeDrift_{DateTime.Now:yyyyMMdd_HHmmss}.html",
+                    FileName = pixel
+                        ? $"SeeDrift_pixels_{DateTime.Now:yyyyMMdd_HHmmss}.html"
+                        : $"SeeDrift_{DateTime.Now:yyyyMMdd_HHmmss}.html",
                     InitialDirectory = Directory.Exists(folder) ? folder : Environment.CurrentDirectory
                 };
                 if (dlg.ShowDialog() != true)
                     return;
 
-                HtmlReportExporter.WriteReport(dlg.FileName, _tracker.Samples.ToList(), "SeeDrift — pointing path");
+                var chartTitle = pixel ? "SeeDrift — cumulative pixel path" : "SeeDrift — pointing path";
+                HtmlReportExporter.WriteReport(dlg.FileName, _tracker.Samples.ToList(), chartTitle);
                 _plugin.HtmlExportFolder = Path.GetDirectoryName(dlg.FileName) ?? folder;
                 _plugin.SyncSettingsFromProperties();
             } catch (Exception ex) {

@@ -21,13 +21,15 @@ namespace NINA.Plugin.SeeDrift.Services {
             public int NextFrameIndex;
         }
 
+        private readonly SeeDriftPlugin _plugin;
         private readonly IImageSaveMediator _imageSaveMediator;
         private readonly TraceState _trace = new();
         private bool _disposed;
 
         public ObservableDriftSamples Samples { get; } = new();
 
-        public DriftTrackingService(IImageSaveMediator imageSaveMediator) {
+        public DriftTrackingService(SeeDriftPlugin plugin, IImageSaveMediator imageSaveMediator) {
+            _plugin = plugin;
             _imageSaveMediator = imageSaveMediator;
             _imageSaveMediator.ImageSaved += OnImageSaved;
         }
@@ -43,7 +45,6 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         /// <summary>
         /// Clears the trace and loads all qualifying FITS in the folder (non-recursive), sorted by DATE-OBS when present.
-        /// Builds samples off the UI thread, then applies one collection reset so every frame appears on the plot.
         /// </summary>
         public void ImportFitsFolder(string folderPath) {
             if (_disposed || string.IsNullOrWhiteSpace(folderPath))
@@ -53,6 +54,15 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             ResetSession();
 
+            if (_plugin.Settings.FolderImportPlotMode == FolderPlotMode.PixelRegistration) {
+                ImportFitsFolderPixelRegistration(folderPath);
+                return;
+            }
+
+            ImportFitsFolderHeaderCoordinates(folderPath);
+        }
+
+        private void ImportFitsFolderHeaderCoordinates(string folderPath) {
             var entries = FitsFolderImport.EnumerateSorted(folderPath);
             var importTrace = new TraceState();
             var built = new List<DriftSample>(entries.Count);
@@ -66,7 +76,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : e.TargetLabel;
 
-                AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, out var sample);
+                AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, null, null, out var sample);
 
                 built.Add(sample);
             }
@@ -78,6 +88,70 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             Logger.Info(
                 $"SeeDrift: replay {built.Count}/{entries.Count} FITS from {folderPath} (skipped: no coords {skippedParse})");
+        }
+
+        private void ImportFitsFolderPixelRegistration(string folderPath) {
+            var entries = FitsFolderImport.EnumerateSorted(folderPath);
+            var cropSize = Math.Clamp(_plugin.Settings.RegistrationCropSize, 64, 4096);
+            var importTrace = new TraceState();
+            var built = new List<DriftSample>(entries.Count);
+            var skippedParse = 0;
+            var skippedImage = 0;
+
+            if (entries.Count == 0) {
+                Logger.Warning($"SeeDrift: no FITS in {folderPath}");
+                return;
+            }
+
+            double[,]? prevCrop = null;
+            double cumX = 0;
+            double cumY = 0;
+
+            for (var i = 0; i < entries.Count; i++) {
+                var e = entries[i];
+                if (!FitsCoordinates.TryReadCoordinates(e.Path, out var raHours, out var decDeg, out var objectName, out _)) {
+                    skippedParse++;
+                    continue;
+                }
+
+                if (!FitsImageCrop.TryLoadCentralCrop(e.Path, cropSize, out var crop) || crop == null) {
+                    skippedImage++;
+                    continue;
+                }
+
+                var label = !string.IsNullOrEmpty(objectName) ? objectName! : e.TargetLabel;
+
+                if (prevCrop == null) {
+                    cumX = 0;
+                    cumY = 0;
+                    AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, cumX, cumY, out var s0);
+                    built.Add(s0);
+                    prevCrop = crop;
+                    continue;
+                }
+
+                double dx = 0;
+                double dy = 0;
+                if (!PhaseCorrelation.TryEstimateShift(prevCrop, crop, out dy, out dx))
+                    skippedImage++;
+
+                cumX += dx;
+                cumY += dy;
+
+                AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, cumX, cumY, out var sample);
+                built.Add(sample);
+
+                prevCrop = crop;
+            }
+
+            Application.Current?.Dispatcher.Invoke(() => {
+                CopyTrace(importTrace, _trace);
+                Samples.ReplaceAll(built);
+            });
+
+            Logger.Info(
+                $"SeeDrift: pixel replay {built.Count}/{entries.Count} FITS from {folderPath} " +
+                $"(crop {cropSize}px, skipped: no coords {skippedParse}, image/registration {skippedImage})");
         }
 
         private static void CopyTrace(TraceState from, TraceState to) {
@@ -116,7 +190,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : targetLabel;
 
                 Application.Current?.Dispatcher.Invoke(() => {
-                    AccumulateFromParsed(raHours, decDeg, exposureUtc, path, label, _trace, out var sample);
+                    AccumulateFromParsed(raHours, decDeg, exposureUtc, path, label, _trace, null, null, out var sample);
                     Samples.Add(sample);
                 });
             } catch (Exception ex) {
@@ -124,7 +198,6 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
         }
 
-        /// <summary>Shared drift math for live capture and folder replay.</summary>
         private static void AccumulateFromParsed(
             double raHours,
             double decDeg,
@@ -132,6 +205,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             string path,
             string label,
             TraceState st,
+            double? cumulativePixelX,
+            double? cumulativePixelY,
             out DriftSample sample) {
 
             if (st.RefRaHours == null || st.RefDecDeg == null) {
@@ -152,7 +227,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 DeltaRaArcSec = dRa,
                 DeltaDecArcSec = dDec,
                 RawRaHours = raHours,
-                RawDecDeg = decDeg
+                RawDecDeg = decDeg,
+                CumulativePixelX = cumulativePixelX,
+                CumulativePixelY = cumulativePixelY
             };
         }
 
