@@ -97,16 +97,18 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 model.Series.Add(pathLine);
 
                 var scatter = new ScatterSeries {
-                    Title          = "Frames",
-                    MarkerType     = MarkerType.Circle,
-                    MarkerSize     = dotSize,
-                    MarkerFill     = dotColor,
-                    MarkerStroke   = OxyColors.Transparent
+                    Title               = "Frames",
+                    MarkerType          = MarkerType.Circle,
+                    MarkerSize          = dotSize,
+                    MarkerFill          = dotColor,
+                    MarkerStroke        = OxyColors.Transparent,
+                    TrackerFormatString = "Frame {Tag}\n{1}: {2:0.##} px\n{3}: {4:0.##} px"
                 };
                 foreach (var s in ordered)
                     scatter.Points.Add(new ScatterPoint(
                         s.CumulativePixelX!.Value,
-                        PlotY(s.CumulativePixelY!.Value)));
+                        PlotY(s.CumulativePixelY!.Value),
+                        tag: $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}"));
                 model.Series.Add(scatter);
 
                 // Jumps first, then start/end on top so they're never obscured.
@@ -178,14 +180,17 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 model.Series.Add(line);
 
                 var scatter2 = new ScatterSeries {
-                    Title      = "Frames",
-                    MarkerType = MarkerType.Circle,
-                    MarkerSize = dotSize2,
-                    MarkerFill = dotColor2,
-                    MarkerStroke = OxyColors.Transparent
+                    Title               = "Frames",
+                    MarkerType          = MarkerType.Circle,
+                    MarkerSize          = dotSize2,
+                    MarkerFill          = dotColor2,
+                    MarkerStroke        = OxyColors.Transparent,
+                    TrackerFormatString = "Frame {Tag}\n{1}: {2:0.###}\"\n{3}: {4:0.###}\""
                 };
                 foreach (var s in ordered)
-                    scatter2.Points.Add(new ScatterPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
+                    scatter2.Points.Add(new ScatterPoint(
+                        s.DeltaRaArcSec, s.DeltaDecArcSec,
+                        tag: $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}"));
                 model.Series.Add(scatter2);
 
                 // Jumps first, then start/end on top.
