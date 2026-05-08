@@ -34,15 +34,23 @@
     <DataTemplate x:Key="SeeDrift_Options" DataType="{x:Type local:SeeDriftPlugin}">
         <StackPanel Margin="8" MaxWidth="560">
             <TextBlock Text="Folder import" FontWeight="Bold" Margin="0,0,0,6"/>
-            <Grid Margin="0,0,0,8">
+            <Grid Margin="0,0,0,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Use pixel registration (phase correlation on image crops — slower; use when FITS headers have identical RA/Dec)"
-                           TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                    <TextBlock Text="Slow / accurate: load image pixels and measure star movement"
+                               TextWrapping="Wrap" VerticalAlignment="Center"/>
+                    <TextBlock Text="OFF = fast: read RA/Dec coordinates from FITS headers instead"
+                               Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                </StackPanel>
                 <CheckBox Grid.Column="1" IsChecked="{Binding FolderImportUsesPixelRegistration}" VerticalAlignment="Center"/>
             </Grid>
+            <TextBlock TextWrapping="Wrap" Foreground="#888" FontSize="11" Margin="0,0,0,16">
+                Turn ON only if your FITS headers always show the same coordinates regardless of where the scope actually pointed. Most setups (including Seestar) write real per-frame positions — leave this OFF for fast loading.
+            </TextBlock>
+
             <TextBlock Text="HTML export" FontWeight="Bold" Margin="0,0,0,6"/>
             <Grid Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
@@ -52,11 +60,6 @@
                 <TextBlock Grid.Column="0" Text="Default folder:" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <TextBox Grid.Column="1" Text="{Binding HtmlExportFolder, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
             </Grid>
-
-            <TextBlock TextWrapping="Wrap" Foreground="#888" FontSize="11">
-                Both modes show movement relative to frame 1 (origin = 0, 0). Header mode plots ΔRA/ΔDec in arcsec from FITS coordinates (fast). Pixel registration plots cumulative detector shifts from phase correlation (slower, but works even when headers report identical coordinates).
-                HTML export folder sets the Save dialog starting directory.
-            </TextBlock>
         </StackPanel>
     </DataTemplate>
 
