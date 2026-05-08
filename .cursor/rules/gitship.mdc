@@ -1,0 +1,21 @@
+---
+description: GitShip — commits (and optional push) should land when work is finished; hooks auto-commit on agent stop.
+alwaysApply: true
+---
+
+# GitShip — commit, push, version
+
+**Rollback depends on commits.** This repo uses a Cursor **hook** (`.cursor/hooks/gitship-commit.ps1` on `stop`) that **auto-commits** any pending changes when an agent run completes, using message `cursor(gitship): sync workspace edits …` when you did not commit manually first.
+
+## Agent behavior
+
+1. Prefer **one logical commit per change** with a **clear imperative subject** when you commit during the session (these messages beat the hook’s generic sync message).
+2. Before ending a turn that modified files: run `git status`. If there are meaningful changes, **commit** (and **push** if `origin` exists and network is allowed) unless the user asked to hold commits.
+3. Respect `.gitignore`. Do **not** commit secrets.
+4. If **git_write** / **network** is blocked: print exact `git` commands for the user.
+5. **Push** is not run by the hook; push explicitly when appropriate (`git push -u origin HEAD` if needed).
+
+## Do not
+
+- Force-push to shared branches.
+- Leave finished features uncommitted when the hook is off or skipped.
