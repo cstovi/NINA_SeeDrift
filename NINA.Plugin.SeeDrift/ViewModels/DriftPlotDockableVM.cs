@@ -21,12 +21,15 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
     public class DriftPlotDockableVM : DockableVM {
         private readonly DriftTrackingService _tracker;
         private readonly SeeDriftPlugin _plugin;
+        private readonly IProfileService _profileService;
         private bool _warnedFlatTrace;
+        private string? _lastImportFolder;
 
         [ImportingConstructor]
         public DriftPlotDockableVM(IProfileService profileService, SeeDriftPlugin plugin)
             : base(profileService) {
             _plugin = plugin;
+            _profileService = profileService;
             _tracker = plugin.DriftTracker;
 
             Title = "SeeDrift";
@@ -106,6 +109,26 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         PlotY(s.CumulativePixelY!.Value)));
                 model.Series.Add(scatter);
 
+                // Jumps first, then start/end on top so they're never obscured.
+                var jumpSamples = ordered.Where(s => s.IsJump).ToList();
+                if (jumpSamples.Count > 0) {
+                    var jumpSeries = new ScatterSeries {
+                        Title                 = $"Jumps ({jumpSamples.Count})",
+                        MarkerType            = MarkerType.Diamond,
+                        MarkerSize            = dotSize + 2.0,
+                        MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
+                        MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
+                        MarkerStrokeThickness = 1.0,
+                        TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##} px\n{3}: {4:0.##} px"
+                    };
+                    foreach (var s in jumpSamples)
+                        jumpSeries.Points.Add(new ScatterPoint(
+                            s.CumulativePixelX!.Value,
+                            PlotY(s.CumulativePixelY!.Value),
+                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
+                    model.Series.Add(jumpSeries);
+                }
+
                 if (ordered.Count > 0) {
                     var first = ordered[0];
                     var startDot = new ScatterSeries {
@@ -127,35 +150,15 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     var endDot = new ScatterSeries {
                         Title        = "End",
                         MarkerType   = MarkerType.Circle,
-                        MarkerSize   = dotSize + 2.5,
-                        MarkerFill   = OxyColor.FromRgb(255, 130, 40),
+                        MarkerSize   = dotSize + 5.0,
+                        MarkerFill   = OxyColor.FromAColor(200, OxyColor.FromRgb(255, 130, 40)),
                         MarkerStroke = OxyColor.FromRgb(255, 220, 180),
-                        MarkerStrokeThickness = 1.2
+                        MarkerStrokeThickness = 1.5
                     };
                     endDot.Points.Add(new ScatterPoint(
                         last.CumulativePixelX!.Value,
                         PlotY(last.CumulativePixelY!.Value)));
                     model.Series.Add(endDot);
-                }
-
-                // Jump markers — gold diamonds drawn on top so they stand out clearly.
-                var jumpSamples = ordered.Where(s => s.IsJump).ToList();
-                if (jumpSamples.Count > 0) {
-                    var jumpSeries = new ScatterSeries {
-                        Title                 = $"Jumps ({jumpSamples.Count})",
-                        MarkerType            = MarkerType.Diamond,
-                        MarkerSize            = dotSize + 2.0,
-                        MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
-                        MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
-                        MarkerStrokeThickness = 1.0,
-                        TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##} px\n{3}: {4:0.##} px"
-                    };
-                    foreach (var s in jumpSamples)
-                        jumpSeries.Points.Add(new ScatterPoint(
-                            s.CumulativePixelX!.Value,
-                            PlotY(s.CumulativePixelY!.Value),
-                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
-                    model.Series.Add(jumpSeries);
                 }
 
                 ApplyPixelAxes(model, samples);
@@ -185,6 +188,25 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     scatter2.Points.Add(new ScatterPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
                 model.Series.Add(scatter2);
 
+                // Jumps first, then start/end on top.
+                var jumpSamples2 = ordered.Where(s => s.IsJump).ToList();
+                if (jumpSamples2.Count > 0) {
+                    var jumpSeries2 = new ScatterSeries {
+                        Title                 = $"Jumps ({jumpSamples2.Count})",
+                        MarkerType            = MarkerType.Diamond,
+                        MarkerSize            = dotSize2 + 2.0,
+                        MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
+                        MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
+                        MarkerStrokeThickness = 1.0,
+                        TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##}\"\n{3}: {4:0.##}\""
+                    };
+                    foreach (var s in jumpSamples2)
+                        jumpSeries2.Points.Add(new ScatterPoint(
+                            s.DeltaRaArcSec, s.DeltaDecArcSec,
+                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
+                    model.Series.Add(jumpSeries2);
+                }
+
                 if (ordered.Count > 0) {
                     var first = ordered[0];
                     var startDot2 = new ScatterSeries {
@@ -203,31 +225,13 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     var endDot2 = new ScatterSeries {
                         Title        = "End",
                         MarkerType   = MarkerType.Circle,
-                        MarkerSize   = dotSize2 + 2.5,
-                        MarkerFill   = OxyColor.FromRgb(255, 130, 40),
+                        MarkerSize   = dotSize2 + 5.0,
+                        MarkerFill   = OxyColor.FromAColor(200, OxyColor.FromRgb(255, 130, 40)),
                         MarkerStroke = OxyColor.FromRgb(255, 220, 180),
-                        MarkerStrokeThickness = 1.2
+                        MarkerStrokeThickness = 1.5
                     };
                     endDot2.Points.Add(new ScatterPoint(last.DeltaRaArcSec, last.DeltaDecArcSec));
                     model.Series.Add(endDot2);
-                }
-
-                var jumpSamples2 = ordered.Where(s => s.IsJump).ToList();
-                if (jumpSamples2.Count > 0) {
-                    var jumpSeries2 = new ScatterSeries {
-                        Title                 = $"Jumps ({jumpSamples2.Count})",
-                        MarkerType            = MarkerType.Diamond,
-                        MarkerSize            = dotSize2 + 2.0,
-                        MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
-                        MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
-                        MarkerStrokeThickness = 1.0,
-                        TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##}\"\n{3}: {4:0.##}\""
-                    };
-                    foreach (var s in jumpSamples2)
-                        jumpSeries2.Points.Add(new ScatterPoint(
-                            s.DeltaRaArcSec, s.DeltaDecArcSec,
-                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
-                    model.Series.Add(jumpSeries2);
                 }
 
                 ApplyPointingAxes(model, samples);
@@ -455,13 +459,20 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     Description = "Select folder containing FITS lights (.fits / .fit / .fts)",
                     UseDescriptionForTitle = true
                 };
-                var initial = _plugin.HtmlExportFolder;
+
+                // Priority: last folder used this session → NINA image save path → HTML export folder → Documents
+                var initial = _lastImportFolder;
+                if (string.IsNullOrWhiteSpace(initial))
+                    initial = _profileService.ActiveProfile?.ImageFileSettings?.FilePath;
+                if (string.IsNullOrWhiteSpace(initial))
+                    initial = _plugin.HtmlExportFolder;
                 if (!string.IsNullOrWhiteSpace(initial) && Directory.Exists(initial))
                     dlg.SelectedPath = initial;
 
                 if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK || string.IsNullOrWhiteSpace(dlg.SelectedPath))
                     return;
 
+                _lastImportFolder = dlg.SelectedPath;
                 _tracker.ImportFitsFolder(dlg.SelectedPath);
             } catch (Exception ex) {
                 Logger.Error($"SeeDrift folder import failed: {ex.Message}");
