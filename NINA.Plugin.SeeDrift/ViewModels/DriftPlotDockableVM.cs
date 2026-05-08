@@ -61,7 +61,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
             if (pixelPlot) {
                 var dotSize = n > 200 ? 2.5 : (n > 80 ? 3.5 : 4.5);
-                var dotColor = OxyColor.FromRgb(130, 180, 255);
+                var dotColor = OxyColor.FromAColor(180, OxyColor.FromRgb(130, 180, 255));
 
                 // Faint connecting line so the drift direction is still readable.
                 var pathLine = new LineSeries {

@@ -103,9 +103,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return;
             }
 
-            double[,]? prevCrop = null;
-            double cumX = 0;
-            double cumY = 0;
+            // Compare every frame against frame 1 (the reference crop).
+            // This gives each frame an independent absolute shift from the origin rather
+            // than accumulating tiny inter-frame steps that mostly round to zero.
+            double[,]? refCrop = null;
 
             for (var i = 0; i < entries.Count; i++) {
                 var e = entries[i];
@@ -121,27 +122,21 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : e.TargetLabel;
 
-                if (prevCrop == null) {
-                    cumX = 0;
-                    cumY = 0;
-                    AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, cumX, cumY, out var s0);
+                if (refCrop == null) {
+                    // Frame 1 is the reference — always at (0, 0).
+                    refCrop = crop;
+                    AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, 0.0, 0.0, out var s0);
                     built.Add(s0);
-                    prevCrop = crop;
                     continue;
                 }
 
                 double dx = 0;
                 double dy = 0;
-                if (!PhaseCorrelation.TryEstimateShift(prevCrop, crop, out dy, out dx))
+                if (!PhaseCorrelation.TryEstimateShift(refCrop, crop, out dy, out dx))
                     skippedImage++;
 
-                cumX += dx;
-                cumY += dy;
-
-                AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, cumX, cumY, out var sample);
+                AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, dx, dy, out var sample);
                 built.Add(sample);
-
-                prevCrop = crop;
             }
 
             Application.Current?.Dispatcher.Invoke(() => {
@@ -151,7 +146,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             Logger.Info(
                 $"SeeDrift: pixel replay {built.Count}/{entries.Count} FITS from {folderPath} " +
-                $"(crop {cropSize}px, skipped: no coords {skippedParse}, image/registration {skippedImage})");
+                $"(crop {cropSize}px, each vs frame 1, skipped: no coords {skippedParse}, image {skippedImage})");
         }
 
         private static void CopyTrace(TraceState from, TraceState to) {
