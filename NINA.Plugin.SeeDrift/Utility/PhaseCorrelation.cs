@@ -3,21 +3,20 @@ using System;
 namespace NINA.Plugin.SeeDrift.Utility {
 
     /// <summary>
-    /// Translation estimate via a coarse-to-fine Sum of Squared Differences search.
-    /// Same call signature as the previous phase-correlation implementation.
-    /// No external dependencies required.
-    /// Positive shiftY = moving image shifted DOWN (more rows); positive shiftX = shifted RIGHT.
+    /// Translation estimate via a coarse-to-fine Sum of Squared Differences search
+    /// with parabolic sub-pixel refinement at the final stage.
+    /// Returns float shifts so cumulative sums remain distinct even when
+    /// per-frame motion is sub-pixel.
+    /// Positive shiftY = moving image shifted DOWN; positive shiftX = shifted RIGHT.
     /// </summary>
     internal static class PhaseCorrelation {
 
-        // Coarse pass: downsample factor and search radius (in downsampled pixels).
-        private const int CoarseStep   = 4;
-        private const int CoarseRadius = 36;   // = ±144 original pixels
-        private const int CoarseTplHalf = 20;  // template 41×41 in downsampled space
+        private const int CoarseStep    = 4;
+        private const int CoarseRadius  = 36;   // ±144 original pixels
+        private const int CoarseTplHalf = 20;   // 41×41 template in downsampled space
 
-        // Fine pass: search radius at full resolution around the coarse hit.
-        private const int FineRadius   = 4;
-        private const int FineTplHalf  = 48;   // template 97×97 at full resolution
+        private const int FineRadius    = 4;
+        private const int FineTplHalf   = 48;   // 97×97 template at full resolution
 
         public static bool TryEstimateShift(
             double[,] reference, double[,] moving,
@@ -31,33 +30,53 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (rows != moving.GetLength(0) || cols != moving.GetLength(1)) return false;
                 if (rows < 64 || cols < 64) return false;
 
-                // Coarse: downsample both images, search within ±CoarseRadius
-                var refD  = Downsample(reference, CoarseStep);
-                var movD  = Downsample(moving,    CoarseStep);
+                // Coarse pass on downsampled images.
+                var refD = Downsample(reference, CoarseStep);
+                var movD = Downsample(moving,    CoarseStep);
                 FindBestSSD(refD, movD, 0, 0, CoarseRadius, CoarseTplHalf,
                     out var cDy, out var cDx);
 
-                // Back to full-resolution coordinates
+                // Fine pass at full resolution around the coarse hit.
                 int fullDy = cDy * CoarseStep;
                 int fullDx = cDx * CoarseStep;
-
-                // Fine: search ±FineRadius around coarse result at full resolution
                 FindBestSSD(reference, moving, fullDy, fullDx, FineRadius, FineTplHalf,
                     out var fDy, out var fDx);
 
-                shiftY = fDy;
-                shiftX = fDx;
+                // Sub-pixel refinement: fit a parabola through the SSD values at
+                // (bestDy-1, bestDx), (bestDy, bestDx), (bestDy+1, bestDx) for Y
+                // and similarly for X, then find the parabolic minimum.
+                var cy = rows / 2;
+                var cx = cols / 2;
+
+                var ssdYm = Ssd(reference, moving, cy, cx, FineTplHalf, fDy - 1, fDx, rows, cols);
+                var ssdY0 = Ssd(reference, moving, cy, cx, FineTplHalf, fDy,     fDx, rows, cols);
+                var ssdYp = Ssd(reference, moving, cy, cx, FineTplHalf, fDy + 1, fDx, rows, cols);
+
+                var ssdXm = Ssd(reference, moving, cy, cx, FineTplHalf, fDy, fDx - 1, rows, cols);
+                var ssdXp = Ssd(reference, moving, cy, cx, FineTplHalf, fDy, fDx + 1, rows, cols);
+
+                shiftY = fDy + ParabolicPeak(ssdYm, ssdY0, ssdYp);
+                shiftX = fDx + ParabolicPeak(ssdXm, ssdY0, ssdXp);
                 return true;
             } catch {
                 return false;
             }
         }
 
-        // -------------------------------------------------------------------
-        // Core SSD search: finds the integer (dy, dx) within [baseDy±radius,
-        // baseDx±radius] that minimises SSD between the centre template of
-        // 'ref' and the corresponding patch in 'mov'.
-        // -------------------------------------------------------------------
+        /// <summary>
+        /// Given SSD values at offset -1, 0, +1, returns the sub-pixel offset of the
+        /// parabolic minimum relative to 0.  Clamps to ±0.5 so we never move more
+        /// than half a pixel from the integer minimum.
+        /// </summary>
+        private static double ParabolicPeak(double sm, double s0, double sp) {
+            var denom = sm - 2.0 * s0 + sp;   // 2a
+            if (Math.Abs(denom) < 1e-12) return 0;
+            // If any neighbour is MaxValue (out-of-bounds) skip refinement.
+            if (sm >= double.MaxValue / 2 || sp >= double.MaxValue / 2) return 0;
+            var offset = -(sp - sm) / (2.0 * denom);
+            return Math.Max(-0.5, Math.Min(0.5, offset));
+        }
+
         private static void FindBestSSD(
             double[,] refImg, double[,] movImg,
             int baseDy, int baseDx, int radius, int tplHalf,
