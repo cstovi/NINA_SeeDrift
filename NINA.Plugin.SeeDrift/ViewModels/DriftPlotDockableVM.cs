@@ -60,8 +60,10 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             var ordered = samples.OrderBy(x => x.FrameIndex).ToList();
 
             if (pixelPlot) {
-                var dotSize = n > 200 ? 2.5 : (n > 80 ? 3.5 : 4.5);
-                var dotColor = OxyColor.FromAColor(180, OxyColor.FromRgb(130, 180, 255));
+                // Small dots so adjacent frames (which can be <1px apart) are visible.
+                // User can scroll-zoom on the plot to separate overlapping clusters.
+                var dotSize = 2.0;
+                var dotColor = OxyColor.FromAColor(160, OxyColor.FromRgb(130, 180, 255));
 
                 // Faint connecting line so the drift direction is still readable.
                 var pathLine = new LineSeries {
@@ -223,32 +225,29 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
         private static void ApplyPixelAxes(PlotModel model, ObservableCollection<DriftSample> samples) {
             var xAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Bottom);
             var yAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Left);
-            const double padRatio = 0.08;
-            const double minSpanPx = 2.0;
 
             if (samples.Count == 0) {
-                xAxis.Minimum = -1;
-                xAxis.Maximum = 1;
-                yAxis.Minimum = -1;
-                yAxis.Maximum = 1;
+                xAxis.Minimum = -1; xAxis.Maximum = 1;
+                yAxis.Minimum = -1; yAxis.Maximum = 1;
                 return;
             }
 
             var xs = samples.Select(s => s.CumulativePixelX!.Value).ToList();
             var ys = samples.Select(s => s.CumulativePixelY!.Value).ToList();
-            var minX = xs.Min();
-            var maxX = xs.Max();
-            var minY = ys.Min();
-            var maxY = ys.Max();
-            var spanX = Math.Max(maxX - minX, minSpanPx);
-            var spanY = Math.Max(maxY - minY, minSpanPx);
-            var padX = spanX * padRatio;
-            var padY = spanY * padRatio;
+            var minX = xs.Min(); var maxX = xs.Max();
+            var minY = ys.Min(); var maxY = ys.Max();
+            var midX = (minX + maxX) / 2.0;
+            var midY = (minY + maxY) / 2.0;
 
-            xAxis.Minimum = minX - padX;
-            xAxis.Maximum = maxX + padX;
-            yAxis.Minimum = minY - padY;
-            yAxis.Maximum = maxY + padY;
+            // Use equal scale: both axes span the same pixel range so 1 px in X = 1 px
+            // in Y. Add 15% padding around the larger dimension.
+            const double padFactor = 1.15;
+            var halfSpan = Math.Max(Math.Max(maxX - minX, maxY - minY), 4.0) / 2.0 * padFactor;
+
+            xAxis.Minimum = midX - halfSpan;
+            xAxis.Maximum = midX + halfSpan;
+            yAxis.Minimum = midY - halfSpan;
+            yAxis.Maximum = midY + halfSpan;
         }
 
         private void WarnIfFlatTrace(bool pixelPlot) {
@@ -295,7 +294,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 subtitle = "";
             else if (pixelPlot)
                 subtitle =
-                    $"{frameCount} frames · cumulative Δx/Δy in pixels from phase correlation · frame 1 = origin (0, 0)";
+                    $"{frameCount} frames · cumulative Δx/Δy in pixels from phase correlation · frame 1 = origin (0, 0) · scroll to zoom";
             else
                 subtitle =
                     $"{frameCount} frames · ΔRA / ΔDec in arcsec relative to frame 1 · sorted by DATE-OBS";
