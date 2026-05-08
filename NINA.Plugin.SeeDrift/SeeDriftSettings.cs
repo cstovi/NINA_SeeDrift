@@ -11,7 +11,7 @@ namespace NINA.Plugin.SeeDrift {
         public string HtmlExportFolder { get; set; } = "";
 
         /// <summary>How offline folder import builds the trace.</summary>
-        public FolderPlotMode FolderImportPlotMode { get; set; } = FolderPlotMode.FitsHeaderCoordinates;
+        public FolderPlotMode FolderImportPlotMode { get; set; } = FolderPlotMode.PixelRegistration;
 
         /// <summary>Central crop edge length for phase correlation (pixels).</summary>
         public int RegistrationCropSize { get; set; } = 800;

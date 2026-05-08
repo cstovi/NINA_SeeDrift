@@ -24,20 +24,20 @@ namespace NINA.Plugin.SeeDrift.Services {
                     scatterPts.AppendFormat(CultureInfo.InvariantCulture, "{{\"x\":{0},\"y\":{1}}}", px, py);
                 }
             } else {
-                var raDeg = samples.Select(s => Math.Round(s.RawRaHours * 15.0, 6)).ToList();
-                var decDeg = samples.Select(s => Math.Round(s.RawDecDeg, 6)).ToList();
                 for (var i = 0; i < samples.Count; i++) {
                     if (i > 0) scatterPts.Append(',');
-                    scatterPts.AppendFormat(CultureInfo.InvariantCulture, "{{\"x\":{0},\"y\":{1}}}", raDeg[i], decDeg[i]);
+                    var dRa = Math.Round(samples[i].DeltaRaArcSec, 4);
+                    var dDec = Math.Round(samples[i].DeltaDecArcSec, 4);
+                    scatterPts.AppendFormat(CultureInfo.InvariantCulture, "{{\"x\":{0},\"y\":{1}}}", dRa, dDec);
                 }
             }
             scatterPts.Append(']');
 
-            var xTitle = pixel ? "Cumulative X (pixels)" : "RA (degrees)";
-            var yTitle = pixel ? "Cumulative Y (pixels)" : "Dec (degrees)";
+            var xTitle = pixel ? "Cumulative X (pixels)" : "ΔRA (arcsec)";
+            var yTitle = pixel ? "Cumulative Y (pixels)" : "ΔDec (arcsec)";
             var blurb = pixel
-                ? $"Frames: {samples.Count} · Cumulative shifts from phase correlation on central crops (detector coords, start at 0,0)"
-                : $"Frames: {samples.Count} · Horizontal RA°, vertical Dec° (FITS per frame, chronological order)";
+                ? $"Frames: {samples.Count} · Cumulative pixel shifts from phase correlation · frame 1 = origin (0, 0)"
+                : $"Frames: {samples.Count} · ΔRA / ΔDec in arcsec relative to frame 1 · sorted by DATE-OBS";
 
             var sb = new StringBuilder();
             sb.AppendLine("<!DOCTYPE html>");

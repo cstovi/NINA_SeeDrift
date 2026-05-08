@@ -60,7 +60,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             var pathSeries = new LineSeries {
                 Title = pixelPlot
                     ? "Cumulative pixel shift (phase correlation)"
-                    : "RA° / Dec° from FITS primary header",
+                    : "ΔRA / ΔDec from FITS headers (arcsec, relative to frame 1)",
                 Color = OxyColor.FromRgb(100, 200, 255),
                 StrokeThickness = 1.75,
                 MarkerType = MarkerType.Circle,
@@ -73,7 +73,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 if (pixelPlot)
                     pathSeries.Points.Add(new DataPoint(s.CumulativePixelX!.Value, s.CumulativePixelY!.Value));
                 else
-                    pathSeries.Points.Add(new DataPoint(RaHoursToDegrees(s.RawRaHours), s.RawDecDeg));
+                    pathSeries.Points.Add(new DataPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
             }
 
             if (pixelPlot)
@@ -90,39 +90,37 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             RaisePropertyChanged(nameof(LastSummary));
         }
 
-        private static double RaHoursToDegrees(double raHours) => raHours * 15.0;
-
         private static void ApplyPointingAxes(PlotModel model,
             ObservableCollection<DriftSample> samples) {
             var xAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Bottom);
             var yAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Left);
 
-            const double padRatio = 0.08;
-            const double minSpanDeg = 0.02;
+            const double padRatio = 0.12;
+            const double minSpanArcSec = 2.0;
 
             if (samples.Count == 0) {
-                xAxis.Minimum = 0;
+                xAxis.Minimum = -1;
                 xAxis.Maximum = 1;
-                yAxis.Minimum = 0;
+                yAxis.Minimum = -1;
                 yAxis.Maximum = 1;
                 return;
             }
 
-            var raDeg = samples.Select(s => RaHoursToDegrees(s.RawRaHours)).ToList();
-            var decDeg = samples.Select(s => s.RawDecDeg).ToList();
-            var minRa = raDeg.Min();
-            var maxRa = raDeg.Max();
-            var minDec = decDeg.Min();
-            var maxDec = decDeg.Max();
-            var spanRa = Math.Max(maxRa - minRa, minSpanDeg);
-            var spanDec = Math.Max(maxDec - minDec, minSpanDeg);
-            var padRa = spanRa * padRatio;
-            var padDec = spanDec * padRatio;
+            var dRa = samples.Select(s => s.DeltaRaArcSec).ToList();
+            var dDec = samples.Select(s => s.DeltaDecArcSec).ToList();
+            var minX = dRa.Min();
+            var maxX = dRa.Max();
+            var minY = dDec.Min();
+            var maxY = dDec.Max();
+            var spanX = Math.Max(maxX - minX, minSpanArcSec);
+            var spanY = Math.Max(maxY - minY, minSpanArcSec);
+            var padX = spanX * padRatio;
+            var padY = spanY * padRatio;
 
-            xAxis.Minimum = minRa - padRa;
-            xAxis.Maximum = maxRa + padRa;
-            yAxis.Minimum = minDec - padDec;
-            yAxis.Maximum = maxDec + padDec;
+            xAxis.Minimum = minX - padX;
+            xAxis.Maximum = maxX + padX;
+            yAxis.Minimum = minY - padY;
+            yAxis.Maximum = maxY + padY;
         }
 
         private static void ApplyPixelAxes(PlotModel model, ObservableCollection<DriftSample> samples) {
@@ -169,10 +167,9 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 var ys = samples.Select(s => s.CumulativePixelY!.Value).ToList();
                 flat = xs.Max() - xs.Min() < 1e-9 && ys.Max() - ys.Min() < 1e-9;
             } else {
-                var raDeg = samples.Select(s => RaHoursToDegrees(s.RawRaHours)).ToList();
-                var raRange = raDeg.Max() - raDeg.Min();
-                var decRange = samples.Max(s => s.RawDecDeg) - samples.Min(s => s.RawDecDeg);
-                flat = raRange < 1e-12 && decRange < 1e-12;
+                var raRange = samples.Max(s => s.DeltaRaArcSec) - samples.Min(s => s.DeltaRaArcSec);
+                var decRange = samples.Max(s => s.DeltaDecArcSec) - samples.Min(s => s.DeltaDecArcSec);
+                flat = raRange < 1e-9 && decRange < 1e-9;
             }
 
             if (!flat) {
@@ -201,15 +198,15 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 subtitle = "";
             else if (pixelPlot)
                 subtitle =
-                    $"{frameCount} frames · cumulative Δx/Δy in pixels (phase correlation on central crop) · order = DATE-OBS when in header";
+                    $"{frameCount} frames · cumulative Δx/Δy in pixels from phase correlation · frame 1 = origin (0, 0)";
             else
                 subtitle =
-                    $"{frameCount} frames · RA° & Dec° from each primary header · order (live = save order; folder = DATE-OBS when present) · identical coords overlap";
+                    $"{frameCount} frames · ΔRA / ΔDec in arcsec relative to frame 1 · sorted by DATE-OBS";
 
             var m = new PlotModel {
                 Title = pixelPlot
-                    ? "Detector path — cumulative pixel shifts"
-                    : "Pointing path — RA° vs Dec° per FITS frame",
+                    ? "Detector drift — cumulative pixel shifts from frame 1"
+                    : "Pointing drift — ΔRA / ΔDec arcsec from frame 1",
                 Subtitle = subtitle,
                 TitleColor = OxyColor.FromRgb(230, 230, 235),
                 SubtitleColor = OxyColor.FromRgb(170, 175, 185),
@@ -219,7 +216,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             };
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Bottom,
-                Title = pixelPlot ? "Cumulative X (px)" : "RA (°)",
+                Title = pixelPlot ? "Cumulative X (px)" : "ΔRA (arcsec)",
                 TitleColor = OxyColor.FromRgb(200, 210, 230),
                 AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
@@ -230,7 +227,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             });
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Left,
-                Title = pixelPlot ? "Cumulative Y (px)" : "Dec (°)",
+                Title = pixelPlot ? "Cumulative Y (px)" : "ΔDec (arcsec)",
                 TitleColor = OxyColor.FromRgb(200, 210, 230),
                 AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
@@ -252,11 +249,9 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 var first = _tracker.Samples[0];
                 var last = _tracker.Samples[^1];
                 if (first.IsPixelPath) {
-                    return $"Pixel path start ({first.CumulativePixelX:F2}, {first.CumulativePixelY:F2}) px → end ({last.CumulativePixelX:F2}, {last.CumulativePixelY:F2}) px · {last.TargetName}";
+                    return $"Pixel drift — end: ({last.CumulativePixelX:F1}, {last.CumulativePixelY:F1}) px from origin · {_tracker.Samples.Count} frames · {last.TargetName}";
                 }
-                var ra0 = RaHoursToDegrees(first.RawRaHours);
-                var ra1 = RaHoursToDegrees(last.RawRaHours);
-                return $"Start RA {ra0:F4}° Dec {first.RawDecDeg:F4}° → end RA {ra1:F4}° Dec {last.RawDecDeg:F4}° · {last.TargetName}";
+                return $"Coord drift — end: ΔRA {last.DeltaRaArcSec:+0.0;-0.0}\" ΔDec {last.DeltaDecArcSec:+0.0;-0.0}\" from frame 1 · {_tracker.Samples.Count} frames · {last.TargetName}";
             }
         }
 

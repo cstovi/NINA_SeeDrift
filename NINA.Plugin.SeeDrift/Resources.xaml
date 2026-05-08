@@ -39,7 +39,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Plot cumulative pixel shifts (phase correlation on crops — slower; shows on-sensor dither when RA/Dec headers stay fixed)"
+                <TextBlock Grid.Column="0" Text="Use pixel registration (phase correlation on image crops — slower; use when FITS headers have identical RA/Dec)"
                            TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
                 <CheckBox Grid.Column="1" IsChecked="{Binding FolderImportUsesPixelRegistration}" VerticalAlignment="Center"/>
             </Grid>
@@ -64,8 +64,8 @@
             </Grid>
 
             <TextBlock TextWrapping="Wrap" Foreground="#888" FontSize="11">
-                Folder import: use pixel shifts to match on-sensor dither when FITS RA/Dec stay fixed; otherwise header mode is faster.
-                HTML export default folder is used as the Save dialog starting directory.
+                Both modes show movement relative to frame 1 (origin = 0, 0). Header mode plots ΔRA/ΔDec in arcsec from FITS coordinates (fast). Pixel registration plots cumulative detector shifts from phase correlation (slower, but works even when headers report identical coordinates).
+                HTML export folder sets the Save dialog starting directory.
             </TextBlock>
         </StackPanel>
     </DataTemplate>
