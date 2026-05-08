@@ -100,10 +100,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 static double PlotY(double y) => -y;
 
                 var pathLine = new LineSeries {
-                    Title           = "Pixel drift path",
-                    Color           = OxyColor.FromAColor(55, dotColor),
-                    StrokeThickness = 0.8,
-                    MarkerType      = MarkerType.None
+                    Title               = "Pixel drift path",
+                    Color               = OxyColor.FromAColor(55, dotColor),
+                    StrokeThickness     = 0.8,
+                    MarkerType          = MarkerType.None,
+                    TrackerFormatString = "Path\n{1}: {2:0.##} px\n{3}: {4:0.##} px"
                 };
                 foreach (var s in ordered)
                     pathLine.Points.Add(new DataPoint(
@@ -185,10 +186,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
                 // Header mode: faint line + dots + start/end highlights.
                 var line = new LineSeries {
-                    Title           = "ΔRA / ΔDec path",
-                    Color           = OxyColor.FromAColor(55, dotColor2),
-                    StrokeThickness = 0.8,
-                    MarkerType      = MarkerType.None
+                    Title               = "ΔRA / ΔDec path",
+                    Color               = OxyColor.FromAColor(55, dotColor2),
+                    StrokeThickness     = 0.8,
+                    MarkerType          = MarkerType.None,
+                    TrackerFormatString = "Path\nΔRA: {2:0.##}\"\nΔDec: {4:0.##}\""
                 };
                 foreach (var s in ordered)
                     line.Points.Add(new DataPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
