@@ -147,12 +147,14 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         MarkerSize            = dotSize + 2.0,
                         MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
                         MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
-                        MarkerStrokeThickness = 1.0
+                        MarkerStrokeThickness = 1.0,
+                        TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##} px\n{3}: {4:0.##} px"
                     };
                     foreach (var s in jumpSamples)
                         jumpSeries.Points.Add(new ScatterPoint(
                             s.CumulativePixelX!.Value,
-                            PlotY(s.CumulativePixelY!.Value)));
+                            PlotY(s.CumulativePixelY!.Value),
+                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
                     model.Series.Add(jumpSeries);
                 }
 
@@ -218,10 +220,13 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         MarkerSize            = dotSize2 + 2.0,
                         MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
                         MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
-                        MarkerStrokeThickness = 1.0
+                        MarkerStrokeThickness = 1.0,
+                        TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##}\"\n{3}: {4:0.##}\""
                     };
                     foreach (var s in jumpSamples2)
-                        jumpSeries2.Points.Add(new ScatterPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
+                        jumpSeries2.Points.Add(new ScatterPoint(
+                            s.DeltaRaArcSec, s.DeltaDecArcSec,
+                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
                     model.Series.Add(jumpSeries2);
                 }
 
