@@ -125,7 +125,9 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     scatter.Points.Add(new ScatterPoint(
                         s.CumulativePixelX!.Value,
                         PlotY(s.CumulativePixelY!.Value),
-                        tag: $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}"));
+                        tag: s.IsJump
+                            ? $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss} · Jump: {s.JumpReason ?? "large shift"}"
+                            : $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}"));
                 model.Series.Add(scatter);
 
                 // Jumps first, then start/end on top so they're never obscured.
@@ -209,7 +211,9 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 foreach (var s in ordered)
                     scatter2.Points.Add(new ScatterPoint(
                         s.DeltaRaArcSec, s.DeltaDecArcSec,
-                        tag: $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}"));
+                        tag: s.IsJump
+                            ? $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss} · Jump: {s.JumpReason ?? "large shift"}"
+                            : $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}"));
                 model.Series.Add(scatter2);
 
                 // Jumps first, then start/end on top.
