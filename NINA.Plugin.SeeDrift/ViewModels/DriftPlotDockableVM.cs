@@ -60,48 +60,124 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             var ordered = samples.OrderBy(x => x.FrameIndex).ToList();
 
             if (pixelPlot) {
-                // Scatter plot (no connecting line) with colour gradient by frame order.
-                // Earlier frames = cool blue; later frames = warm orange — same visual
-                // language as Siril's registration plot.
-                model.Axes.Add(new LinearColorAxis {
-                    Key            = "frameOrder",
-                    Palette        = OxyPalettes.Jet(256),
-                    Minimum        = 0,
-                    Maximum        = Math.Max(n - 1, 1),
-                    IsAxisVisible  = false
-                });
+                var dotSize = n > 200 ? 2.5 : (n > 80 ? 3.5 : 4.5);
+                var dotColor = OxyColor.FromRgb(130, 180, 255);
 
+                // Faint connecting line so the drift direction is still readable.
+                var pathLine = new LineSeries {
+                    Title           = "Pixel drift path",
+                    Color           = OxyColor.FromAColor(55, dotColor),
+                    StrokeThickness = 0.8,
+                    MarkerType      = MarkerType.None
+                };
+                foreach (var s in ordered)
+                    pathLine.Points.Add(new DataPoint(
+                        s.CumulativePixelX!.Value,
+                        s.CumulativePixelY!.Value));
+                model.Series.Add(pathLine);
+
+                // All frame dots — uniform colour, drawn on top of the line.
                 var scatter = new ScatterSeries {
-                    Title          = "Pixel shift per frame (colour = frame order, blue→red)",
-                    ColorAxisKey   = "frameOrder",
+                    Title          = "Frames",
                     MarkerType     = MarkerType.Circle,
-                    MarkerSize     = n > 200 ? 2.5 : (n > 80 ? 3.5 : 4.5),
+                    MarkerSize     = dotSize,
+                    MarkerFill     = dotColor,
                     MarkerStroke   = OxyColors.Transparent
                 };
-
                 foreach (var s in ordered)
                     scatter.Points.Add(new ScatterPoint(
                         s.CumulativePixelX!.Value,
-                        s.CumulativePixelY!.Value,
-                        double.NaN,
-                        s.FrameIndex));
-
+                        s.CumulativePixelY!.Value));
                 model.Series.Add(scatter);
+
+                // Start (frame 1 = reference) in green.
+                if (ordered.Count > 0) {
+                    var first = ordered[0];
+                    var startDot = new ScatterSeries {
+                        Title        = "Start (ref)",
+                        MarkerType   = MarkerType.Circle,
+                        MarkerSize   = dotSize + 2.5,
+                        MarkerFill   = OxyColor.FromRgb(80, 210, 100),
+                        MarkerStroke = OxyColor.FromRgb(220, 255, 220),
+                        MarkerStrokeThickness = 1.2
+                    };
+                    startDot.Points.Add(new ScatterPoint(
+                        first.CumulativePixelX!.Value,
+                        first.CumulativePixelY!.Value));
+                    model.Series.Add(startDot);
+                }
+
+                // End frame in orange.
+                if (ordered.Count > 1) {
+                    var last = ordered[^1];
+                    var endDot = new ScatterSeries {
+                        Title        = "End",
+                        MarkerType   = MarkerType.Circle,
+                        MarkerSize   = dotSize + 2.5,
+                        MarkerFill   = OxyColor.FromRgb(255, 130, 40),
+                        MarkerStroke = OxyColor.FromRgb(255, 220, 180),
+                        MarkerStrokeThickness = 1.2
+                    };
+                    endDot.Points.Add(new ScatterPoint(
+                        last.CumulativePixelX!.Value,
+                        last.CumulativePixelY!.Value));
+                    model.Series.Add(endDot);
+                }
+
                 ApplyPixelAxes(model, samples);
             } else {
-                // Header mode: connected path so pointing direction is visible.
+                var dotColor2  = OxyColor.FromRgb(100, 200, 255);
+                var dotSize2   = n > 100 ? 2.5 : 3.5;
+
+                // Header mode: faint line + dots + start/end highlights.
                 var line = new LineSeries {
-                    Title          = "ΔRA / ΔDec from FITS headers (arcsec, relative to frame 1)",
-                    Color          = OxyColor.FromRgb(100, 200, 255),
-                    StrokeThickness = 1.5,
-                    MarkerType     = MarkerType.Circle,
-                    MarkerSize     = n > 100 ? 2.5 : 3.5,
-                    MarkerFill     = OxyColor.FromRgb(100, 200, 255),
-                    MarkerStroke   = OxyColors.Transparent
+                    Title           = "ΔRA / ΔDec path",
+                    Color           = OxyColor.FromAColor(55, dotColor2),
+                    StrokeThickness = 0.8,
+                    MarkerType      = MarkerType.None
                 };
                 foreach (var s in ordered)
                     line.Points.Add(new DataPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
                 model.Series.Add(line);
+
+                var scatter2 = new ScatterSeries {
+                    Title      = "Frames",
+                    MarkerType = MarkerType.Circle,
+                    MarkerSize = dotSize2,
+                    MarkerFill = dotColor2,
+                    MarkerStroke = OxyColors.Transparent
+                };
+                foreach (var s in ordered)
+                    scatter2.Points.Add(new ScatterPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
+                model.Series.Add(scatter2);
+
+                if (ordered.Count > 0) {
+                    var first = ordered[0];
+                    var startDot2 = new ScatterSeries {
+                        Title        = "Start (ref)",
+                        MarkerType   = MarkerType.Circle,
+                        MarkerSize   = dotSize2 + 2.5,
+                        MarkerFill   = OxyColor.FromRgb(80, 210, 100),
+                        MarkerStroke = OxyColor.FromRgb(220, 255, 220),
+                        MarkerStrokeThickness = 1.2
+                    };
+                    startDot2.Points.Add(new ScatterPoint(first.DeltaRaArcSec, first.DeltaDecArcSec));
+                    model.Series.Add(startDot2);
+                }
+                if (ordered.Count > 1) {
+                    var last = ordered[^1];
+                    var endDot2 = new ScatterSeries {
+                        Title        = "End",
+                        MarkerType   = MarkerType.Circle,
+                        MarkerSize   = dotSize2 + 2.5,
+                        MarkerFill   = OxyColor.FromRgb(255, 130, 40),
+                        MarkerStroke = OxyColor.FromRgb(255, 220, 180),
+                        MarkerStrokeThickness = 1.2
+                    };
+                    endDot2.Points.Add(new ScatterPoint(last.DeltaRaArcSec, last.DeltaDecArcSec));
+                    model.Series.Add(endDot2);
+                }
+
                 ApplyPointingAxes(model, samples);
             }
 
