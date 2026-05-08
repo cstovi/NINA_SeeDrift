@@ -1,12 +1,13 @@
 using System;
 using System.ComponentModel.Composition;
-using System.Linq;
+using System.Collections.ObjectModel;
 using System.IO;
-using System.Windows;
+using System.Linq;
 using System.Windows.Input;
 using Microsoft.Win32;
 using NINA.Core.Utility;
 using NINA.Equipment.Interfaces.ViewModel;
+using NINA.Plugin.SeeDrift.Models;
 using NINA.Plugin.SeeDrift.Services;
 using NINA.Profile.Interfaces;
 using NINA.WPF.Base.ViewModel;
@@ -20,6 +21,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
     public class DriftPlotDockableVM : DockableVM {
         private readonly DriftTrackingService _tracker;
         private readonly SeeDriftPlugin _plugin;
+        private bool _warnedFlatTrace;
 
         [ImportingConstructor]
         public DriftPlotDockableVM(IProfileService profileService, SeeDriftPlugin plugin)
@@ -52,55 +54,113 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
         private void RefreshPlot() {
             var model = BuildEmptyModel();
-            var raSeries = new LineSeries {
-                Title = "ΔRA (″)",
-                Color = OxyColors.DeepSkyBlue,
-                StrokeThickness = 1.5,
+            var pathSeries = new LineSeries {
+                Title = "Drift path (frame order)",
+                Color = OxyColor.FromRgb(100, 200, 255),
+                StrokeThickness = 1.75,
                 MarkerType = MarkerType.Circle,
-                MarkerSize = 3,
-                MarkerFill = OxyColors.DeepSkyBlue
-            };
-            var decSeries = new LineSeries {
-                Title = "ΔDec (″)",
-                Color = OxyColors.LightPink,
-                StrokeThickness = 1.5,
-                MarkerType = MarkerType.Circle,
-                MarkerSize = 3,
-                MarkerFill = OxyColors.LightPink
+                MarkerSize = 3.5,
+                MarkerFill = OxyColor.FromRgb(100, 200, 255),
+                MarkerStroke = OxyColors.Transparent
             };
 
-            foreach (var s in _tracker.Samples) {
-                raSeries.Points.Add(new DataPoint(s.FrameIndex, s.DeltaRaArcSec));
-                decSeries.Points.Add(new DataPoint(s.FrameIndex, s.DeltaDecArcSec));
-            }
+            foreach (var s in _tracker.Samples.OrderBy(x => x.FrameIndex))
+                pathSeries.Points.Add(new DataPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
 
-            model.Series.Add(raSeries);
-            model.Series.Add(decSeries);
+            ApplySquareArcSecAxes(model, _tracker.Samples);
+
+            model.Series.Add(pathSeries);
+
+            WarnIfFlatTrace();
+
             PlotModel = model;
             RaisePropertyChanged(nameof(SampleCount));
             RaisePropertyChanged(nameof(LastSummary));
         }
 
+        /// <summary>
+        /// Same scale on X and Y so arcsecond drift matches sky geometry (square plot).
+        /// </summary>
+        private static void ApplySquareArcSecAxes(PlotModel model,
+            ObservableCollection<DriftSample> samples) {
+            var xAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Bottom);
+            var yAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Left);
+
+            const double minHalfExtentArcSec = 0.35;
+            const double padFactor = 1.12;
+
+            if (samples.Count == 0) {
+                xAxis.Minimum = -minHalfExtentArcSec;
+                xAxis.Maximum = minHalfExtentArcSec;
+                yAxis.Minimum = -minHalfExtentArcSec;
+                yAxis.Maximum = minHalfExtentArcSec;
+                return;
+            }
+
+            var maxAbsRa = samples.Max(s => Math.Abs(s.DeltaRaArcSec));
+            var maxAbsDec = samples.Max(s => Math.Abs(s.DeltaDecArcSec));
+            var half = Math.Max(Math.Max(maxAbsRa, maxAbsDec), minHalfExtentArcSec) * padFactor;
+
+            xAxis.Minimum = -half;
+            xAxis.Maximum = half;
+            yAxis.Minimum = -half;
+            yAxis.Maximum = half;
+        }
+
+        private void WarnIfFlatTrace() {
+            var samples = _tracker.Samples;
+            if (samples.Count == 0)
+                _warnedFlatTrace = false;
+            if (samples.Count < 3)
+                return;
+            var raRange = samples.Max(s => s.DeltaRaArcSec) - samples.Min(s => s.DeltaRaArcSec);
+            var decRange = samples.Max(s => s.DeltaDecArcSec) - samples.Min(s => s.DeltaDecArcSec);
+            var flat = raRange < 1e-9 && decRange < 1e-9;
+            if (!flat) {
+                _warnedFlatTrace = false;
+                return;
+            }
+            if (_warnedFlatTrace)
+                return;
+            _warnedFlatTrace = true;
+            Logger.Warning(
+                "SeeDrift: all frames share identical pointing in FITS headers (often fixed CRVAL/OBJCT). " +
+                "Prefer per-frame solved RA/DEC, or turn off Seestar-only if headers lack INSTRUME.");
+        }
+
         private static PlotModel BuildEmptyModel() {
+            var gridMajor = OxyColor.FromAColor(55, OxyColor.FromRgb(180, 180, 190));
+            var gridMinor = OxyColor.FromAColor(35, OxyColor.FromRgb(140, 140, 155));
+            var axisLine = OxyColor.FromRgb(95, 95, 105);
+
             var m = new PlotModel {
-                Title = "Drift vs frame # (arcsec from first accepted frame)",
-                Background = OxyColors.Transparent,
-                TextColor = OxyColors.LightGray,
-                PlotAreaBorderColor = OxyColors.Gray
+                Title = "Drift in focal plane (″ relative to first frame)",
+                TitleColor = OxyColor.FromRgb(230, 230, 235),
+                Background = OxyColor.FromRgb(26, 26, 30),
+                TextColor = OxyColor.FromRgb(210, 210, 218),
+                PlotAreaBorderColor = OxyColor.FromRgb(58, 58, 66)
             };
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Bottom,
-                Title = "Frame index",
+                Title = "ΔRA (″)",
+                TitleColor = OxyColor.FromRgb(200, 210, 230),
+                AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
-                MajorGridlineColor = OxyColor.FromAColor(80, OxyColors.Gray),
+                MajorGridlineColor = gridMajor,
                 MinorGridlineStyle = LineStyle.Dot,
-                MinorGridlineColor = OxyColor.FromAColor(40, OxyColors.Gray)
+                MinorGridlineColor = gridMinor,
+                TicklineColor = axisLine
             });
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Left,
-                Title = "Δ arcsec",
+                Title = "ΔDec (″)",
+                TitleColor = OxyColor.FromRgb(200, 210, 230),
+                AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
-                MajorGridlineColor = OxyColor.FromAColor(80, OxyColors.Gray)
+                MajorGridlineColor = gridMajor,
+                MinorGridlineStyle = LineStyle.Dot,
+                MinorGridlineColor = gridMinor,
+                TicklineColor = axisLine
             });
             m.IsLegendVisible = true;
             return m;

@@ -98,6 +98,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (cards.TryGetValue("INSTRUME", out var ins))
                     instrument = ins.Trim();
 
+                // Prefer keywords that usually change per frame (solved center / mount).
+                // CRVAL/OBJCTRA are often copied from target/reference and identical across subs → flat drift.
+                if (TryParseRaDecKeywords(cards, out raHours, out decDeg))
+                    return true;
+                if (TryParseTelRaDecKeywords(cards, out raHours, out decDeg))
+                    return true;
                 if (TryCrval(cards, out raHours, out decDeg))
                     return true;
 
@@ -106,24 +112,53 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         return true;
                 }
 
-                if (cards.TryGetValue("RA", out var rsa) && cards.TryGetValue("DEC", out var rdec)) {
-                    if (double.TryParse(rsa.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rvRa)
-                        && double.TryParse(rdec.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rvDec)) {
-                        if (rvRa <= 24.0 && Math.Abs(rvRa) < 25.0) {
-                            raHours = rvRa;
-                            decDeg = rvDec;
-                            return true;
-                        }
-                        raHours = rvRa / 15.0;
-                        decDeg = rvDec;
-                        return true;
-                    }
-                }
-
                 return false;
             } catch {
                 return false;
             }
+        }
+
+        /// <summary>RA/DEC numeric pair — often plate-solved image center (decimal deg) or hours+deg.</summary>
+        private static bool TryParseRaDecKeywords(Dictionary<string, string> cards,
+            out double raHours, out double decDeg) {
+            raHours = 0;
+            decDeg = 0;
+            if (!cards.TryGetValue("RA", out var rsa) || !cards.TryGetValue("DEC", out var rdec))
+                return false;
+            if (!double.TryParse(rsa.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rvRa)
+                || !double.TryParse(rdec.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rvDec))
+                return false;
+            if (rvRa <= 24.0 && Math.Abs(rvRa) < 25.0) {
+                raHours = rvRa;
+                decDeg = rvDec;
+                return true;
+            }
+            raHours = rvRa / 15.0;
+            decDeg = rvDec;
+            return true;
+        }
+
+        /// <summary>TELRA/TELDEC — mount/telescope coords; typically decimal degrees in FITS.</summary>
+        private static bool TryParseTelRaDecKeywords(Dictionary<string, string> cards,
+            out double raHours, out double decDeg) {
+            raHours = 0;
+            decDeg = 0;
+            if (!cards.TryGetValue("TELRA", out var tra) || !cards.TryGetValue("TELDEC", out var tdec))
+                return false;
+            if (!double.TryParse(tra.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var telRa)
+                || !double.TryParse(tdec.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var telDec))
+                return false;
+
+            // RA field is hours when |RA| ≤ 24 (common ASCOM-style); otherwise decimal degrees (e.g. 280°).
+            if (Math.Abs(telRa) > 24.0) {
+                raHours = telRa / 15.0;
+                decDeg = telDec;
+                return true;
+            }
+
+            raHours = telRa;
+            decDeg = telDec;
+            return true;
         }
 
         private static bool TryCrval(Dictionary<string, string> cards, out double raHours, out double decDeg) {
