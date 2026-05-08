@@ -30,7 +30,7 @@ Session discipline (**one scope / one target run**, separate folders for replay)
 ### Offline replay
 
 1. Click **Import FITS folder…** and select a directory that contains your lights (not subfolders). The current trace is cleared and replaced by replayed frames — **every** readable light is plotted in order.
-2. Files are ordered by **DATE-OBS** / **DATE** / **EXPSTART** when those keywords exist; otherwise by file creation time and name.
+2. Files are sorted by observation time when present (**DATE-OBS** first, then **DATE** / **EXPSTART** / **OBSTIME**); otherwise by file creation time and path. Each point uses **RA** and **Dec** (hours/degrees as applicable) parsed from that file’s **primary HDU header** — see technical notes for keyword precedence. Many subs can share the same header coordinates, so markers **stack** and only distinct sky positions are visible.
 3. Files with **IMAGETYP** / **OBSTYPE** set to something other than light-style imaging are skipped when those keywords are present.
 
 ## Technical notes

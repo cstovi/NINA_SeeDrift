@@ -56,7 +56,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             var n = _tracker.Samples.Count;
             var model = BuildEmptyModel(n);
             var pathSeries = new LineSeries {
-                Title = "Frame order (FITS RA/Dec)",
+                Title = "RA° / Dec° from FITS primary header",
                 Color = OxyColor.FromRgb(100, 200, 255),
                 StrokeThickness = 1.75,
                 MarkerType = MarkerType.Circle,
@@ -65,7 +65,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 MarkerStroke = OxyColors.Transparent
             };
 
-            // Absolute pointing per frame (not Δ from first): X = RA°, Y = Dec° — line follows capture/replay order.
+            // X/Y = RA° / Dec° from each FITS primary header; folder import order matches DATE-OBS sort (see FitsFolderImport).
             foreach (var s in _tracker.Samples.OrderBy(x => x.FrameIndex))
                 pathSeries.Points.Add(new DataPoint(RaHoursToDegrees(s.RawRaHours), s.RawDecDeg));
 
@@ -146,7 +146,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             var m = new PlotModel {
                 Title = "Pointing path — RA° vs Dec° per FITS frame",
                 Subtitle = frameCount > 0
-                    ? $"{frameCount} markers · line connects frames in time order (DATE-OBS / capture order)"
+                    ? $"{frameCount} frames · RA° & Dec° from each primary header · frame order (live = save order; folder import = DATE-OBS when present) · identical coords overlap"
                     : "",
                 TitleColor = OxyColor.FromRgb(230, 230, 235),
                 SubtitleColor = OxyColor.FromRgb(170, 175, 185),
