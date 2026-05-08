@@ -22,6 +22,14 @@ try {
 
     $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     git commit -m "cursor(gitship): sync workspace edits $ts"
+    if ($LASTEXITCODE -eq 0) {
+        if (git remote get-url origin 2>$null) {
+            git push 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                git push -u origin HEAD 2>$null
+            }
+        }
+    }
     Pop-Location
     exit 0
 }
