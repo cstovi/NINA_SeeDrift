@@ -84,6 +84,24 @@ namespace NINA.Plugin.SeeDrift.Utility {
             return true;
         }
 
+        /// <summary>
+        /// Derives the image plate scale from XPIXSZ (µm) and FOCALLEN (mm).
+        /// Formula: 206.265 × pixel_size_µm / focal_length_mm = arcsec/px.
+        /// </summary>
+        public static bool TryReadPlateScale(Dictionary<string, string> cards, out double arcSecPerPx) {
+            arcSecPerPx = 0;
+            if (!cards.TryGetValue("XPIXSZ", out var xp) || !cards.TryGetValue("FOCALLEN", out var fl))
+                return false;
+            if (!double.TryParse(xp.Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var pixUm) || pixUm <= 0)
+                return false;
+            if (!double.TryParse(fl.Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var focalMm) || focalMm <= 0)
+                return false;
+            arcSecPerPx = 206.265 * pixUm / focalMm;
+            return arcSecPerPx > 0;
+        }
+
         internal static bool TryParsePointing(Dictionary<string, string> cards,
             out double raHours, out double decDeg,
             out string? objectName, out string? instrument) {

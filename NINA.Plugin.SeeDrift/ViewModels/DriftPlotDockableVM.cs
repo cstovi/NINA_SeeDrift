@@ -56,7 +56,13 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             var samples = _tracker.Samples;
             var n = samples.Count;
             var pixelPlot = n > 0 && samples[0].IsPixelPath;
-            var model = BuildEmptyModel(n, pixelPlot);
+
+            // Build plate-scale label from the tracker's cached value.
+            string? psLabel = _tracker.PlateScaleArcSecPerPx.HasValue
+                ? $"{_tracker.PlateScaleArcSecPerPx.Value:F2}\"↗px"
+                : null;
+
+            var model = BuildEmptyModel(n, pixelPlot, psLabel);
             var ordered = samples.OrderBy(x => x.FrameIndex).ToList();
 
             if (pixelPlot) {
@@ -127,6 +133,24 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     model.Series.Add(endDot);
                 }
 
+                // Jump markers — gold diamonds drawn on top so they stand out clearly.
+                var jumpSamples = ordered.Where(s => s.IsJump).ToList();
+                if (jumpSamples.Count > 0) {
+                    var jumpSeries = new ScatterSeries {
+                        Title                 = $"Jumps ({jumpSamples.Count})",
+                        MarkerType            = MarkerType.Diamond,
+                        MarkerSize            = dotSize + 2.0,
+                        MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
+                        MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
+                        MarkerStrokeThickness = 1.0
+                    };
+                    foreach (var s in jumpSamples)
+                        jumpSeries.Points.Add(new ScatterPoint(
+                            s.CumulativePixelX!.Value,
+                            PlotY(s.CumulativePixelY!.Value)));
+                    model.Series.Add(jumpSeries);
+                }
+
                 ApplyPixelAxes(model, samples);
             } else {
                 var dotColor2  = OxyColor.FromRgb(100, 200, 255);
@@ -179,6 +203,21 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     };
                     endDot2.Points.Add(new ScatterPoint(last.DeltaRaArcSec, last.DeltaDecArcSec));
                     model.Series.Add(endDot2);
+                }
+
+                var jumpSamples2 = ordered.Where(s => s.IsJump).ToList();
+                if (jumpSamples2.Count > 0) {
+                    var jumpSeries2 = new ScatterSeries {
+                        Title                 = $"Jumps ({jumpSamples2.Count})",
+                        MarkerType            = MarkerType.Diamond,
+                        MarkerSize            = dotSize2 + 2.0,
+                        MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
+                        MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
+                        MarkerStrokeThickness = 1.0
+                    };
+                    foreach (var s in jumpSamples2)
+                        jumpSeries2.Points.Add(new ScatterPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
+                    model.Series.Add(jumpSeries2);
                 }
 
                 ApplyPointingAxes(model, samples);
@@ -287,20 +326,23 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             }
         }
 
-        private static PlotModel BuildEmptyModel(int frameCount, bool pixelPlot) {
+        private static PlotModel BuildEmptyModel(int frameCount, bool pixelPlot,
+                string? plateScaleLabel = null) {
             var gridMajor = OxyColor.FromAColor(55, OxyColor.FromRgb(180, 180, 190));
             var gridMinor = OxyColor.FromAColor(35, OxyColor.FromRgb(140, 140, 155));
             var axisLine = OxyColor.FromRgb(95, 95, 105);
+
+            var psHint = plateScaleLabel != null ? $" · {plateScaleLabel}" : "";
 
             string subtitle;
             if (frameCount <= 0)
                 subtitle = "";
             else if (pixelPlot)
                 subtitle =
-                    $"{frameCount} frames · cumulative Δx/Δy in pixels from phase correlation · frame 1 = origin (0, 0) · scroll to zoom";
+                    $"{frameCount} frames · cumulative Δx/Δy in pixels{psHint} · frame 1 = origin · scroll to zoom";
             else
                 subtitle =
-                    $"{frameCount} frames · ΔRA / ΔDec in arcsec relative to frame 1 · sorted by DATE-OBS";
+                    $"{frameCount} frames · ΔRA / ΔDec in arcsec relative to frame 1{psHint} · sorted by DATE-OBS";
 
             var m = new PlotModel {
                 Title = pixelPlot
@@ -343,14 +385,37 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
         public string LastSummary {
             get {
-                if (_tracker.Samples.Count == 0)
+                var samples = _tracker.Samples;
+                if (samples.Count == 0)
                     return "No frames yet.";
-                var first = _tracker.Samples[0];
-                var last = _tracker.Samples[^1];
-                if (first.IsPixelPath) {
-                    return $"Pixel drift — end: ({last.CumulativePixelX:F1}, {last.CumulativePixelY:F1}) px from origin · {_tracker.Samples.Count} frames · {last.TargetName}";
+
+                var n = samples.Count;
+                var last = samples[^1];
+                var jumps = _tracker.JumpCount;
+                var jumpStr = jumps > 0 ? $" · {jumps} jump{(jumps == 1 ? "" : "s")} detected" : "";
+
+                // RA/Dec spread (works for both modes from the delta values).
+                var minRa  = samples.Min(s => s.DeltaRaArcSec);
+                var maxRa  = samples.Max(s => s.DeltaRaArcSec);
+                var minDec = samples.Min(s => s.DeltaDecArcSec);
+                var maxDec = samples.Max(s => s.DeltaDecArcSec);
+                var raRange  = maxRa  - minRa;
+                var decRange = maxDec - minDec;
+                var spreadStr = $"ΔRA {minRa:+0.0;-0.0}″…{maxRa:+0.0;-0.0}″ ({raRange:F1}″ pp) · ΔDec {minDec:+0.0;-0.0}″…{maxDec:+0.0;-0.0}″ ({decRange:F1}″ pp)";
+
+                if (samples[0].IsPixelPath) {
+                    var maxDist = samples.Max(s =>
+                        Math.Sqrt(s.CumulativePixelX!.Value * s.CumulativePixelX.Value +
+                                  s.CumulativePixelY!.Value * s.CumulativePixelY.Value));
+                    string psExtra = "";
+                    if (_tracker.PlateScaleArcSecPerPx.HasValue) {
+                        var ps = _tracker.PlateScaleArcSecPerPx.Value;
+                        psExtra = $" (≈{maxDist * ps:F0}″ · {ps:F2}″/px)";
+                    }
+                    return $"{n} frames · max drift {maxDist:F1}px{psExtra}{jumpStr} · {spreadStr} · {last.TargetName}";
                 }
-                return $"Coord drift — end: ΔRA {last.DeltaRaArcSec:+0.0;-0.0}\" ΔDec {last.DeltaDecArcSec:+0.0;-0.0}\" from frame 1 · {_tracker.Samples.Count} frames · {last.TargetName}";
+
+                return $"{n} frames · {spreadStr}{jumpStr} · {last.TargetName}";
             }
         }
 

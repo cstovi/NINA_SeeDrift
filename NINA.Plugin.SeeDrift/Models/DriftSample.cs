@@ -19,5 +19,11 @@ namespace NINA.Plugin.SeeDrift.Models {
         public double? CumulativePixelY { get; init; }
 
         public bool IsPixelPath => CumulativePixelX.HasValue && CumulativePixelY.HasValue;
+
+        /// <summary>True when the step from the previous frame exceeds the jump threshold.</summary>
+        public bool IsJump { get; set; }
+
+        /// <summary>Human-readable reason for the jump (pixel step, correlated log event, etc.).</summary>
+        public string? JumpReason { get; set; }
     }
 }

@@ -28,6 +28,12 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         public ObservableDriftSamples Samples { get; } = new();
 
+        /// <summary>Plate scale derived from XPIXSZ+FOCALLEN of the first imported FITS, or null.</summary>
+        public double? PlateScaleArcSecPerPx { get; private set; }
+
+        /// <summary>Number of jump frames detected in the most recent import.</summary>
+        public int JumpCount { get; private set; }
+
         public DriftTrackingService(SeeDriftPlugin plugin, IImageSaveMediator imageSaveMediator) {
             _plugin = plugin;
             _imageSaveMediator = imageSaveMediator;
@@ -40,6 +46,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 _trace.RefRaHours = null;
                 _trace.RefDecDeg = null;
                 _trace.NextFrameIndex = 0;
+                PlateScaleArcSecPerPx = null;
+                JumpCount = 0;
             });
         }
 
@@ -67,27 +75,40 @@ namespace NINA.Plugin.SeeDrift.Services {
             var importTrace = new TraceState();
             var built = new List<DriftSample>(entries.Count);
             var skippedParse = 0;
+            double? plateScale = null;
 
             foreach (var e in entries) {
-                if (!FitsCoordinates.TryReadCoordinates(e.Path, out var raHours, out var decDeg, out var objectName, out _)) {
+                if (!FitsCoordinates.TryReadPrimaryHeader(e.Path, out var cards)) {
+                    skippedParse++;
+                    continue;
+                }
+                if (!FitsCoordinates.TryParsePointing(cards, out var raHours, out var decDeg, out var objectName, out _)) {
                     skippedParse++;
                     continue;
                 }
 
+                if (plateScale == null && FitsCoordinates.TryReadPlateScale(cards, out var ps))
+                    plateScale = ps;
+
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : e.TargetLabel;
-
                 AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, null, null, out var sample);
-
                 built.Add(sample);
             }
 
+            JumpDetector.AnnotateJumps(built);
+            NinaLogCorrelator.AnnotateWithLogEvents(built);
+            var jumps = JumpDetector.CountJumps(built);
+
             Application.Current?.Dispatcher.Invoke(() => {
                 CopyTrace(importTrace, _trace);
+                PlateScaleArcSecPerPx = plateScale;
+                JumpCount = jumps;
                 Samples.ReplaceAll(built);
             });
 
             Logger.Info(
-                $"SeeDrift: replay {built.Count}/{entries.Count} FITS from {folderPath} (skipped: no coords {skippedParse})");
+                $"SeeDrift: replay {built.Count}/{entries.Count} FITS from {folderPath} " +
+                $"(skipped: no coords {skippedParse}) jumps={jumps}");
         }
 
         private void ImportFitsFolderPixelRegistration(string folderPath) {
@@ -97,6 +118,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var built = new List<DriftSample>(entries.Count);
             var skippedParse = 0;
             var skippedImage = 0;
+            double? plateScale = null;
 
             if (entries.Count == 0) {
                 Logger.Warning($"SeeDrift: no FITS in {folderPath}");
@@ -113,10 +135,18 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             for (var i = 0; i < entries.Count; i++) {
                 var e = entries[i];
-                if (!FitsCoordinates.TryReadCoordinates(e.Path, out var raHours, out var decDeg, out var objectName, out _)) {
+                if (!FitsCoordinates.TryReadPrimaryHeader(e.Path, out var cards)) {
                     skippedParse++;
                     continue;
                 }
+                if (!FitsCoordinates.TryParsePointing(cards, out var raHours, out var decDeg, out var objectName, out _)) {
+                    skippedParse++;
+                    continue;
+                }
+
+                // Read plate scale from the first FITS that has the keywords.
+                if (plateScale == null && FitsCoordinates.TryReadPlateScale(cards, out var ps))
+                    plateScale = ps;
 
                 if (!FitsImageCrop.TryLoadCentralCrop(e.Path, cropSize, out var crop) || crop == null) {
                     skippedImage++;
@@ -147,14 +177,20 @@ namespace NINA.Plugin.SeeDrift.Services {
                 prevCrop = crop;
             }
 
+            JumpDetector.AnnotateJumps(built);
+            NinaLogCorrelator.AnnotateWithLogEvents(built);
+            var jumps = JumpDetector.CountJumps(built);
+
             Application.Current?.Dispatcher.Invoke(() => {
                 CopyTrace(importTrace, _trace);
+                PlateScaleArcSecPerPx = plateScale;
+                JumpCount = jumps;
                 Samples.ReplaceAll(built);
             });
 
             Logger.Info(
                 $"SeeDrift: pixel replay {built.Count}/{entries.Count} FITS from {folderPath} " +
-                $"(crop {cropSize}px, frame-to-frame + subpixel, skipped: no coords {skippedParse}, image {skippedImage})");
+                $"(crop {cropSize}px, frame-to-frame + subpixel, skipped: no coords {skippedParse}, image {skippedImage}, jumps {jumps})");
         }
 
         private static void CopyTrace(TraceState from, TraceState to) {
