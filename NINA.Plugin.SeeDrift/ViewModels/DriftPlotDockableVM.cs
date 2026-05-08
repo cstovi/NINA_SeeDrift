@@ -404,7 +404,16 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 var n = samples.Count;
                 var last = samples[^1];
                 var jumps = _tracker.JumpCount;
-                var jumpStr = jumps > 0 ? $" · {jumps} jump{(jumps == 1 ? "" : "s")} detected" : "";
+                string jumpStr;
+                if (jumps == 0) {
+                    jumpStr = "";
+                } else if (!_tracker.LogWasFound) {
+                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")} (no NINA log found)";
+                } else if (_tracker.LogCorrelatedCount == 0) {
+                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")} (log found, no events matched)";
+                } else {
+                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")}, {_tracker.LogCorrelatedCount} correlated from log";
+                }
 
                 // RA/Dec spread (works for both modes from the delta values).
                 var minRa  = samples.Min(s => s.DeltaRaArcSec);

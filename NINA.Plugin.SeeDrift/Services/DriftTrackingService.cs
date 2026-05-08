@@ -34,6 +34,12 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <summary>Number of jump frames detected in the most recent import.</summary>
         public int JumpCount { get; private set; }
 
+        /// <summary>Number of jumps that were matched to a NINA log event.</summary>
+        public int LogCorrelatedCount { get; private set; }
+
+        /// <summary>True when a NINA log file was found for the session date.</summary>
+        public bool LogWasFound { get; private set; }
+
         public DriftTrackingService(SeeDriftPlugin plugin, IImageSaveMediator imageSaveMediator) {
             _plugin = plugin;
             _imageSaveMediator = imageSaveMediator;
@@ -48,6 +54,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 _trace.NextFrameIndex = 0;
                 PlateScaleArcSecPerPx = null;
                 JumpCount = 0;
+                LogCorrelatedCount = 0;
+                LogWasFound = false;
             });
         }
 
@@ -96,19 +104,21 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             JumpDetector.AnnotateJumps(built);
-            NinaLogCorrelator.AnnotateWithLogEvents(built);
+            var (logMatched, logFound) = NinaLogCorrelator.AnnotateWithLogEvents(built);
             var jumps = JumpDetector.CountJumps(built);
 
             Application.Current?.Dispatcher.Invoke(() => {
                 CopyTrace(importTrace, _trace);
                 PlateScaleArcSecPerPx = plateScale;
                 JumpCount = jumps;
+                LogCorrelatedCount = logMatched;
+                LogWasFound = logFound;
                 Samples.ReplaceAll(built);
             });
 
             Logger.Info(
                 $"SeeDrift: replay {built.Count}/{entries.Count} FITS from {folderPath} " +
-                $"(skipped: no coords {skippedParse}) jumps={jumps}");
+                $"(skipped: no coords {skippedParse}) jumps={jumps} logFound={logFound} logMatched={logMatched}");
         }
 
         private void ImportFitsFolderPixelRegistration(string folderPath) {
@@ -178,19 +188,21 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             JumpDetector.AnnotateJumps(built);
-            NinaLogCorrelator.AnnotateWithLogEvents(built);
+            var (logMatched2, logFound2) = NinaLogCorrelator.AnnotateWithLogEvents(built);
             var jumps = JumpDetector.CountJumps(built);
 
             Application.Current?.Dispatcher.Invoke(() => {
                 CopyTrace(importTrace, _trace);
                 PlateScaleArcSecPerPx = plateScale;
                 JumpCount = jumps;
+                LogCorrelatedCount = logMatched2;
+                LogWasFound = logFound2;
                 Samples.ReplaceAll(built);
             });
 
             Logger.Info(
                 $"SeeDrift: pixel replay {built.Count}/{entries.Count} FITS from {folderPath} " +
-                $"(crop {cropSize}px, frame-to-frame + subpixel, skipped: no coords {skippedParse}, image {skippedImage}, jumps {jumps})");
+                $"(crop {cropSize}px, frame-to-frame + subpixel, skipped: no coords {skippedParse}, image {skippedImage}, jumps {jumps} logFound={logFound2} logMatched={logMatched2})");
         }
 
         private static void CopyTrace(TraceState from, TraceState to) {

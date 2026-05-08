@@ -41,16 +41,17 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
         /// <summary>
         /// Tries to correlate jump samples with events in the NINA log for the session date.
-        /// Jump samples whose <see cref="DriftSample.JumpReason"/> is already set will have the
-        /// log event appended; others will have it set as the primary reason.
+        /// Returns <c>(matched, logFound)</c> — <c>logFound</c> is true even if zero jumps
+        /// were within the match window, as long as the log file itself was readable.
         /// </summary>
-        public static void AnnotateWithLogEvents(List<DriftSample> samples) {
-            if (samples.Count == 0) return;
+        public static (int Matched, bool LogFound) AnnotateWithLogEvents(List<DriftSample> samples) {
+            if (samples.Count == 0) return (0, false);
             try {
                 var sessionDate = samples[0].ExposureStartUtc.Date;
                 var events = LoadEvents(sessionDate);
-                if (events.Count == 0) return;
+                if (events.Count == 0) return (0, false);
 
+                var matched = 0;
                 foreach (var sample in samples) {
                     if (!sample.IsJump) continue;
                     var closest = FindClosestEvent(events, sample.ExposureStartUtc);
@@ -59,9 +60,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     sample.JumpReason = string.IsNullOrEmpty(sample.JumpReason)
                         ? $"→ {closest.Label} @ {closest.UtcTime:HH:mm:ss}"
                         : $"{sample.JumpReason} → {closest.Label} @ {closest.UtcTime:HH:mm:ss}";
+                    matched++;
                 }
+                return (matched, true);
             } catch (Exception ex) {
                 Logger.Debug($"SeeDrift: log correlation skipped: {ex.Message}");
+                return (0, false);
             }
         }
 
