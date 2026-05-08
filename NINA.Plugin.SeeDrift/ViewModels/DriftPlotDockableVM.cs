@@ -35,7 +35,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             c.BindMouseEnter(new DelegatePlotCommand<OxyMouseEventArgs>(
                 (view, ctrl, args) =>
                     ctrl.AddHoverManipulator(view,
-                        new TrackerManipulator(view) { Snap = false, PointsOnly = true, FiresDistance = 30.0 },
+                        new TrackerManipulator(view) { Snap = false, PointsOnly = true, FiresDistance = 15.0 },
                         args)));
             return c;
         }
@@ -100,11 +100,12 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 static double PlotY(double y) => -y;
 
                 var pathLine = new LineSeries {
-                    Title               = "Pixel drift path",
-                    Color               = OxyColor.FromAColor(55, dotColor),
-                    StrokeThickness     = 0.8,
-                    MarkerType          = MarkerType.None,
-                    TrackerFormatString = "Path\n{1}: {2:0.##} px\n{3}: {4:0.##} px"
+                    Title                        = "Pixel drift path",
+                    Color                        = OxyColor.FromAColor(55, dotColor),
+                    StrokeThickness              = 0.8,
+                    MarkerType                   = MarkerType.None,
+                    CanTrackerInterpolatePoints  = false,
+                    TrackerFormatString          = "Path\n{1}: {2:0.##} px\n{3}: {4:0.##} px"
                 };
                 foreach (var s in ordered)
                     pathLine.Points.Add(new DataPoint(
@@ -186,11 +187,12 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
                 // Header mode: faint line + dots + start/end highlights.
                 var line = new LineSeries {
-                    Title               = "ΔRA / ΔDec path",
-                    Color               = OxyColor.FromAColor(55, dotColor2),
-                    StrokeThickness     = 0.8,
-                    MarkerType          = MarkerType.None,
-                    TrackerFormatString = "Path\nΔRA: {2:0.##}\"\nΔDec: {4:0.##}\""
+                    Title                        = "ΔRA / ΔDec path",
+                    Color                        = OxyColor.FromAColor(55, dotColor2),
+                    StrokeThickness              = 0.8,
+                    MarkerType                   = MarkerType.None,
+                    CanTrackerInterpolatePoints  = false,
+                    TrackerFormatString          = "Path\nΔRA: {2:0.##}\"\nΔDec: {4:0.##}\""
                 };
                 foreach (var s in ordered)
                     line.Points.Add(new DataPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
