@@ -57,34 +57,55 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             var n = samples.Count;
             var pixelPlot = n > 0 && samples[0].IsPixelPath;
             var model = BuildEmptyModel(n, pixelPlot);
-            var pathSeries = new LineSeries {
-                Title = pixelPlot
-                    ? "Cumulative pixel shift (phase correlation)"
-                    : "ΔRA / ΔDec from FITS headers (arcsec, relative to frame 1)",
-                Color = OxyColor.FromRgb(100, 200, 255),
-                StrokeThickness = 1.75,
-                MarkerType = MarkerType.Circle,
-                MarkerSize = n > 100 ? 2.25 : 3.5,
-                MarkerFill = OxyColor.FromRgb(100, 200, 255),
-                MarkerStroke = OxyColors.Transparent
-            };
+            var ordered = samples.OrderBy(x => x.FrameIndex).ToList();
 
-            foreach (var s in samples.OrderBy(x => x.FrameIndex)) {
-                if (pixelPlot)
-                    pathSeries.Points.Add(new DataPoint(s.CumulativePixelX!.Value, s.CumulativePixelY!.Value));
-                else
-                    pathSeries.Points.Add(new DataPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
+            if (pixelPlot) {
+                // Scatter plot (no connecting line) with colour gradient by frame order.
+                // Earlier frames = cool blue; later frames = warm orange — same visual
+                // language as Siril's registration plot.
+                model.Axes.Add(new LinearColorAxis {
+                    Key            = "frameOrder",
+                    Palette        = OxyPalettes.Jet(256),
+                    Minimum        = 0,
+                    Maximum        = Math.Max(n - 1, 1),
+                    IsAxisVisible  = false
+                });
+
+                var scatter = new ScatterSeries {
+                    Title          = "Pixel shift per frame (colour = frame order, blue→red)",
+                    ColorAxisKey   = "frameOrder",
+                    MarkerType     = MarkerType.Circle,
+                    MarkerSize     = n > 200 ? 2.5 : (n > 80 ? 3.5 : 4.5),
+                    MarkerStroke   = OxyColors.Transparent
+                };
+
+                foreach (var s in ordered)
+                    scatter.Points.Add(new ScatterPoint(
+                        s.CumulativePixelX!.Value,
+                        s.CumulativePixelY!.Value,
+                        double.NaN,
+                        s.FrameIndex));
+
+                model.Series.Add(scatter);
+                ApplyPixelAxes(model, samples);
+            } else {
+                // Header mode: connected path so pointing direction is visible.
+                var line = new LineSeries {
+                    Title          = "ΔRA / ΔDec from FITS headers (arcsec, relative to frame 1)",
+                    Color          = OxyColor.FromRgb(100, 200, 255),
+                    StrokeThickness = 1.5,
+                    MarkerType     = MarkerType.Circle,
+                    MarkerSize     = n > 100 ? 2.5 : 3.5,
+                    MarkerFill     = OxyColor.FromRgb(100, 200, 255),
+                    MarkerStroke   = OxyColors.Transparent
+                };
+                foreach (var s in ordered)
+                    line.Points.Add(new DataPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
+                model.Series.Add(line);
+                ApplyPointingAxes(model, samples);
             }
 
-            if (pixelPlot)
-                ApplyPixelAxes(model, samples);
-            else
-                ApplyPointingAxes(model, samples);
-
-            model.Series.Add(pathSeries);
-
             WarnIfFlatTrace(pixelPlot);
-
             PlotModel = model;
             RaisePropertyChanged(nameof(SampleCount));
             RaisePropertyChanged(nameof(LastSummary));
