@@ -38,7 +38,8 @@ namespace NINA.Plugin.SeeDrift.Services {
         private readonly TraceState _trace = new();
         private bool _disposed;
 
-        // Live pixel-registration state (reset on Arm / ResetCurrentTrace).
+        // Mode and pixel-registration state locked in at Arm() time.
+        private FolderPlotMode _armedMode = FolderPlotMode.FitsHeaderCoordinates;
         private double[,]? _prevLiveCrop;
         private double _liveCumX;
         private double _liveCumY;
@@ -79,9 +80,10 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// </summary>
         public void Arm() {
             Application.Current?.Dispatcher.Invoke(() => {
+                _armedMode = _plugin.Settings.FolderImportPlotMode;
                 ResetCurrentTrace();
                 IsArmed = true;
-                Logger.Info("SeeDrift: armed — live recording started");
+                Logger.Info($"SeeDrift: armed — live recording started (mode: {_armedMode})");
             });
         }
 
@@ -343,9 +345,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : targetLabel;
 
                 // Pixel registration: compute shift off the UI thread (image I/O is slow).
+                // Mode is locked in at Arm() — not re-read per frame.
                 double? pixX = null;
                 double? pixY = null;
-                if (_plugin.Settings.FolderImportPlotMode == FolderPlotMode.PixelRegistration) {
+                if (_armedMode == FolderPlotMode.PixelRegistration) {
                     var cropSize = Math.Clamp(_plugin.Settings.RegistrationCropSize, 64, 4096);
                     if (FitsImageCrop.TryLoadCentralCrop(path, cropSize, out var crop) && crop != null) {
                         if (_prevLiveCrop == null) {
