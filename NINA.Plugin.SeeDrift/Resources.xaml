@@ -34,9 +34,17 @@
     <DataTemplate x:Key="SeeDrift_Options" DataType="{x:Type local:SeeDriftPlugin}">
         <StackPanel Margin="8" MaxWidth="560">
             <TextBlock Text="Folder import" FontWeight="Bold" Margin="0,0,0,6"/>
-            <CheckBox Content="Plot cumulative pixel shifts (phase correlation on image crops — slower, matches on-sensor dither/drift)"
-                      IsChecked="{Binding FolderImportUsesPixelRegistration}" Margin="0,0,0,8"/>
-            <Grid Margin="0,0,0,12">
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Plot cumulative pixel shifts (phase correlation on crops — slower; shows on-sensor dither when RA/Dec headers stay fixed)"
+                           TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <CheckBox Grid.Column="1" IsChecked="{Binding FolderImportUsesPixelRegistration}" VerticalAlignment="Center"/>
+            </Grid>
+            <Grid Margin="0,0,0,12"
+                  Visibility="{Binding FolderImportUsesPixelRegistration, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="180"/>
                     <ColumnDefinition Width="*"/>
