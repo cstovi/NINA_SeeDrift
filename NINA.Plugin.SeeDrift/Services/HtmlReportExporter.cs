@@ -13,13 +13,13 @@ namespace NINA.Plugin.SeeDrift.Services {
         public static void WriteReport(string path, IReadOnlyList<DriftSample> samples, string title) {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-            var ra = samples.Select(s => Math.Round(s.DeltaRaArcSec, 4)).ToList();
-            var dec = samples.Select(s => Math.Round(s.DeltaDecArcSec, 4)).ToList();
+            var raDeg = samples.Select(s => Math.Round(s.RawRaHours * 15.0, 6)).ToList();
+            var decDeg = samples.Select(s => Math.Round(s.RawDecDeg, 6)).ToList();
             var scatterPts = new StringBuilder();
             scatterPts.Append('[');
             for (var i = 0; i < samples.Count; i++) {
                 if (i > 0) scatterPts.Append(',');
-                scatterPts.AppendFormat(CultureInfo.InvariantCulture, "{{\"x\":{0},\"y\":{1}}}", ra[i], dec[i]);
+                scatterPts.AppendFormat(CultureInfo.InvariantCulture, "{{\"x\":{0},\"y\":{1}}}", raDeg[i], decDeg[i]);
             }
             scatterPts.Append(']');
 
@@ -31,7 +31,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("<style>body{font-family:Segoe UI,Arial,sans-serif;margin:24px;background:#141418;color:#e8e8ee}");
             sb.AppendLine("h1{font-size:1.2rem} canvas{max-width:100%;max-height:70vh}</style></head><body>");
             sb.AppendLine($"<h1>{Escape(title)}</h1>");
-            sb.AppendLine($"<p>Frames: {samples.Count} · ΔRA horizontal, ΔDec vertical (arcsec from first frame) · Generated {DateTime.Now:yyyy-MM-dd HH:mm}</p>");
+            sb.AppendLine($"<p>Frames: {samples.Count} · Horizontal RA°, vertical Dec° (FITS per frame, chronological order) · Generated {DateTime.Now:yyyy-MM-dd HH:mm}</p>");
             sb.AppendLine("<canvas id=\"c\"></canvas>");
             sb.AppendLine("<script>");
             sb.AppendLine($"const pts = {scatterPts};");
@@ -40,7 +40,7 @@ new Chart(ctx, {
   type: 'scatter',
   data: {
     datasets: [{
-      label: 'Drift path (frame order)',
+      label: 'Pointing path (frame order)',
       data: pts,
       borderColor: '#64c8ff',
       backgroundColor: 'rgba(100,200,255,0.35)',
@@ -55,12 +55,12 @@ new Chart(ctx, {
     maintainAspectRatio: true,
     scales: {
       x: {
-        title: { display: true, text: 'ΔRA (arcsec)', color: '#bbb' },
+        title: { display: true, text: 'RA (degrees)', color: '#bbb' },
         grid: { color: 'rgba(255,255,255,0.08)' },
         ticks: { color: '#aaa' }
       },
       y: {
-        title: { display: true, text: 'ΔDec (arcsec)', color: '#bbb' },
+        title: { display: true, text: 'Dec (degrees)', color: '#bbb' },
         grid: { color: 'rgba(255,255,255,0.08)' },
         ticks: { color: '#aaa' }
       }

@@ -55,7 +55,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
         private void RefreshPlot() {
             var model = BuildEmptyModel();
             var pathSeries = new LineSeries {
-                Title = "Drift path (frame order)",
+                Title = "Frame order (FITS RA/Dec)",
                 Color = OxyColor.FromRgb(100, 200, 255),
                 StrokeThickness = 1.75,
                 MarkerType = MarkerType.Circle,
@@ -64,10 +64,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 MarkerStroke = OxyColors.Transparent
             };
 
+            // Absolute pointing per frame (not Δ from first): X = RA°, Y = Dec° — line follows capture/replay order.
             foreach (var s in _tracker.Samples.OrderBy(x => x.FrameIndex))
-                pathSeries.Points.Add(new DataPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
+                pathSeries.Points.Add(new DataPoint(RaHoursToDegrees(s.RawRaHours), s.RawDecDeg));
 
-            ApplyIndependentArcSecAxes(model, _tracker.Samples);
+            ApplyPointingAxes(model, _tracker.Samples);
 
             model.Series.Add(pathSeries);
 
@@ -78,35 +79,40 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             RaisePropertyChanged(nameof(LastSummary));
         }
 
-        /// <summary>
-        /// Independent scales on X and Y so small RA drift stays visible when Dec drift is much larger
-        /// (equal scales would squash RA into a vertical hairline).
-        /// </summary>
-        private static void ApplyIndependentArcSecAxes(PlotModel model,
+        private static double RaHoursToDegrees(double raHours) => raHours * 15.0;
+
+        /// <summary>Pad around min/max RA° and Dec° so the path uses the plot area (independent scales).</summary>
+        private static void ApplyPointingAxes(PlotModel model,
             ObservableCollection<DriftSample> samples) {
             var xAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Bottom);
             var yAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Left);
 
-            const double minHalfExtentArcSec = 0.35;
-            const double padFactor = 1.12;
+            const double padRatio = 0.08;
+            const double minSpanDeg = 0.02;
 
             if (samples.Count == 0) {
-                xAxis.Minimum = -minHalfExtentArcSec;
-                xAxis.Maximum = minHalfExtentArcSec;
-                yAxis.Minimum = -minHalfExtentArcSec;
-                yAxis.Maximum = minHalfExtentArcSec;
+                xAxis.Minimum = 0;
+                xAxis.Maximum = 1;
+                yAxis.Minimum = 0;
+                yAxis.Maximum = 1;
                 return;
             }
 
-            var maxAbsRa = samples.Max(s => Math.Abs(s.DeltaRaArcSec));
-            var maxAbsDec = samples.Max(s => Math.Abs(s.DeltaDecArcSec));
-            var halfRa = Math.Max(maxAbsRa, minHalfExtentArcSec) * padFactor;
-            var halfDec = Math.Max(maxAbsDec, minHalfExtentArcSec) * padFactor;
+            var raDeg = samples.Select(s => RaHoursToDegrees(s.RawRaHours)).ToList();
+            var decDeg = samples.Select(s => s.RawDecDeg).ToList();
+            var minRa = raDeg.Min();
+            var maxRa = raDeg.Max();
+            var minDec = decDeg.Min();
+            var maxDec = decDeg.Max();
+            var spanRa = Math.Max(maxRa - minRa, minSpanDeg);
+            var spanDec = Math.Max(maxDec - minDec, minSpanDeg);
+            var padRa = spanRa * padRatio;
+            var padDec = spanDec * padRatio;
 
-            xAxis.Minimum = -halfRa;
-            xAxis.Maximum = halfRa;
-            yAxis.Minimum = -halfDec;
-            yAxis.Maximum = halfDec;
+            xAxis.Minimum = minRa - padRa;
+            xAxis.Maximum = maxRa + padRa;
+            yAxis.Minimum = minDec - padDec;
+            yAxis.Maximum = maxDec + padDec;
         }
 
         private void WarnIfFlatTrace() {
@@ -115,9 +121,10 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 _warnedFlatTrace = false;
             if (samples.Count < 3)
                 return;
-            var raRange = samples.Max(s => s.DeltaRaArcSec) - samples.Min(s => s.DeltaRaArcSec);
-            var decRange = samples.Max(s => s.DeltaDecArcSec) - samples.Min(s => s.DeltaDecArcSec);
-            var flat = raRange < 1e-9 && decRange < 1e-9;
+            var raDeg = samples.Select(s => RaHoursToDegrees(s.RawRaHours)).ToList();
+            var raRange = raDeg.Max() - raDeg.Min();
+            var decRange = samples.Max(s => s.RawDecDeg) - samples.Min(s => s.RawDecDeg);
+            var flat = raRange < 1e-12 && decRange < 1e-12;
             if (!flat) {
                 _warnedFlatTrace = false;
                 return;
@@ -136,7 +143,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             var axisLine = OxyColor.FromRgb(95, 95, 105);
 
             var m = new PlotModel {
-                Title = "Drift in focal plane (″ relative to first frame)",
+                Title = "Pointing path (FITS RA / Dec, consecutive frames)",
                 TitleColor = OxyColor.FromRgb(230, 230, 235),
                 Background = OxyColor.FromRgb(26, 26, 30),
                 TextColor = OxyColor.FromRgb(210, 210, 218),
@@ -144,7 +151,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             };
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Bottom,
-                Title = "ΔRA (″)",
+                Title = "RA (°)",
                 TitleColor = OxyColor.FromRgb(200, 210, 230),
                 AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
@@ -155,7 +162,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             });
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Left,
-                Title = "ΔDec (″)",
+                Title = "Dec (°)",
                 TitleColor = OxyColor.FromRgb(200, 210, 230),
                 AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
@@ -174,8 +181,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             get {
                 if (_tracker.Samples.Count == 0)
                     return "No frames yet.";
+                var first = _tracker.Samples[0];
                 var last = _tracker.Samples[^1];
-                return $"Last: ΔRA {last.DeltaRaArcSec:+0.0;-0.0;0}″ · ΔDec {last.DeltaDecArcSec:+0.0;-0.0;0}″ · {last.TargetName}";
+                var ra0 = RaHoursToDegrees(first.RawRaHours);
+                var ra1 = RaHoursToDegrees(last.RawRaHours);
+                return $"Start RA {ra0:F4}° Dec {first.RawDecDeg:F4}° → end RA {ra1:F4}° Dec {last.RawDecDeg:F4}° · {last.TargetName}";
             }
         }
 
@@ -215,7 +225,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 if (dlg.ShowDialog() != true)
                     return;
 
-                HtmlReportExporter.WriteReport(dlg.FileName, _tracker.Samples.ToList(), "SeeDrift — drift trace");
+                HtmlReportExporter.WriteReport(dlg.FileName, _tracker.Samples.ToList(), "SeeDrift — pointing path");
                 _plugin.HtmlExportFolder = Path.GetDirectoryName(dlg.FileName) ?? folder;
                 _plugin.SyncSettingsFromProperties();
             } catch (Exception ex) {
