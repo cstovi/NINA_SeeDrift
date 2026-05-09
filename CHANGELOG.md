@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **MANUAL:** Explains that **one session is usually one NINA log**, but **log rotation** (e.g. **month** boundary) can split a session across **two** files—matching why **Stop** reads **all** `*.log` files under NINA Logs.
+
 - **Plugins → SeeDrift:** Inline help for **Night report folder**, **Concurrency**, and **Minimum exposures** moved into **hover tooltips** on each row (longer read time on hover).
 - **Plugins → SeeDrift:** Removed the static line under the test-report status panel that compared in-plugin status to **Stop** (details remain in the manual).
 

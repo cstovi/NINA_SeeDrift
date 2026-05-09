@@ -54,7 +54,7 @@ When log lines match **between-frame** intervals, **dither** and **center-after-
 
 - **LIGHT filter:** After resolving paths from the log, SeeDrift reads each FITS/XISF primary header and skips frames whose **IMAGETYP** / **OBSTYPE** indicate calibration (bias/dark/flat) when those keywords are present — same as earlier builds. File extensions **.fits**, **.fit**, **.fts**, and **.xisf** are accepted from the log.
 - **Stop vs Test:** Stop restricts **Saved image to …** lines to **[arm, disarm]** by log timestamp. Test uses **the entire chosen log file**.
-- **Logs folder:** Stop scans **`%LocalAppData%\NINA\Logs\*.log`** only — fast compared to walking the image tree.
+- **Logs folder:** Stop scans **`%LocalAppData%\NINA\Logs\*.log`** only — fast compared to walking the image tree. In practice you often get **one log file per imaging session**, but NINA may **start a new file** when it rotates logs (for example at a **month** boundary), so one session can span **two** files. Reading **every** `.log` in that folder keeps **Stop** from missing **Saved image to …** lines that fell into the “tail” of one file and the “head” of the next.
 - **Solve failures:** Frames that do not solve are skipped for the trace (implementation logs errors).
 - **Jump detection:** Runs on the solved-sample sequence where applicable.
 
