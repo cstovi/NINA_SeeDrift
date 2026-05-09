@@ -2,7 +2,10 @@ using System;
 using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media;
 using NINA.Core.Model;
+using NINA.Plugin.SeeDrift.Utility;
 using NINA.Sequencer.SequenceItem;
 
 namespace NINA.Plugin.SeeDrift.Sequencer {
@@ -20,8 +23,8 @@ namespace NINA.Plugin.SeeDrift.Sequencer {
         public SeeDriftStopInstruction(SeeDriftPlugin plugin) {
             _plugin = plugin;
             Name = "SeeDrift Stop";
-            if (System.Windows.Application.Current?.Resources["SeeDrift_Icon"]
-                    is System.Windows.Media.GeometryGroup icon)
+            SeeDriftIconRegistration.Register();
+            if (Application.Current?.Resources["SeeDrift_Icon"] is GeometryGroup icon)
                 Icon = icon;
         }
 

@@ -55,6 +55,7 @@ namespace NINA.Plugin.SeeDrift {
                 IProfileService profileService,
                 IPlateSolverFactory plateSolverFactory,
                 IImageDataFactory imageDataFactory) {
+            SeeDriftIconRegistration.Register();
             ProfileService = profileService;
 
             Settings = SeeDriftSettings.Load();

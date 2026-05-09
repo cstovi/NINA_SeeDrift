@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.22] — 2026-05-09
+
+### Fixed
+
+- **Sequencer:** **SeeDrift Start** / **SeeDrift Stop** now show the **SeeDrift_Icon** geometry in the instruction palette and on sequence blocks (same `GeometryGroup` as in `Resources.xaml`), by registering that resource on `Application.Current` at plugin load—matching how other See\* plugins expose icons to NINA’s app-wide resource lookup.
+
 ## [0.7.21] — 2026-05-09
 
 ### Added

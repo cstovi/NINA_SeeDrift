@@ -29,6 +29,8 @@ SeeDrift also appends its own messages to **`%LocalAppData%\NINA\SeeDrift\SeeDri
 
 ### Automated window (sequencer)
 
+In NINA’s sequencer palette and on dropped blocks, **SeeDrift Start** and **SeeDrift Stop** show the same vector icon as in plugin metadata (**SeeDrift_Icon**, crosshair-style lines in `Resources.xaml`).
+
 1. Insert **SeeDrift Start** so the plugin records **arm** time (UTC internally).
 2. Capture lights; NINA writes **Saved image to …** lines into the active session log under **`%LocalAppData%\NINA\Logs`**.
 3. Insert **SeeDrift Stop** — the plugin records **disarm** time, reads **all** `*.log` files in that folder, keeps lines whose timestamp falls in **[arm, disarm]** inclusive, collects FITS paths from **Saved image to …**, skips calibration-looking frames when FITS keywords say so, plate-solves in log order, correlates **CenterAfterDrift** / **DitherAfterExposures** from the same logs, and updates the **night HTML**.
