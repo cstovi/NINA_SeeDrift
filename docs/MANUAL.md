@@ -29,7 +29,7 @@ SeeDrift also appends its own messages to **`%LocalAppData%\NINA\SeeDrift\SeeDri
 
 ### Automated window (sequencer)
 
-In the instruction list (left) and on each **dragged-in sequence step**—the same two places SeeDew shows its icon—**SeeDrift Start** and **SeeDrift Stop** use **SeeDrift_Icon** (crosshair-style vector in `Resources.xaml`), registered on NINA’s application resources so both surfaces resolve it.
+**SeeDrift Start** and **SeeDrift Stop** use a small **SeeDrift** vector icon (axes + drift trace) in the sequencer instruction list and on each step block; the geometry is assigned in code so it always appears.
 
 1. Insert **SeeDrift Start** so the plugin records **arm** time (UTC internally).
 2. Capture lights; NINA writes **Saved image to …** lines into the active session log under **`%LocalAppData%\NINA\Logs`**.

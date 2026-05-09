@@ -19,10 +19,10 @@ namespace NINA.Plugin.SeeDrift.Services {
         private const string CdnChartZoom = "https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js";
         private const string CdnTailwind = "https://cdn.tailwindcss.com";
 
-        /// <summary>Fallback: same vector as <c>SeeDrift_Icon</c> in <c>Resources.xaml</c> (sequencer / small chrome).</summary>
+        /// <summary>Fallback SVG motif matching the sequencer icon (axes + drift trace).</summary>
         private const string SeeDriftIconSvgFallback =
             "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" class=\"shrink-0\" aria-hidden=\"true\" focusable=\"false\">" +
-            "<path d=\"M3 12h18M12 3v18M6 6l12 12M18 6L6 18\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2\" stroke-linecap=\"round\"/>" +
+            "<path d=\"M6 18V8H18 M8 15l3-3 3 1 3-4\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>" +
             "</svg>";
 
         /// <summary>Embedded PNG logical name — must match <c>EmbeddedResource</c> <c>LogicalName</c> in the csproj.</summary>

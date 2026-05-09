@@ -2,8 +2,6 @@ using System;
 using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Media;
 using NINA.Core.Model;
 using NINA.Plugin.SeeDrift.Utility;
 using NINA.Sequencer.SequenceItem;
@@ -24,8 +22,7 @@ namespace NINA.Plugin.SeeDrift.Sequencer {
             _plugin = plugin;
             Name = "SeeDrift Start";
             SeeDriftIconRegistration.Register();
-            if (Application.Current?.Resources["SeeDrift_Icon"] is GeometryGroup icon)
-                Icon = icon;
+            Icon = SeeDriftIcons.InstructionIcon;
         }
 
         private SeeDriftStartInstruction(SeeDriftStartInstruction cloneMe) : this(cloneMe._plugin) { }

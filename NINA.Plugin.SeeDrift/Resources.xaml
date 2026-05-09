@@ -5,7 +5,8 @@
     xmlns:local="clr-namespace:NINA.Plugin.SeeDrift">
 
     <GeometryGroup x:Key="SeeDrift_Icon" FillRule="Nonzero">
-        <PathGeometry Figures="M3,12 L21,12 M12,3 L12,21 M6,6 L18,18 M18,6 L6,18"/>
+        <PathGeometry Figures="M6,18 L6,8 L18,8"/>
+        <PathGeometry Figures="M8,15 L11,12 L14,13 L17,9"/>
     </GeometryGroup>
 
     <DataTemplate x:Key="SeeDrift_Options" DataType="{x:Type local:SeeDriftPlugin}">

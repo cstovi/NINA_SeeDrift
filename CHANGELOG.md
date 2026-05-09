@@ -6,11 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.24] — 2026-05-09
+
+### Fixed
+
+- **Sequencer:** **SeeDrift Start** / **SeeDrift Stop** now set `Icon` to a **frozen** `GeometryGroup` defined in code (`SeeDriftIcons.InstructionIcon`) so the graphic appears in the instruction list and on dropped blocks **without** depending on `Application` resource timing. The motif is a compact **axes + drift trace** (distinct from the old crosshair-only glyph).
+
 ## [0.7.23] — 2026-05-09
 
 ### Fixed
 
-- **Sequencer:** If NINA composes the plugin before `Application.Current` exists, icon registration **retries on the UI idle queue** (capped) so the **palette row** and **dragged-in step blocks** still pick up **SeeDrift_Icon**—the same two surfaces SeeDew-style instructions use.
+- **Sequencer:** If NINA composes the plugin before `Application.Current` exists, icon registration **retries on the UI idle queue** (capped) so **SeeDrift_Icon** can still be published for hosts that resolve icon metadata keys.
 
 ## [0.7.22] — 2026-05-09
 
