@@ -42,6 +42,20 @@
                 <TextBox Grid.Column="1" Text="{Binding TempWorkingFolder, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
             </Grid>
 
+            <TextBlock Text="Plate solve speed" FontWeight="Bold" Margin="0,0,0,6"/>
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="160"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Concurrency:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <StackPanel Grid.Column="1">
+                    <TextBox Text="{Binding PlateSolveParallelism, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
+                    <TextBlock Text="How many frames to plate-solve at once (1–16). Default 4. Each slot uses a separate solver instance; higher values use more RAM and CPU. Downsampling still comes only from your NINA Plate Solve profile."
+                               FontSize="10" Foreground="#777" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Grid>
+
             <Separator Margin="0,0,0,12"/>
 
             <TextBlock Text="Test report (historic session)" FontWeight="Bold" Margin="0,0,0,4"/>

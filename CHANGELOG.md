@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.0] — 2026-05-09
+
+### Added
+
+- **Plugins → SeeDrift → Concurrency** (1–16, default **4**): plate-solves multiple LIGHT frames in parallel; each slot uses its **own** `IImageSolver` instance from NINA’s factory (no shared solver across concurrent tasks).
+
+### Changed
+
+- **Performance:** Reuses the **primary FITS header** read during LIGHT filtering so Stop/Test does **not** open-and-parse each header twice before solve.
+- Drift samples are still built in **strict log/frame order** after parallel solves complete.
+
 ## [0.6.8] — 2026-05-09
 
 ### Changed

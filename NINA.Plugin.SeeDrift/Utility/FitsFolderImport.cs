@@ -8,17 +8,26 @@ using NINA.Profile.Interfaces;
 namespace NINA.Plugin.SeeDrift.Utility {
 
     internal readonly struct FitsReplayEntry {
-        public FitsReplayEntry(string path, DateTime sortUtc, DateTime exposureUtc, string targetLabel) {
+        public FitsReplayEntry(
+                string path,
+                DateTime sortUtc,
+                DateTime exposureUtc,
+                string targetLabel,
+                Dictionary<string, string>? primaryHeaderCards = null) {
             Path = path;
             SortUtc = sortUtc;
             ExposureUtc = exposureUtc;
             TargetLabel = targetLabel;
+            PrimaryHeaderCards = primaryHeaderCards;
         }
 
         public string Path { get; }
         public DateTime SortUtc { get; }
         public DateTime ExposureUtc { get; }
         public string TargetLabel { get; }
+
+        /// <summary>Primary HDU header from the first successful read (avoids a second disk parse during plate solve).</summary>
+        public Dictionary<string, string>? PrimaryHeaderCards { get; }
     }
 
     internal static class FitsFolderImport {
@@ -59,7 +68,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
             var yearLo = Math.Min(a.Year, b.Year);
             var yearHi = Math.Max(a.Year, b.Year);
 
-            var list = new List<(string path, DateTime sortUtc, DateTime exposureUtc, string target, int seq)>();
+            var list = new List<(string path, DateTime sortUtc, DateTime exposureUtc, string target, int seq, Dictionary<string, string> cards)>();
             var fitsLike = 0;
             var skippedYear = 0;
             var headersRead = 0;
@@ -106,7 +115,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 cards.TryGetValue("OBJECT", out var obj);
                 var target = string.IsNullOrWhiteSpace(obj) ? Path.GetFileNameWithoutExtension(path) : obj.Trim();
 
-                list.Add((path, sortUtc, exposureUtc, target, ExposureSequenceTieBreak(path)));
+                list.Add((path, sortUtc, exposureUtc, target, ExposureSequenceTieBreak(path), cards));
 
                 if (fitsLike % progressEvery == 0) {
                     onScanProgress?.Invoke(
@@ -123,7 +132,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 .OrderBy(x => x.seq)
                 .ThenBy(x => x.sortUtc)
                 .ThenBy(x => x.path, StringComparer.OrdinalIgnoreCase)
-                .Select(x => new FitsReplayEntry(x.path, x.sortUtc, x.exposureUtc, x.target))
+                .Select(x => new FitsReplayEntry(x.path, x.sortUtc, x.exposureUtc, x.target, x.cards))
                 .ToList();
         }
 
@@ -179,7 +188,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 cards.TryGetValue("OBJECT", out var obj);
                 var target = string.IsNullOrWhiteSpace(obj) ? Path.GetFileNameWithoutExtension(path) : obj.Trim();
 
-                result.Add(new FitsReplayEntry(path, sortUtc, exposureUtc, target));
+                result.Add(new FitsReplayEntry(path, sortUtc, exposureUtc, target, cards));
             }
 
             return result;
@@ -237,7 +246,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
             if (!Directory.Exists(folderPath))
                 return Array.Empty<FitsReplayEntry>();
 
-            var list = new List<(string path, DateTime sortUtc, DateTime exposureUtc, string target, int seq)>();
+            var list = new List<(string path, DateTime sortUtc, DateTime exposureUtc, string target, int seq, Dictionary<string, string> cards)>();
 
             foreach (var path in Directory.EnumerateFiles(folderPath)) {
                 var ext = Path.GetExtension(path);
@@ -260,14 +269,14 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 cards.TryGetValue("OBJECT", out var obj);
                 var target = string.IsNullOrWhiteSpace(obj) ? Path.GetFileNameWithoutExtension(path) : obj.Trim();
 
-                list.Add((path, sortUtc, exposureUtc, target, ExposureSequenceTieBreak(path)));
+                list.Add((path, sortUtc, exposureUtc, target, ExposureSequenceTieBreak(path), cards));
             }
 
             return list
                 .OrderBy(x => x.seq)
                 .ThenBy(x => x.sortUtc)
                 .ThenBy(x => x.path, StringComparer.OrdinalIgnoreCase)
-                .Select(x => new FitsReplayEntry(x.path, x.sortUtc, x.exposureUtc, x.target))
+                .Select(x => new FitsReplayEntry(x.path, x.sortUtc, x.exposureUtc, x.target, x.cards))
                 .ToList();
         }
 

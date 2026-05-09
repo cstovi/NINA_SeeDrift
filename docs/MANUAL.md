@@ -17,11 +17,12 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 | **NINA image folder** | Read-only display of `ActiveProfile.ImageFileSettings.FilePath`. Paths in the log must still resolve on disk (configure **NINA Options → Imaging → image file path** so saves land where you expect). |
 | **Night report folder** | Directory for the rolling **night HTML** file (`SeeDrift_night_YYYYMMDD.html`). Created if missing. If you leave this blank, SeeDrift uses **`Documents\SeeDrift`** (your **Documents** folder, not Desktop). When a run finishes successfully, **NINA’s status bar** shows the **full path** to the file that was written. |
 | **Working folder** | Reserved for possible future scratch use when solving; solving currently uses **`IImageDataFactory.CreateFromFile`** on originals. Default on first run: `%TEMP%\SeeDrift`. |
+| **Concurrency** | How many frames SeeDrift plate-solves **at once** (1–16, default **4**). Each concurrent slot gets its **own** solver instance; higher values use more RAM and CPU. Use **1** to mimic older sequential behavior. Image **downsampling** for solves comes only from **NINA Options → Plate Solve** (same profile as the Plate Solve tool)—SeeDrift does not add a separate downsample step. |
 | **NINA log file** | Used only by **Run test report**: path to a saved `.log` file (Browse opens `%LocalAppData%\NINA\Logs`). Persisted in settings. |
 
 SeeDrift also appends its own messages to **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** (same folder as `settings.json`). The main NINA application log still receives the same lines.
 
-**Tip:** Plate solving uses your **NINA plate-solve profile** (same engines/settings as the Plate Solve tool).
+**Tip:** Plate solving uses your **NINA plate-solve profile** (same engines/settings as the Plate Solve tool). To reduce solve time, tune that profile (solver choice, timeouts, downsampling); then adjust **Concurrency** if your PC can sustain multiple solves.
 
 ## Workflow
 

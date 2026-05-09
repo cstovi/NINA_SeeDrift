@@ -56,6 +56,7 @@ namespace NINA.Plugin.SeeDrift {
             _isInitializing = true;
             HtmlExportFolder = Settings.HtmlExportFolder;
             TempWorkingFolder = Settings.TempWorkingFolder;
+            PlateSolveParallelism = NormalizePlateSolveParallelism(Settings.PlateSolveParallelism);
             _testReportLogFilePath = Settings.TestReportLogFilePath ?? "";
             _isInitializing = false;
             RaisePropertyChanged(nameof(TestReportLogFilePath));
@@ -212,6 +213,7 @@ namespace NINA.Plugin.SeeDrift {
                 Settings.HtmlExportFolder = _htmlExportFolder;
                 Settings.TempWorkingFolder = _tempWorkingFolder;
                 Settings.TestReportLogFilePath = _testReportLogFilePath;
+                Settings.PlateSolveParallelism = _plateSolveParallelism;
                 Settings.Save();
             } finally {
                 _isSyncing = false;
@@ -228,6 +230,26 @@ namespace NINA.Plugin.SeeDrift {
         public string TempWorkingFolder {
             get => _tempWorkingFolder;
             set { _tempWorkingFolder = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
+        }
+
+        private int _plateSolveParallelism = 4;
+
+        /// <summary>Concurrent plate solves during Stop/Test (1–16). Default 4.</summary>
+        public int PlateSolveParallelism {
+            get => _plateSolveParallelism;
+            set {
+                var v = NormalizePlateSolveParallelism(value);
+                if (v == _plateSolveParallelism) return;
+                _plateSolveParallelism = v;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        private static int NormalizePlateSolveParallelism(int value) {
+            if (value < 1) return 4;
+            if (value > 16) return 16;
+            return value;
         }
 
         /// <summary>NINA image save root from the active profile (read-only).</summary>

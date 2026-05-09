@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -31,6 +33,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             public int NextFrameIndex;
             public string? RefTargetName;
         }
+
+        private readonly record struct SolvedCoords(double RaHours, double DecDeg);
 
         private readonly SeeDriftPlugin _plugin;
         private readonly IPlateSolverFactory _plateSolverFactory;
@@ -217,52 +221,65 @@ namespace NINA.Plugin.SeeDrift.Services {
                 MaxProgress = windowed.Count
             });
 
-            var primary = _plateSolverFactory.GetPlateSolver(profile.PlateSolveSettings);
-            var blind = _plateSolverFactory.GetBlindSolver(profile.PlateSolveSettings);
-            var imageSolver = _plateSolverFactory.GetImageSolver(primary, blind);
+            var parallelismCfg = Math.Clamp(_plugin.Settings.PlateSolveParallelism, 1, 16);
+            var poolSize = Math.Min(parallelismCfg, windowed.Count);
+            SeeDriftLog.Info($"SeeDrift: plate-solve concurrency={poolSize} (setting max={parallelismCfg})");
+
+            IImageSolver MakeSolver() {
+                var primary = _plateSolverFactory.GetPlateSolver(profile.PlateSolveSettings!);
+                var blind = _plateSolverFactory.GetBlindSolver(profile.PlateSolveSettings!);
+                return _plateSolverFactory.GetImageSolver(primary, blind);
+            }
+
+            var coords = new SolvedCoords?[windowed.Count];
+            var completed = 0;
+
+            var pool = new BlockingCollection<IImageSolver>();
+            var ownedSolvers = new List<IImageSolver>(poolSize);
+            for (var p = 0; p < poolSize; p++) {
+                var s = MakeSolver();
+                ownedSolvers.Add(s);
+                pool.Add(s);
+            }
+
+            try {
+                await Parallel.ForEachAsync(
+                    Enumerable.Range(0, windowed.Count),
+                    new ParallelOptions { MaxDegreeOfParallelism = poolSize, CancellationToken = token },
+                    async (idx, ct) => {
+                        ct.ThrowIfCancellationRequested();
+                        var entry = windowed[idx];
+                        var solver = pool.Take(ct);
+                        try {
+                            coords[idx] = await TrySolveOneAsync(entry, solver, ct).ConfigureAwait(false);
+                        } finally {
+                            pool.Add(solver);
+                        }
+
+                        var done = Interlocked.Increment(ref completed);
+                        progress?.Report(new ApplicationStatus {
+                            Source = "SeeDrift",
+                            Status = $"Solving {done}/{windowed.Count} — {Path.GetFileName(entry.Path)}",
+                            Progress = done,
+                            MaxProgress = windowed.Count
+                        });
+                    }).ConfigureAwait(false);
+            } finally {
+                foreach (var s in ownedSolvers) {
+                    if (s is IDisposable d)
+                        d.Dispose();
+                }
+            }
 
             var built = new List<DriftSample>(windowed.Count);
             var trace = new TraceState();
-            var i = 0;
-            foreach (var entry in windowed) {
-                token.ThrowIfCancellationRequested();
-                i++;
-                progress?.Report(new ApplicationStatus {
-                    Source = "SeeDrift",
-                    Status = $"Solving {i}/{windowed.Count} — {Path.GetFileName(entry.Path)}",
-                    Progress = i,
-                    MaxProgress = windowed.Count
-                });
-
-                if (!FitsCoordinates.TryReadPrimaryHeader(entry.Path, out var cards))
+            for (var idx = 0; idx < windowed.Count; idx++) {
+                var sc = coords[idx];
+                if (!sc.HasValue)
                     continue;
-
-                var ps = PlateSolveHelper.BuildPlateSolveParameter(cards);
-
-                NINA.Image.Interfaces.IImageData? img = null;
-                try {
-                    img = await _imageDataFactory.CreateFromFile(
-                        entry.Path, 32, false, RawConverterEnum.FREEIMAGE, token).ConfigureAwait(false);
-                } catch (Exception ex) {
-                    SeeDriftLog.Warning($"SeeDrift: could not load image for solve — {entry.Path}: {ex.Message}");
-                    continue;
-                }
-
-                PlateSolveResult? result = null;
-                try {
-                    result = await imageSolver.Solve(img, ps, progress, token).ConfigureAwait(false);
-                } catch (Exception ex) {
-                    SeeDriftLog.Warning($"SeeDrift: plate solve failed — {entry.Path}: {ex.Message}");
-                } finally {
-                    if (img is IDisposable d)
-                        d.Dispose();
-                }
-
-                if (result == null || !PlateSolveHelper.TryResultToRaDecHours(result, out var raH, out var decD))
-                    continue;
-
+                var entry = windowed[idx];
                 var label = entry.TargetLabel;
-                AccumulateFromParsed(raH, decD, entry.ExposureUtc, entry.Path, label, trace, null, null, out var sample);
+                AccumulateFromParsed(sc.Value.RaHours, sc.Value.DecDeg, entry.ExposureUtc, entry.Path, label, trace, null, null, out var sample);
                 built.Add(sample);
             }
 
@@ -363,6 +380,49 @@ namespace NINA.Plugin.SeeDrift.Services {
                 errorMessage = ex.Message;
                 SeeDriftLog.Error($"SeeDrift: failed to write night report: {ex.Message}");
                 return false;
+            }
+        }
+
+        private static bool TryResolveHeaderCards(FitsReplayEntry entry, out Dictionary<string, string> cards) {
+            if (entry.PrimaryHeaderCards != null) {
+                cards = entry.PrimaryHeaderCards;
+                return true;
+            }
+
+            return FitsCoordinates.TryReadPrimaryHeader(entry.Path, out cards);
+        }
+
+        private async Task<SolvedCoords?> TrySolveOneAsync(FitsReplayEntry entry, IImageSolver solver, CancellationToken token) {
+            if (!TryResolveHeaderCards(entry, out var cards))
+                return null;
+
+            var ps = PlateSolveHelper.BuildPlateSolveParameter(cards);
+
+            NINA.Image.Interfaces.IImageData? img = null;
+            try {
+                img = await _imageDataFactory.CreateFromFile(
+                    entry.Path, 32, false, RawConverterEnum.FREEIMAGE, token).ConfigureAwait(false);
+            } catch (Exception ex) {
+                SeeDriftLog.Warning($"SeeDrift: could not load image for solve — {entry.Path}: {ex.Message}");
+                return null;
+            }
+
+            try {
+                PlateSolveResult? result = null;
+                try {
+                    result = await solver.Solve(img, ps, null, token).ConfigureAwait(false);
+                } catch (Exception ex) {
+                    SeeDriftLog.Warning($"SeeDrift: plate solve failed — {entry.Path}: {ex.Message}");
+                    return null;
+                }
+
+                if (result == null || !PlateSolveHelper.TryResultToRaDecHours(result, out var raH, out var decD))
+                    return null;
+
+                return new SolvedCoords(raH, decD);
+            } finally {
+                if (img is IDisposable d)
+                    d.Dispose();
             }
         }
 
