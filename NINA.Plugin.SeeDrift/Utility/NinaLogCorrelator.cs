@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using NINA.Core.Utility;
 using NINA.Plugin.SeeDrift.Models;
@@ -48,9 +49,21 @@ namespace NINA.Plugin.SeeDrift.Utility {
             if (samples.Count == 0) return (0, false);
             try {
                 var sessionDate = samples[0].ExposureStartUtc.Date;
+                Logger.Debug($"SeeDrift: log correlator — sessionDate={sessionDate:yyyy-MM-dd}, first sample UTC={samples[0].ExposureStartUtc:o}");
+
                 var (events, logFound) = LoadEvents(sessionDate);
+                Logger.Debug($"SeeDrift: log correlator — logFound={logFound}, events loaded={events.Count}");
                 if (!logFound) return (0, false);
                 if (events.Count == 0) return (0, true);
+
+                var jumpSamples = samples.Where(s => s.IsJump).ToList();
+                Logger.Debug($"SeeDrift: log correlator — jump samples to match={jumpSamples.Count}, matchWindow={MatchWindow.TotalSeconds}s");
+                if (jumpSamples.Count > 0) {
+                    // Log the closest gap for the first jump so we can diagnose window issues.
+                    var firstJump = jumpSamples[0];
+                    var nearest = events.OrderBy(e => (e.UtcTime - firstJump.ExposureStartUtc).Duration()).First();
+                    Logger.Debug($"SeeDrift: log correlator — first jump UTC={firstJump.ExposureStartUtc:o}, nearest event '{nearest.Label}' UTC={nearest.UtcTime:o}, gap={( nearest.UtcTime - firstJump.ExposureStartUtc).Duration().TotalSeconds:F0}s");
+                }
 
                 var matched = 0;
                 foreach (var sample in samples) {
@@ -63,6 +76,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         : $"{sample.JumpReason} → {closest.Label} @ {closest.UtcTime:HH:mm:ss}";
                     matched++;
                 }
+                Logger.Debug($"SeeDrift: log correlator — matched={matched}");
                 return (matched, true);
             } catch (Exception ex) {
                 Logger.Debug($"SeeDrift: log correlation skipped: {ex.Message}");
