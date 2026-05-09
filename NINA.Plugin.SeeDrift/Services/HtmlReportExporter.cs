@@ -30,6 +30,9 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("  p{margin:2px 0 10px;font-size:0.85rem;color:#888}");
             sb.AppendLine("  canvas{max-width:100%;max-height:55vh;margin-bottom:8px}");
             sb.AppendLine("  hr{border:none;border-top:1px solid #333;margin:24px 0}");
+            sb.AppendLine("  table.logtbl{border-collapse:collapse;font-size:0.8rem;margin:12px 0 0}");
+            sb.AppendLine("  table.logtbl th,table.logtbl td{border:1px solid #333;padding:4px 8px;text-align:left}");
+            sb.AppendLine("  table.logtbl th{color:#aac8ff}");
             sb.AppendLine("</style></head><body>");
             sb.AppendLine($"<h1>SeeDrift — night {DateTime.Now:yyyy-MM-dd}</h1>");
             sb.AppendLine($"<p>Generated {DateTime.Now:HH:mm} · {targets.Count} target{(targets.Count == 1 ? "" : "s")}</p>");
@@ -39,29 +42,21 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var samples = target.Samples;
                 if (t > 0) sb.AppendLine("<hr/>");
 
-                var pixel = samples.Count > 0 && samples[0].IsPixelPath;
-                var xTitle = pixel ? "Cumulative X (pixels)" : "ΔRA (arcsec)";
-                var yTitle = pixel ? "Cumulative Y (pixels)" : "ΔDec (arcsec)";
+                const string xTitle = "ΔRA (arcsec)";
+                const string yTitle = "ΔDec (arcsec)";
                 var canvasId = $"c{t}";
 
                 sb.AppendLine($"<h2>{Escape(target.Name)}</h2>");
-                sb.AppendLine($"<p>{samples.Count} frames · stopped {target.StoppedUtc.ToLocalTime():HH:mm}</p>");
+                sb.AppendLine($"<p>{samples.Count} frames · plate-solved drift · stopped {target.StoppedUtc.ToLocalTime():HH:mm}</p>");
                 sb.AppendLine($"<canvas id=\"{canvasId}\"></canvas>");
 
                 var pts = new StringBuilder("[");
                 for (var i = 0; i < samples.Count; i++) {
                     if (i > 0) pts.Append(',');
-                    if (pixel) {
-                        pts.AppendFormat(CultureInfo.InvariantCulture,
-                            "{{\"x\":{0},\"y\":{1}}}",
-                            samples[i].CumulativePixelX!.Value,
-                            samples[i].CumulativePixelY!.Value);
-                    } else {
-                        pts.AppendFormat(CultureInfo.InvariantCulture,
-                            "{{\"x\":{0},\"y\":{1}}}",
-                            Math.Round(samples[i].DeltaRaArcSec, 4),
-                            Math.Round(samples[i].DeltaDecArcSec, 4));
-                    }
+                    pts.AppendFormat(CultureInfo.InvariantCulture,
+                        "{{\"x\":{0},\"y\":{1}}}",
+                        Math.Round(samples[i].DeltaRaArcSec, 4),
+                        Math.Round(samples[i].DeltaDecArcSec, 4));
                 }
                 pts.Append(']');
 
@@ -86,89 +81,34 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine("  });");
                 sb.AppendLine("})();");
                 sb.AppendLine("</script>");
+                AppendSequencerEdgeTable(sb, samples);
             }
 
             sb.AppendLine("</body></html>");
             File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
         }
 
-        public static void WriteReport(string path, IReadOnlyList<DriftSample> samples, string title) {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-
-            var pixel = samples.Count > 0 && samples[0].IsPixelPath;
-            var scatterPts = new StringBuilder();
-            scatterPts.Append('[');
-            if (pixel) {
-                for (var i = 0; i < samples.Count; i++) {
-                    if (i > 0) scatterPts.Append(',');
-                    var px = samples[i].CumulativePixelX!.Value;
-                    var py = samples[i].CumulativePixelY!.Value;
-                    scatterPts.AppendFormat(CultureInfo.InvariantCulture, "{{\"x\":{0},\"y\":{1}}}", px, py);
-                }
-            } else {
-                for (var i = 0; i < samples.Count; i++) {
-                    if (i > 0) scatterPts.Append(',');
-                    var dRa = Math.Round(samples[i].DeltaRaArcSec, 4);
-                    var dDec = Math.Round(samples[i].DeltaDecArcSec, 4);
-                    scatterPts.AppendFormat(CultureInfo.InvariantCulture, "{{\"x\":{0},\"y\":{1}}}", dRa, dDec);
+        private static void AppendSequencerEdgeTable(StringBuilder sb, IReadOnlyList<DriftSample> samples) {
+            var rows = new List<(string fromFn, string toFn, string kind, string detail)>();
+            for (var i = 0; i < samples.Count; i++) {
+                var m = samples[i].EdgeSequencerMarkers;
+                if (m == null || m.Count == 0) continue;
+                var prevFn = i > 0 ? samples[i - 1].FileName : "";
+                foreach (var e in m) {
+                    var kind = e.IsDither ? "DitherAfterExposures" : "CenterAfterDrift";
+                    rows.Add((prevFn, samples[i].FileName, kind, e.Tooltip));
                 }
             }
-            scatterPts.Append(']');
+            if (rows.Count == 0)
+                return;
 
-            var xTitle = pixel ? "Cumulative X (pixels)" : "ΔRA (arcsec)";
-            var yTitle = pixel ? "Cumulative Y (pixels)" : "ΔDec (arcsec)";
-            var blurb = pixel
-                ? $"Frames: {samples.Count} · Cumulative pixel shifts (central-crop SSD registration) · frame 1 = origin (0, 0)"
-                : $"Frames: {samples.Count} · ΔRA / ΔDec in arcsec relative to frame 1 · sorted by filename #, then DATE-OBS";
-
-            var sb = new StringBuilder();
-            sb.AppendLine("<!DOCTYPE html>");
-            sb.AppendLine("<html lang=\"en\"><head><meta charset=\"utf-8\"/>");
-            sb.AppendLine($"<title>{Escape(title)}</title>");
-            sb.AppendLine("<script src=\"https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js\"></script>");
-            sb.AppendLine("<style>body{font-family:Segoe UI,Arial,sans-serif;margin:24px;background:#141418;color:#e8e8ee}");
-            sb.AppendLine("h1{font-size:1.2rem} canvas{max-width:100%;max-height:70vh}</style></head><body>");
-            sb.AppendLine($"<h1>{Escape(title)}</h1>");
-            sb.AppendLine($"<p>{Escape(blurb)} · Generated {DateTime.Now:yyyy-MM-dd HH:mm}</p>");
-            sb.AppendLine("<canvas id=\"c\"></canvas>");
-            sb.AppendLine("<script>");
-            sb.AppendLine($"const pts = {scatterPts};");
-            sb.AppendLine("const ctx = document.getElementById('c');");
-            sb.AppendLine("new Chart(ctx, {");
-            sb.AppendLine("  type: 'scatter',");
-            sb.AppendLine("  data: {");
-            sb.AppendLine("    datasets: [{");
-            sb.AppendLine("      label: 'Pointing path (frame order)',");
-            sb.AppendLine("      data: pts,");
-            sb.AppendLine("      borderColor: '#64c8ff',");
-            sb.AppendLine("      backgroundColor: 'rgba(100,200,255,0.35)',");
-            sb.AppendLine("      showLine: true,");
-            sb.AppendLine("      tension: 0.12,");
-            sb.AppendLine("      pointRadius: 3,");
-            sb.AppendLine("      borderWidth: 1.5");
-            sb.AppendLine("    }]");
-            sb.AppendLine("  },");
-            sb.AppendLine("  options: {");
-            sb.AppendLine("    responsive: true,");
-            sb.AppendLine("    maintainAspectRatio: true,");
-            sb.AppendLine("    scales: {");
-            sb.AppendLine("      x: {");
-            sb.AppendLine($"        title: {{ display: true, text: '{xTitle}', color: '#bbb' }},");
-            sb.AppendLine("        grid: { color: 'rgba(255,255,255,0.08)' },");
-            sb.AppendLine("        ticks: { color: '#aaa' }");
-            sb.AppendLine("      },");
-            sb.AppendLine("      y: {");
-            sb.AppendLine($"        title: {{ display: true, text: '{yTitle}', color: '#bbb' }},");
-            sb.AppendLine("        grid: { color: 'rgba(255,255,255,0.08)' },");
-            sb.AppendLine("        ticks: { color: '#aaa' }");
-            sb.AppendLine("      }");
-            sb.AppendLine("    },");
-            sb.AppendLine("    plugins: { legend: { labels: { color: '#ccc' } } }");
-            sb.AppendLine("  }");
-            sb.AppendLine("});");
-            sb.AppendLine("</script></body></html>");
-
-            File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+            sb.AppendLine("<h3 style=\"font-size:0.95rem;margin-top:18px;color:#aac8ff\">Sequencer events (NINA logs)</h3>");
+            sb.AppendLine("<p style=\"font-size:0.8rem;color:#888\">Between-frame triggers aligned to exposure intervals — requires matching session log.</p>");
+            sb.AppendLine("<table class=\"logtbl\"><thead><tr><th>From frame</th><th>To frame</th><th>Kind</th><th>Detail</th></tr></thead><tbody>");
+            foreach (var r in rows) {
+                sb.AppendLine($"<tr><td>{Escape(r.fromFn)}</td><td>{Escape(r.toFn)}</td><td>{Escape(r.kind)}</td><td style=\"white-space:pre-wrap\">{Escape(r.detail)}</td></tr>");
+            }
+            sb.AppendLine("</tbody></table>");
         }
 
         private static string Escape(string s) {

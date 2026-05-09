@@ -1,44 +1,48 @@
 # SeeDrift — NINA plugin
 
-Plots **RA/Dec drift** from **saved LIGHT** frames (any camera): offsets in arcseconds relative to the first frame in the current trace. Optional **pixel registration** (central-crop template matching) can drive the trace for **folder import** and for **live** capture while **armed**, depending on the plugin option. Includes a **live dockable** chart (OxyPlot), **offline FITS folder replay**, and **HTML export** (Chart.js).
+**Plate-solves** saved **LIGHT** frames under your **NINA image file directory** (recursive scan), filtered by a **UTC observation window**. Drift is reported as **ΔRA / ΔDec in arcseconds** versus the first solved frame of that window. Output is **HTML** with a **Chart.js** scatter plot; when session logs match the run, **dither** and **center-after-drift** sequencer triggers appear in a **table** (same correlation logic as before — strict between-frame intervals).
+
+There is **no live dockable chart** and **no pixel / header-only drift path** in this version.
 
 ## Requirements
 
 - **N.I.N.A.** 3.2+ (targets `NINA.Plugin` **3.2.0.9001**, **.NET 8**)
 - Windows (same as NINA)
+- A working **plate solve** profile in NINA (same stack as **Plate Solve**)
 
 ## Install
 
-1. Build `NINA.Plugin.SeeDrift.csproj` (`dotnet build -c Release`).
-2. Copy **`NINA.Plugin.SeeDrift.dll`** from `bin\Release\net8.0-windows\` (or your build output folder) to:
+1. Build `NINA.Plugin.SeeDrift.csproj`: `dotnet build -c Release`.
+2. Copy **`NINA.Plugin.SeeDrift.dll`** from `bin\Release\net8.0-windows\` to:
 
    `%LOCALAPPDATA%\NINA\Plugins\3.0.0\SeeDrift\`
 
-   If NINA reports a missing dependency, copy the other assemblies from the **same** output folder as well (e.g. **OxyPlot**.dll / **OxyPlot.Wpf**.dll, **Newtonsoft.Json**.dll). The project does **not** use Math.NET.
+   If NINA reports a missing dependency, copy the other assemblies from the **same** output folder as well (for example **Newtonsoft.Json**.dll, **FreeImage** / imaging-related DLLs pulled in transitively). This project does **not** use Math.NET.
 
 3. Restart NINA.
 
-The csproj includes a post-build copy to that folder when NINA is not locking the DLL. That copy uses **whichever configuration you built**: plain `dotnet build` defaults to **Debug** (`bin\Debug\net8.0-windows\`); use **`dotnet build -c Release`** for shipping (output under `bin\Release\...`).
+The csproj may post-build copy to that folder when NINA is not locking the DLL. Plain `dotnet build` defaults to **Debug**; use **`dotnet build -c Release`** for shipping.
 
 ## Usage
 
-### Live imaging
+### Configure imaging path
 
-1. Open **Imaging** → dock **SeeDrift** (Tools/Info panel depending on NINA layout).
-2. Run your sequence; each saved **LIGHT** updates the trace (ΔRA and ΔDec vs frame index).
-3. **Reset trace** clears the reference frame; **Export HTML…** saves the same data as a standalone HTML file.
+Set **Options → Imaging → image file path** in NINA to the folder where lights are saved. SeeDrift reads this path from the **active profile** (shown read-only under **Plugins → SeeDrift**).
 
-### Offline testing (no camera)
+### Sequencer (recommended)
 
-1. Open **SeeDrift**.
-2. Click **Import FITS folder…** and choose a folder with existing lights (`.fits` / `.fit` / `.fts`, non-recursive). The trace resets and replays files sorted by filename exposure number (`_0019`, …) when present, then by **DATE-OBS** (etc.).
-3. Use **Export HTML…** if you want a report file.
+1. Add **SeeDrift Start** before capture and **SeeDrift Stop** when finished (same target / session as needed).
+2. **Stop** runs the batch: finds LIGHT `.fits` / `.fit` / `.fts` **under that folder and subfolders**, keeps files whose observation UTC is **inside** `[Start, Stop]` (inclusive), sorts them (filename exposure index, then header times), plate-solves each frame, builds drift samples, and **appends** a section to the rolling **night HTML** in your configured export folder.
 
-Coordinates are read from each FITS primary header (`CRVAL` / `OBJCTRA`+`OBJCTDEC` / `RA`+`DEC`). If headers do not move frame-to-frame, the plot stays flat until metadata or optional plate solving is added.
+### Test report (options panel)
 
-With **NINA logs** available, **dither** / **center-after-drift** labels and guider detail appear **only** on **between-exposure** markers (orange/cyan) along the line between consecutive frame points — multiple triggers in the same gap get separate markers spaced along that segment — not on every frame or jump — see the manual.
+Under **Plugins → SeeDrift**, enter **observation start/end (UTC)** as ISO 8601 and click **Run test report**. Uses the same pipeline as Stop but with your persisted window instead of Arm timestamps.
 
-See **[docs/MANUAL.md](docs/MANUAL.md)** for options and troubleshooting.
+### Session bookkeeping
+
+**Clear completed targets (session)** resets in-memory completed targets for the rolling night file layout (see manual if you re-run the same night).
+
+See **[docs/MANUAL.md](docs/MANUAL.md)** for options, HTML location, and troubleshooting.
 
 ## Changelog
 

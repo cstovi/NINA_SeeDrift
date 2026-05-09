@@ -1,14 +1,21 @@
 using System;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
+using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
+using NINA.Core.Model;
+using NINA.Core.Utility;
+using static NINA.Core.Utility.Logger;
+using NINA.Image.Interfaces;
 using NINA.Plugin;
 using NINA.Plugin.Interfaces;
-using NINA.Plugin.SeeDrift.Models;
 using NINA.Plugin.SeeDrift.Services;
+using NINA.Plugin.SeeDrift.Utility;
+using NINA.PlateSolving.Interfaces;
 using NINA.Profile.Interfaces;
-using NINA.WPF.Base.Interfaces.Mediator;
 
 namespace NINA.Plugin.SeeDrift {
 
@@ -22,28 +29,63 @@ namespace NINA.Plugin.SeeDrift {
         protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
-        public IImageSaveMediator ImageSaveMediator { get; }
         public IProfileService ProfileService { get; }
 
         public SeeDriftSettings Settings { get; }
         public DriftTrackingService DriftTracker { get; }
 
+        public ICommand ResetSessionCommand { get; }
+        public ICommand RunTestReportCommand { get; }
+
         [ImportingConstructor]
         public SeeDriftPlugin(
-            IImageSaveMediator imageSaveMediator,
-            IProfileService profileService) {
-            ImageSaveMediator = imageSaveMediator;
+                IProfileService profileService,
+                IPlateSolverFactory plateSolverFactory,
+                IImageDataFactory imageDataFactory) {
             ProfileService = profileService;
 
             Settings = SeeDriftSettings.Load();
-            DriftTracker = new DriftTrackingService(this, ImageSaveMediator);
+            DriftTracker = new DriftTrackingService(this, plateSolverFactory, imageDataFactory);
 
             _isInitializing = true;
             HtmlExportFolder = Settings.HtmlExportFolder;
-            FolderImportPlotMode = Settings.FolderImportPlotMode;
-            RegistrationCropSize = Settings.RegistrationCropSize;
-            MountMode = Settings.MountMode;
+            TempWorkingFolder = Settings.TempWorkingFolder;
+            TestObservationStartUtcIso = Settings.TestObservationStartUtcIso;
+            TestObservationEndUtcIso = Settings.TestObservationEndUtcIso;
             _isInitializing = false;
+
+            ResetSessionCommand = new RelayCommand(_ => DriftTracker.ResetSession());
+            RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
+        }
+
+        private async Task RunTestReportFireAsync() {
+            try {
+                if (!TryParseUtcIso(TestObservationStartUtcIso, out var startUtc)) {
+                    Logger.Error("SeeDrift: Test observation start time is not a valid UTC ISO 8601 string.");
+                    return;
+                }
+                if (!TryParseUtcIso(TestObservationEndUtcIso, out var endUtc)) {
+                    Logger.Error("SeeDrift: Test observation end time is not a valid UTC ISO 8601 string.");
+                    return;
+                }
+                await DriftTracker.RunTestReportAsync(startUtc, endUtc,
+                        (IProgress<ApplicationStatus>?)null, CancellationToken.None)
+                    .ConfigureAwait(false);
+            } catch (Exception ex) {
+                Logger.Error($"SeeDrift: Test report failed — {ex.Message}");
+            }
+        }
+
+        private static bool TryParseUtcIso(string? text, out DateTime utc) {
+            utc = default;
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+            text = text.Trim();
+            if (DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dto)) {
+                utc = dto.UtcDateTime;
+                return true;
+            }
+            return false;
         }
 
         public override Task Teardown() {
@@ -56,9 +98,9 @@ namespace NINA.Plugin.SeeDrift {
             _isSyncing = true;
             try {
                 Settings.HtmlExportFolder = _htmlExportFolder;
-                Settings.FolderImportPlotMode = _folderImportPlotMode;
-                Settings.RegistrationCropSize = _registrationCropSize;
-                Settings.MountMode = _mountMode;
+                Settings.TempWorkingFolder = _tempWorkingFolder;
+                Settings.TestObservationStartUtcIso = _testObservationStartUtcIso;
+                Settings.TestObservationEndUtcIso = _testObservationEndUtcIso;
                 Settings.Save();
             } finally {
                 _isSyncing = false;
@@ -71,67 +113,26 @@ namespace NINA.Plugin.SeeDrift {
             set { _htmlExportFolder = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
         }
 
-        private FolderPlotMode _folderImportPlotMode = FolderPlotMode.FitsHeaderCoordinates;
-        public FolderPlotMode FolderImportPlotMode {
-            get => _folderImportPlotMode;
-            set {
-                if (_folderImportPlotMode == value) return;
-                _folderImportPlotMode = value;
-                RaisePropertyChanged();
-                RaisePropertyChanged(nameof(FolderImportUsesPixelRegistration));
-                RaisePropertyChanged(nameof(FolderImportUsesHeaderCoordinates));
-                SyncSettingsFromProperties();
-            }
+        private string _tempWorkingFolder = "";
+        public string TempWorkingFolder {
+            get => _tempWorkingFolder;
+            set { _tempWorkingFolder = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
         }
 
-        /// <summary>UI helper — true when pixel registration mode is selected.</summary>
-        public bool FolderImportUsesPixelRegistration {
-            get => FolderImportPlotMode == FolderPlotMode.PixelRegistration;
-            set => FolderImportPlotMode = value ? FolderPlotMode.PixelRegistration : FolderPlotMode.FitsHeaderCoordinates;
+        private string _testObservationStartUtcIso = "";
+        public string TestObservationStartUtcIso {
+            get => _testObservationStartUtcIso;
+            set { _testObservationStartUtcIso = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
         }
 
-        /// <summary>UI helper — true when FITS header coordinates mode is selected.</summary>
-        public bool FolderImportUsesHeaderCoordinates {
-            get => FolderImportPlotMode == FolderPlotMode.FitsHeaderCoordinates;
-            set => FolderImportPlotMode = value ? FolderPlotMode.FitsHeaderCoordinates : FolderPlotMode.PixelRegistration;
+        private string _testObservationEndUtcIso = "";
+        public string TestObservationEndUtcIso {
+            get => _testObservationEndUtcIso;
+            set { _testObservationEndUtcIso = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
         }
 
-        private MountMode _mountMode = MountMode.EQ;
-        public MountMode MountMode {
-            get => _mountMode;
-            set {
-                if (_mountMode == value) return;
-                _mountMode = value;
-                RaisePropertyChanged();
-                RaisePropertyChanged(nameof(MountModeIsEq));
-                RaisePropertyChanged(nameof(MountModeIsAltAz));
-                SyncSettingsFromProperties();
-            }
-        }
-
-        /// <summary>UI helper — true when EQ mode is selected.</summary>
-        public bool MountModeIsEq {
-            get => MountMode == MountMode.EQ;
-            set => MountMode = value ? MountMode.EQ : MountMode.AltAz;
-        }
-
-        /// <summary>UI helper — true when Alt/Az mode is selected.</summary>
-        public bool MountModeIsAltAz {
-            get => MountMode == MountMode.AltAz;
-            set => MountMode = value ? MountMode.AltAz : MountMode.EQ;
-        }
-
-        private int _registrationCropSize = 800;
-        public int RegistrationCropSize {
-            get => _registrationCropSize;
-            set {
-                var v = value;
-                if (v < 64) v = 64;
-                if (v > 4096) v = 4096;
-                _registrationCropSize = v;
-                RaisePropertyChanged();
-                SyncSettingsFromProperties();
-            }
-        }
+        /// <summary>NINA image save root from the active profile (read-only).</summary>
+        public string NINAImageDirectoryDisplay =>
+            NinaPaths.TryGetDefaultImageDirectory(ProfileService) ?? "(not set or folder missing)";
     }
 }

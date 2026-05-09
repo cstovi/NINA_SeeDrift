@@ -2,58 +2,58 @@
 
 ## Overview
 
-SeeDrift listens for **saved LIGHT** images and plots pointing in frame order: **FITS RA / Dec** from headers by default, or **cumulative pixel shifts** from central-crop **template registration** when **Plot cumulative pixel shifts** is enabled (used for **folder import** and for **live** frames while **armed** — the mode is fixed when the SeeDrift **Start** instruction runs). After **Reset trace**, the next accepted frame becomes the reference for offsets and HTML export.
+SeeDrift measures **on-sky drift** by **plate solving** each **LIGHT** frame in a **UTC-bounded** set of files under your **NINA default image directory**. The trace is **ΔRA / ΔDec in arcseconds** relative to the **first solved frame** in that batch.
 
-Use it to visualize tracking drift and to see whether **dither** produces visible steps in RA and/or Dec (sharp jumps vs slow drift).
+It does **not** subscribe to live saves for plotting; work happens when **SeeDrift Stop** finishes (or when you run **Test report** from plugin options).
 
 ## Installation
 
-See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** into NINA’s plugin folder; if load fails, copy companion assemblies from the same build output (see README). **Math.NET is not used.**
+See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependencies from the same build output if the host asks).
 
 ## Options (Plugins → SeeDrift)
 
 | Setting | Meaning |
 |--------|---------|
-| **Plot cumulative pixel shifts** | When enabled, measures frame-to-frame shifts on a central square crop (**SSD template** registration — see Technical notes) and plots **cumulative pixel X/Y** (detector coordinates). Applies to **folder import** and to **live** lights while **armed** (mode is captured at **Start**). When off, both use **FITS header** RA/Dec for the plotted trace (faster). |
-| **Registration crop (px)** | Edge length of the central crop for registration (64–4096, default 800). |
-| **Default folder** | Starting folder for **Export HTML…** |
+| **NINA image folder** | Read-only display of `ActiveProfile.ImageFileSettings.FilePath`. Lights must land here (configure **NINA Options → Imaging → image file path**). |
+| **Night report folder** | Directory for the rolling **night HTML** file (`SeeDrift-night-YYYY-MM-DD.html`). Created if missing. |
+| **Working folder** | Reserved for possible future scratch use when solving; solving currently uses **`IImageDataFactory.CreateFromFile`** on originals. Default on first run: `%TEMP%\SeeDrift`. |
+| **Observation start / end (UTC)** | ISO 8601 strings used only by **Run test report** (for example `2026-05-09T22:00:00Z`). |
 
-Session discipline (**one scope / one target run**, separate folders for replay) is up to you. Use **Reset trace** when you want a new reference frame or before a new session.
+**Tip:** Plate solving uses your **NINA plate-solve profile** (same engines/settings as the Plate Solve tool).
 
 ## Workflow
 
-### Live
+### Automated window (sequencer)
 
-1. Open the **SeeDrift** dockable on the Imaging tab.
-2. Arm recording with the SeeDrift **Start** sequence instruction (and **Stop** when finished), or use your usual workflow so frames are recorded while armed.
-3. Click **Reset trace** before or during a run if you want a fresh reference frame.
-4. Accumulate lights; the plot updates per saved frame. Jump detection and **strict** NINA log correlation for **between-frame** markers run on the same trace as for folder import. **Hover tooltips** disappear when you move the pointer off the marker (you do not need to click away or leave the chart). Frame and jump hovers end with the FITS **file name** (basename) when known. **Frame numbers** in those hovers use the NINA **exposure index** parsed from the basename (e.g. `_0019.fits` → 19) when possible, not the 1-based position in the current trace (which can differ if the run did not start at sub 1 or filenames omit the pattern).
-5. Use **Export HTML…** to save an offline copy (needs network once for Chart.js CDN unless you host scripts locally).
+1. Insert **SeeDrift Start** so the plugin records **arm UTC**.
+2. Capture lights into the configured NINA image folder (subfolders allowed).
+3. Insert **SeeDrift Stop** — the plugin records **disarm UTC**, scans **recursively**, filters by observation UTC ∈ **[arm, disarm]** inclusive, solves, correlates logs, and updates the **night HTML**.
 
-### Offline replay
+### Offline-style test (same disk folder)
 
-1. Optional: in **Plugins → SeeDrift**, enable **Plot cumulative pixel shifts** and set **Registration crop** if you want the detector-space path (slower).
-2. Click **Import FITS folder…** and select a directory that contains your lights (not subfolders). The current trace is cleared and replaced by replayed frames — **every** readable light is plotted in order. Frame and jump hovers include the FITS basename on the last line.
-3. Files are sorted primarily by the numeric suffix after the last underscore in the file name when present (NINA-style `_0019`, `_0020`), then by observation time (**DATE-OBS** first, then **DATE** / **EXPSTART** / **OBSTIME**) when present, otherwise file creation time — so replay order follows the sequencer even if **DATE-OBS** is occasionally out of order between consecutive subs. **Header mode:** many subs can share the same header coordinates, so markers **stack**. **Pixel mode:** path reflects motion in **pixel space**; subs with identical shift still add vertices (line segments may have zero length).
-4. Files with **IMAGETYP** / **OBSTYPE** set to something other than light-style imaging are skipped when those keywords are present.
+1. Set **Observation start** and **Observation end** to bracket your subs (UTC).
+2. Click **Run test report**.
+
+### Rolling HTML file
+
+Each completed batch adds or refreshes content in the night report under **Night report folder**. Open the HTML in a browser; Chart.js loads once from the CDN (needs network unless you host scripts locally).
+
+### Sequencer events in HTML
+
+When **`%LocalAppData%\NINA\Logs`** contains matching session lines, **between-frame** **dither** and **center-after-drift** triggers appear under **Sequencer events (NINA logs)** — same strict interval rules as earlier SeeDrift builds (paired save times when present, fractional seconds, etc.). If logs do not match the interval, the chart still shows drift; the table may be empty.
 
 ## Technical notes
 
-- **Header RA/Dec:** primary HDU FITS keywords (`CRVAL1/2`, `OBJCTRA`/`OBJCTDEC`, or `RA`/`DEC`). If these do not update each sub, the header plot looks flat or stacked.
-- **Pixel registration:** uncompressed primary image data only; central crop; **sum-of-squared-differences** template search (coarse-to-fine on downsampled data, then fine search and **parabolic sub-pixel** refinement). **No FFT and no Math.NET** — not frequency-domain phase correlation despite similar goals. Produces a cumulative **detector** trail comparable in intent to cross-correlation stacks in other tools. Each pair also runs the **inverse** registration (swap reference/moving); if forward and inverse shifts do not nearly cancel, or a single step exceeds a **fraction of the crop size**, that step is **discarded** (cumulative offset unchanged for that frame) to suppress rare false SSD minima that can look like huge arcminute jumps while consecutive FITS still look aligned.
-- **Jump detection:** **Header** mode uses frame-to-frame steps in FITS ΔRA/ΔDec. **Pixel** mode uses cumulative **detector-pixel** steps only when plate-scale **derived** ΔRA/ΔDec is missing on any frame; when **every** frame has derived positions (the usual ΔRA/ΔDec plot), jumps use the **same derived** frame-to-frame distance as the chart. Raw pixel steps can disagree with that curve because conversion uses **per-frame** declination (and parallactic angle on Alt/Az), so the detector no longer labels jumps from pixel space when the plot is in derived arcseconds.
-- **RA wrap:** handled when computing deltas in arcseconds (small-angle approximation with cos(Dec)).
-- **NINA log correlation:** When **armed** (live capture) and on **folder import**, SeeDrift scans `%LocalAppData%\NINA\Logs` (±1 calendar day from the first frame’s date). It reads **all** `.log` files whose names match that window (not only one file per day), parses **`Starting Trigger:`** lines (center-after-drift, dither-after-exposures) and **`DirectGuider` / `SelectDitherPulse`** dither commands.
-  - **Where “Center after drift” / “Dither (after exposures)” appear:** Only as **between-frame** markers on the segment to the next point — when that `Starting Trigger:` timestamp falls **strictly between** the interval bounds for that frame pair. Bounds are normally **consecutive exposure starts**; when the logs contain **`BaseImageData|SaveToDisk|…|Saved image to …`** for **both** frames, SeeDrift matches the path’s **file name** to each sample’s `FileName` and uses the **earliest** logged save time per file for `t0`/`t1` (only if the second save is after the first), so triggers stay aligned even when FITS **DATE-OBS** and NINA log wall time sit in different bases (e.g. UT vs UK local). **Blue frame dots** and **jump** diamonds do **not** attach loose “nearest log line” names; **JumpReason** is from step detection only.
-  - **Between-frame intervals:** **Orange triangles** = dither-after-exposures; **cyan squares** = center-after-drift. **Each** matching `Starting Trigger:` in the strict interval gets its own marker. Markers sit **on the line** between the two frame points; when several events fall in the same gap, they are **evenly spaced along that segment, centered on the midpoint**. Hover shows **NINA intent from logs** for **that** trigger: **dither** — full `SelectDitherPulse` **from → to** guider coordinates, move Δx/Δy, and optional **guide durations** (seconds); **center-after-drift** — `PlatesolvingImageFollower_PropertyChanged` **Drift:** value vs **arc minutes** threshold. Then the same **measured** frame-to-frame steps on every marker in that gap: **header** ΔRA/ΔDec, **derived** ΔRA/ΔDec (pixel registration + plate scale, when available), **cumulative-pixel** Δx/Δy. Multiple dithers in one gap pair with distinct `SelectDitherPulse` lines in chronological order when available. Guider coordinates are **not** arcseconds on sky.
-  - **Jumps:** The subtitle **“with next-frame dither/center interval in log”** counts jumps where the **following** frame boundary has one of those strict intervals — useful overlap, not a causal label on the jump diamond itself.
-  - **Summary line:** When logs are read, the **NINA log** fragment includes how many **`Starting Trigger:`** lines were parsed in the **calendar date window**, how many **DitherAfterExposures** vs **CenterAfterDrift** fall between the **first and last plotted frame** exposure starts (UTC, inclusive), and how many **strict between-frame intervals** have at least one marker.
-  - **Timezone / timing:** NINA log timestamps are usually interpreted as **local** (then converted to UTC). FITS **DATE-OBS** may be UT. **SaveToDisk** pairing (above) avoids relying on exposure-start alignment for the between-frame window when both saves appear in the session logs. Log lines include **fractional seconds**; when the window is capped at the next frame’s header time (second resolution), matching uses a **short upper slop** so a dither logged milliseconds later in the same second is not missed.
+- **Sort order:** Numeric suffix after the last `_` in the file name when present (NINA-style `_0019`), then **DATE-OBS** / fallbacks — see `FitsFolderImport`.
+- **Observation filter:** FITS time keywords converted to UTC; bounds are **inclusive**.
+- **Solve failures:** Frames that do not solve are skipped for the trace (implementation logs errors).
+- **Jump detection:** Still runs on the solved-sample sequence where applicable.
 
 ## Troubleshooting
 
 | Symptom | Likely cause |
 |--------|----------------|
-| Flat line at zero | Header coordinates identical every frame; verify with a FITS viewer or add plate-based positions in a future version. |
-| No points | Not saving **LIGHT** frames; FITS path unreadable at save time; coordinates missing from primary header. |
-| Plugin DLL not updating | NINA still has the DLL locked — close NINA and rebuild/copy. |
+| Empty or tiny trace | No LIGHT files in the folder tree in the UTC window; observation times missing/wrong; plate solve failing — check NINA logs and solver profile. |
+| Wrong folder | Active profile image path differs from where files were saved — verify Options → Imaging and the read-only path on the plugin page. |
+| No sequencer table | Log files missing, wrong date window, or triggers not in strict between-frame intervals — expected when logs do not align. |
+| Plugin DLL not updating | NINA has the DLL locked — close NINA and rebuild/copy. |

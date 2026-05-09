@@ -9,7 +9,7 @@ namespace NINA.Plugin.SeeDrift.Sequencer {
 
     [Export(typeof(ISequenceItem))]
     [ExportMetadata("Name", "SeeDrift Stop")]
-    [ExportMetadata("Description", "Stops SeeDrift tracking and saves the completed target's drift trace to the nightly HTML report. Place after the imaging loop for each target.")]
+    [ExportMetadata("Description", "Stops SeeDrift arm window and plate-solves LIGHT frames saved under the NINA image path during that window, then appends to the nightly HTML report.")]
     [ExportMetadata("Icon", "SeeDrift_Icon")]
     [ExportMetadata("Category", "SeeDrift")]
     public class SeeDriftStopInstruction : SequenceItem {
@@ -27,9 +27,8 @@ namespace NINA.Plugin.SeeDrift.Sequencer {
 
         private SeeDriftStopInstruction(SeeDriftStopInstruction cloneMe) : this(cloneMe._plugin) { }
 
-        public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
-            _plugin.DriftTracker.Disarm();
-            return Task.CompletedTask;
+        public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
+            await _plugin.DriftTracker.DisarmAsync(progress, token).ConfigureAwait(false);
         }
 
         public override object Clone() => new SeeDriftStopInstruction(this);

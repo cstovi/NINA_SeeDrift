@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-09
+
+### Breaking
+
+- **Removed** live **dockable** drift chart (**OxyPlot**) and **ImageSaved** streaming drift.
+- **Removed** cumulative **pixel / SSD registration** path and header-only drift plotting.
+
+### Added
+
+- **Plate-solve batch:** Uses **`IPlateSolverFactory`** / **`IImageSolver`** with **`IImageDataFactory.CreateFromFile`** (same stack as NINA plate solving).
+- **Recursive scan** of the **NINA profile image file path** with **UTC inclusive** `[SeeDrift Start, SeeDrift Stop]` filtering (sequencer) or persisted **Test observation** window (options).
+- **HTML:** Night report sections include a **Sequencer events** table when **NINA log** correlation finds **between-frame** dither / center-after-drift triggers.
+
+### Changed
+
+- Plugin UI is **options-only** (no dockable); **SeeDrift Stop** instruction awaits **`DisarmAsync`** (batch solve + report).
+
+### Removed
+
+- Unused **`WriteReport`** HTML helper (dead code).
+- **`IImageSaveMediator`** dependency from the plugin constructor.
+
 ## [0.4.19] — 2026-05-09
 
 ### Fixed

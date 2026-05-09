@@ -2,22 +2,21 @@ using System;
 using System.IO;
 using Newtonsoft.Json;
 
-using NINA.Plugin.SeeDrift.Models;
-
 namespace NINA.Plugin.SeeDrift {
 
     public class SeeDriftSettings {
-        /// <summary>Folder for HTML exports (Save dialog default).</summary>
+
+        /// <summary>Folder for rolling night HTML exports.</summary>
         public string HtmlExportFolder { get; set; } = "";
 
-        /// <summary>Header vs pixel registration for folder import and for live capture while armed (snapshotted at Arm).</summary>
-        public FolderPlotMode FolderImportPlotMode { get; set; } = FolderPlotMode.FitsHeaderCoordinates;
+        /// <summary>Scratch folder for plate-solve intermediates (reserved for future use).</summary>
+        public string TempWorkingFolder { get; set; } = "";
 
-        /// <summary>Central crop edge length for pixel registration (pixels).</summary>
-        public int RegistrationCropSize { get; set; } = 800;
+        /// <summary>UTC ISO 8601 text for Test report observation window start (e.g. <c>2025-05-09T22:00:00Z</c>).</summary>
+        public string TestObservationStartUtcIso { get; set; } = "";
 
-        /// <summary>Mount type — determines how pixel shifts are converted to RA/Dec arcseconds.</summary>
-        public MountMode MountMode { get; set; } = MountMode.EQ;
+        /// <summary>UTC ISO 8601 text for Test report observation window end.</summary>
+        public string TestObservationEndUtcIso { get; set; } = "";
 
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -33,6 +32,9 @@ namespace NINA.Plugin.SeeDrift {
                 var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
                 if (!string.IsNullOrEmpty(docs))
                     s.HtmlExportFolder = Path.Combine(docs, "SeeDrift");
+            } catch { }
+            try {
+                s.TempWorkingFolder = Path.Combine(Path.GetTempPath(), "SeeDrift");
             } catch { }
             return s;
         }

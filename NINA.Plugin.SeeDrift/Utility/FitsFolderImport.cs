@@ -24,6 +24,71 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static readonly string[] Extensions = { ".fits", ".fit", ".fts" };
 
         /// <summary>
+        /// Recursive scan under <paramref name="rootFolderPath"/> (all subfolders). Same ordering as
+        /// <see cref="EnumerateSorted"/> after flattening.
+        /// </summary>
+        public static IReadOnlyList<FitsReplayEntry> EnumerateSortedRecursive(string rootFolderPath) {
+            if (!Directory.Exists(rootFolderPath))
+                return Array.Empty<FitsReplayEntry>();
+
+            var list = new List<(string path, DateTime sortUtc, DateTime exposureUtc, string target, int seq)>();
+
+            foreach (var path in Directory.EnumerateFiles(rootFolderPath, "*", SearchOption.AllDirectories)) {
+                var ext = Path.GetExtension(path);
+                if (string.IsNullOrEmpty(ext) || Extensions.All(e => !ext.Equals(e, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                if (!FitsCoordinates.TryReadPrimaryHeader(path, out var cards))
+                    continue;
+
+                if (!FitsCoordinates.PassesLightFilterForReplay(cards))
+                    continue;
+
+                DateTime? obsUtc = null;
+                if (FitsCoordinates.TryParseObservationUtc(cards, out var parsedUtc))
+                    obsUtc = parsedUtc;
+
+                var sortUtc = obsUtc ?? File.GetCreationTimeUtc(path);
+                var exposureUtc = obsUtc ?? File.GetLastWriteTimeUtc(path);
+
+                cards.TryGetValue("OBJECT", out var obj);
+                var target = string.IsNullOrWhiteSpace(obj) ? Path.GetFileNameWithoutExtension(path) : obj.Trim();
+
+                list.Add((path, sortUtc, exposureUtc, target, ExposureSequenceTieBreak(path)));
+            }
+
+            return list
+                .OrderBy(x => x.seq)
+                .ThenBy(x => x.sortUtc)
+                .ThenBy(x => x.path, StringComparer.OrdinalIgnoreCase)
+                .Select(x => new FitsReplayEntry(x.path, x.sortUtc, x.exposureUtc, x.target))
+                .ToList();
+        }
+
+        /// <summary>
+        /// Filters by FITS observation time (UTC). Inclusive on both ends.
+        /// </summary>
+        public static IReadOnlyList<FitsReplayEntry> FilterObservationUtcInclusive(
+                IReadOnlyList<FitsReplayEntry> entries, DateTime startUtc, DateTime endUtc) {
+            static DateTime AsUtc(DateTime t) =>
+                t.Kind == DateTimeKind.Utc ? t : t.ToUniversalTime();
+
+            var a = AsUtc(startUtc);
+            var b = AsUtc(endUtc);
+            if (b < a)
+                (a, b) = (b, a);
+
+            var list = new List<FitsReplayEntry>();
+            foreach (var e in entries) {
+                var u = AsUtc(e.ExposureUtc);
+                if (u < a || u > b)
+                    continue;
+                list.Add(e);
+            }
+            return list;
+        }
+
+        /// <summary>
         /// Non-recursive scan; sorts primarily by numeric suffix after the last underscore in the file name
         /// (NINA <c>$$EXPOSURENUMBER$$</c>, e.g. <c>…_0019.fits</c>) when present, then FITS observation time
         /// (else file creation UTC), then path — so order follows the sequencer even when <c>DATE-OBS</c> is
