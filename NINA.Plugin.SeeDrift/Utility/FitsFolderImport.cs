@@ -24,15 +24,17 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static readonly string[] Extensions = { ".fits", ".fit", ".fts" };
 
         /// <summary>
-        /// Non-recursive scan; sorts by FITS observation time when possible, else file creation UTC,
-        /// then numeric suffix after the last underscore in the file name (NINA <c>$$EXPOSURENUMBER$$</c> style),
-        /// then path — so replay order matches sequencer frame numbers when timestamps tie or drift slightly.
+        /// Non-recursive scan; sorts primarily by numeric suffix after the last underscore in the file name
+        /// (NINA <c>$$EXPOSURENUMBER$$</c>, e.g. <c>…_0019.fits</c>) when present, then FITS observation time
+        /// (else file creation UTC), then path — so order follows the sequencer even when <c>DATE-OBS</c> is
+        /// out of order between consecutive subs (tie-break-only sorting was not enough).
+        /// Files without a parseable suffix sort after numbered lights (suffix <c>int.MaxValue</c> sentinel).
         /// </summary>
         public static IReadOnlyList<FitsReplayEntry> EnumerateSorted(string folderPath) {
             if (!Directory.Exists(folderPath))
                 return Array.Empty<FitsReplayEntry>();
 
-            var list = new List<(string path, DateTime sortUtc, DateTime exposureUtc, string target)>();
+            var list = new List<(string path, DateTime sortUtc, DateTime exposureUtc, string target, int seq)>();
 
             foreach (var path in Directory.EnumerateFiles(folderPath)) {
                 var ext = Path.GetExtension(path);
@@ -55,12 +57,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 cards.TryGetValue("OBJECT", out var obj);
                 var target = string.IsNullOrWhiteSpace(obj) ? Path.GetFileNameWithoutExtension(path) : obj.Trim();
 
-                list.Add((path, sortUtc, exposureUtc, target));
+                list.Add((path, sortUtc, exposureUtc, target, ExposureSequenceTieBreak(path)));
             }
 
             return list
-                .OrderBy(x => x.sortUtc)
-                .ThenBy(x => ExposureSequenceTieBreak(x.path))
+                .OrderBy(x => x.seq)
+                .ThenBy(x => x.sortUtc)
                 .ThenBy(x => x.path, StringComparer.OrdinalIgnoreCase)
                 .Select(x => new FitsReplayEntry(x.path, x.sortUtc, x.exposureUtc, x.target))
                 .ToList();

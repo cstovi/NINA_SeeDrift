@@ -199,6 +199,11 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     && save1 > save0) {
                     t0 = save0;
                     t1 = save1;
+                    // End window at next exposure start when FITS time is sane — avoids classifying the
+                    // following gap's trigger inside (save_prev, save_cur) when save_cur is very late.
+                    var expCur = cur.ExposureStartUtc;
+                    if (expCur > t0 && expCur < t1)
+                        t1 = expCur;
                 }
                 if (t1 <= t0)
                     continue;
@@ -250,7 +255,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 }
 
                 var lines = new List<string> {
-                    $"Between frames {prev.FrameIndex + 1} → {cur.FrameIndex + 1}"
+                    $"Between frames {prev.FrameIndex + 1} → {cur.FrameIndex + 1} ({prev.FileName} → {cur.FileName})"
                 };
                 if (cur.EdgeHadDitherTrigger)
                     lines.Add(ditherTriggerUtc.HasValue

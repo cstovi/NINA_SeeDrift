@@ -34,7 +34,7 @@ Session discipline (**one scope / one target run**, separate folders for replay)
 
 1. Optional: in **Plugins → SeeDrift**, enable **Plot cumulative pixel shifts** and set **Registration crop** if you want the detector-space path (slower).
 2. Click **Import FITS folder…** and select a directory that contains your lights (not subfolders). The current trace is cleared and replaced by replayed frames — **every** readable light is plotted in order.
-3. Files are sorted by observation time when present (**DATE-OBS** first, then **DATE** / **EXPSTART** / **OBSTIME**); when two files share the same sort time, by the numeric suffix after the last underscore in the file name (NINA-style `_0019`); otherwise by file creation time and path. **Header mode:** many subs can share the same header coordinates, so markers **stack**. **Pixel mode:** path reflects motion in **pixel space**; subs with identical shift still add vertices (line segments may have zero length).
+3. Files are sorted primarily by the numeric suffix after the last underscore in the file name when present (NINA-style `_0019`, `_0020`), then by observation time (**DATE-OBS** first, then **DATE** / **EXPSTART** / **OBSTIME**) when present, otherwise file creation time — so replay order follows the sequencer even if **DATE-OBS** is occasionally out of order between consecutive subs. **Header mode:** many subs can share the same header coordinates, so markers **stack**. **Pixel mode:** path reflects motion in **pixel space**; subs with identical shift still add vertices (line segments may have zero length).
 4. Files with **IMAGETYP** / **OBSTYPE** set to something other than light-style imaging are skipped when those keywords are present.
 
 ## Technical notes

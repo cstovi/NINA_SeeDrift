@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.12] — 2026-05-09
+
+### Fixed
+
+- **Folder import:** Sort **primarily** by filename exposure index (`_0019`, `_0020`, …), then **DATE-OBS** — the previous “DATE-OBS first, filename only on ties” order could still swap consecutive subs when headers differed by even one second, shifting between-frame log markers by one frame.
+- **NINA log intervals:** When using paired **SaveToDisk** times, cap **`t1`** at the next frame’s **FITS exposure start** when it falls inside `(save_prev, save_cur)` so the following gap’s trigger is less likely to fall into the wrong interval.
+- **Tooltips:** Between-frame line includes **`prev` → `cur` file names** so frame index and FITS name can be checked at a glance.
+
+### Documentation
+
+- **README / MANUAL / plot subtitle / HTML report:** Describe filename-primary sort.
+
 ## [0.4.11] — 2026-05-09
 
 ### Fixed
