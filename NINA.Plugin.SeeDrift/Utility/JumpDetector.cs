@@ -25,6 +25,10 @@ namespace NINA.Plugin.SeeDrift.Utility {
         /// Works for both pixel-registration and header-coordinate samples.
         /// </summary>
         public static void AnnotateJumps(List<DriftSample> samples) {
+            foreach (var s in samples) {
+                s.IsJump = false;
+                s.JumpReason = null;
+            }
             if (samples.Count < 3) return;
             var isPixel = samples[0].IsPixelPath;
 

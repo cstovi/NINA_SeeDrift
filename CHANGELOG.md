@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Live — NINA log correlation:** While **armed**, each new saved LIGHT is annotated with the same **jump detection** and **`Starting Trigger:`** log matching (45-minute window) as **folder import**, so tooltips and the plot subtitle can show sequencer hints and log-correlated jumps during capture.
 - **Folder import — pixel path:** optional **phase correlation** on central image crops (like a Python `phase_cross_correlation` stack). Plots **cumulative Δx/Δy in detector pixels** starting at (0,0). Slower; shows dither/drift when FITS **RA/Dec** headers do not. Uses **Math.NET** FFT. Uncompressed primary HDU only.
 - **Dither log overlay:** extension point only (`DitherLogOverlay` placeholder) for a future iteration.
 

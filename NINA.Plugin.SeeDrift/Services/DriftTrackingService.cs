@@ -204,22 +204,17 @@ namespace NINA.Plugin.SeeDrift.Services {
                 built.Add(sample);
             }
 
-            JumpDetector.AnnotateJumps(built);
-            var (logMatched, logFound) = NinaLogCorrelator.AnnotateWithLogEvents(built);
-            var jumps = JumpDetector.CountJumps(built);
+            ApplyJumpAndLogAnnotation(built);
 
             Application.Current?.Dispatcher.Invoke(() => {
                 CopyTrace(importTrace, _trace);
                 PlateScaleArcSecPerPx = plateScale;
-                JumpCount = jumps;
-                LogCorrelatedCount = logMatched;
-                LogWasFound = logFound;
                 Samples.ReplaceAll(built);
             });
 
             Logger.Info(
                 $"SeeDrift: replay {built.Count}/{entries.Count} FITS from {folderPath} " +
-                $"(skipped: no coords {skippedParse}) jumps={jumps} logFound={logFound} logMatched={logMatched}");
+                $"(skipped: no coords {skippedParse}) jumps={JumpCount} logFound={LogWasFound} logMatched={LogCorrelatedCount}");
         }
 
         private void ImportFitsFolderPixelRegistration(string folderPath) {
@@ -299,23 +294,18 @@ namespace NINA.Plugin.SeeDrift.Services {
                 prevCrop = crop;
             }
 
-            JumpDetector.AnnotateJumps(built);
-            var (logMatched2, logFound2) = NinaLogCorrelator.AnnotateWithLogEvents(built);
-            var jumps = JumpDetector.CountJumps(built);
+            ApplyJumpAndLogAnnotation(built);
 
             Application.Current?.Dispatcher.Invoke(() => {
                 CopyTrace(importTrace, _trace);
                 PlateScaleArcSecPerPx = plateScale;
-                JumpCount = jumps;
-                LogCorrelatedCount = logMatched2;
-                LogWasFound = logFound2;
                 Samples.ReplaceAll(built);
             });
 
             Logger.Info(
                 $"SeeDrift: pixel replay {built.Count}/{entries.Count} FITS from {folderPath} " +
                 $"(crop {cropSize}px, mode={_plugin.Settings.MountMode}, skipped: no coords {skippedParse}, " +
-                $"image {skippedImage}, jumps {jumps} logFound={logFound2} logMatched={logMatched2})");
+                $"image {skippedImage}, jumps {JumpCount} logFound={LogWasFound} logMatched={LogCorrelatedCount})");
         }
 
 
@@ -324,6 +314,18 @@ namespace NINA.Plugin.SeeDrift.Services {
             to.RefDecDeg = from.RefDecDeg;
             to.NextFrameIndex = from.NextFrameIndex;
             to.RefTargetName = from.RefTargetName;
+        }
+
+        /// <summary>
+        /// Jump detection + NINA log trigger correlation. Mutates <paramref name="frames"/> in-place;
+        /// updates <see cref="JumpCount"/>, <see cref="LogCorrelatedCount"/>, <see cref="LogWasFound"/>.
+        /// </summary>
+        private void ApplyJumpAndLogAnnotation(List<DriftSample> frames) {
+            JumpDetector.AnnotateJumps(frames);
+            var (logMatched, logFound) = NinaLogCorrelator.AnnotateWithLogEvents(frames);
+            JumpCount = JumpDetector.CountJumps(frames);
+            LogCorrelatedCount = logMatched;
+            LogWasFound = logFound;
         }
 
         private void OnImageSaved(object? sender, ImageSavedEventArgs e) {
@@ -422,6 +424,12 @@ namespace NINA.Plugin.SeeDrift.Services {
                     AccumulateFromParsed(raHours, decDeg, exposureUtc, path, label, _trace, pixX, pixY, out var sample);
                     sample.PixelDerivedRaArcSec  = pixRa;
                     sample.PixelDerivedDecArcSec = pixDec;
+
+                    var batch = new List<DriftSample>(Samples.Count + 1);
+                    foreach (var s in Samples)
+                        batch.Add(s);
+                    batch.Add(sample);
+                    ApplyJumpAndLogAnnotation(batch);
                     Samples.Add(sample);
                 });
             } catch (Exception ex) {

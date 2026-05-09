@@ -25,9 +25,10 @@ Session discipline (**one scope / one target run**, separate folders for replay)
 ### Live
 
 1. Open the **SeeDrift** dockable on the Imaging tab.
-2. Click **Reset trace** before or during a run if you want a fresh reference frame.
-3. Accumulate lights; the plot updates per saved frame.
-4. Use **Export HTML…** to save an offline copy (needs network once for Chart.js CDN unless you host scripts locally).
+2. Arm recording with the SeeDrift **Start** sequence instruction (and **Stop** when finished), or use your usual workflow so frames are recorded while armed.
+3. Click **Reset trace** before or during a run if you want a fresh reference frame.
+4. Accumulate lights; the plot updates per saved frame. Jump detection and NINA log hints (see Technical notes) run on the same trace as for folder import.
+5. Use **Export HTML…** to save an offline copy (needs network once for Chart.js CDN unless you host scripts locally).
 
 ### Offline replay
 
@@ -41,7 +42,7 @@ Session discipline (**one scope / one target run**, separate folders for replay)
 - **Header RA/Dec:** primary HDU FITS keywords (`CRVAL1/2`, `OBJCTRA`/`OBJCTDEC`, or `RA`/`DEC`). If these do not update each sub, the header plot looks flat or stacked.
 - **Pixel registration:** uncompressed primary image data only; central crop; normalized phase correlation (integer pixel shifts). Not identical to external tools’ sub-pixel tuning but matches the intent of a cumulative **detector** trail.
 - **RA wrap:** handled when computing deltas in arcseconds (small-angle approximation with cos(Dec)).
-- **NINA log correlation:** On folder import, SeeDrift scans `%LocalAppData%\NINA\Logs` (±1 calendar day). It matches **`Starting Trigger:`** sequencer lines (center-after-drift, dither-after-exposures) to each frame’s **DATE-OBS** within **45 minutes** and stores a short **SequencerLogHint** on the sample for tooltips. Jump rows also append the same text to **JumpReason** when a trigger matches. Broader log patterns are not used so the nearest event is not random plate-solve noise.
+- **NINA log correlation:** When **armed** (live capture) and on **folder import**, SeeDrift scans `%LocalAppData%\NINA\Logs` (±1 calendar day). It matches **`Starting Trigger:`** sequencer lines (center-after-drift, dither-after-exposures) to each frame’s **exposure start time** within **45 minutes** and stores a short **SequencerLogHint** on the sample for tooltips. Jump rows also append the same text to **JumpReason** when a trigger matches. Broader log patterns are not used so the nearest event is not random plate-solve noise.
 
 ## Troubleshooting
 
