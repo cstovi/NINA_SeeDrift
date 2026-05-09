@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -39,6 +38,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("<style>");
             sb.AppendLine("  /* Chart container needs explicit height for responsive canvas + pan/zoom */");
             sb.AppendLine("  .seedrift-chart-box { position: relative; height: 24rem; width: 100%; }");
+            sb.AppendLine("  /* Sequencer table: wrap long paths so the Detail column keeps usable width */");
+            sb.AppendLine("  .seedrift-seq-table { word-break: break-word; overflow-wrap: anywhere; }");
             sb.AppendLine("</style>");
             sb.AppendLine("</head>");
             sb.AppendLine("<body class=\"min-h-full bg-slate-950 text-slate-200 antialiased\">");
@@ -78,6 +79,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"    <div class=\"seedrift-chart-box mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-2\">");
                     sb.AppendLine($"      <canvas id=\"{canvasId}\"></canvas>");
                     sb.AppendLine("    </div>");
+                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Chart markers: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if only one frame). Hover lists the file name, then ΔRA/ΔDec.</p>");
 
                     var ptsJson = FormatScatterPointsJsonAnchored(grp);
 
@@ -86,13 +88,37 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"  const pts = {ptsJson};");
                     sb.AppendLine($"  const datasetLabel = {labelJson};");
                     sb.AppendLine($"  const el = document.getElementById('{canvasId}');");
+                    sb.AppendLine("  function pointRadiusFn(ctx) {");
+                    sb.AppendLine("    var n = ctx.dataset.data.length;");
+                    sb.AppendLine("    if (n <= 1) return 7;");
+                    sb.AppendLine("    var i = ctx.dataIndex;");
+                    sb.AppendLine("    return (i === 0 || i === n - 1) ? 7 : 3;");
+                    sb.AppendLine("  }");
+                    sb.AppendLine("  function pointBgFn(ctx) {");
+                    sb.AppendLine("    var n = ctx.dataset.data.length;");
+                    sb.AppendLine("    var i = ctx.dataIndex;");
+                    sb.AppendLine("    if (n <= 1) return 'rgba(234,179,8,0.85)';");
+                    sb.AppendLine("    if (i === 0) return 'rgba(52,211,153,0.95)';");
+                    sb.AppendLine("    if (i === n - 1) return 'rgba(251,146,60,0.95)';");
+                    sb.AppendLine("    return 'rgba(56,189,248,0.35)';");
+                    sb.AppendLine("  }");
+                    sb.AppendLine("  function pointBorderFn(ctx) {");
+                    sb.AppendLine("    var n = ctx.dataset.data.length;");
+                    sb.AppendLine("    var i = ctx.dataIndex;");
+                    sb.AppendLine("    if (n <= 1) return '#fbbf24';");
+                    sb.AppendLine("    if (i === 0) return '#34d399';");
+                    sb.AppendLine("    if (i === n - 1) return '#fb923c';");
+                    sb.AppendLine("    return '#38bdf8';");
+                    sb.AppendLine("  }");
                     sb.AppendLine("  const chart = new Chart(el, {");
                     sb.AppendLine("    type: 'scatter',");
                     sb.AppendLine("    data: { datasets: [{");
                     sb.AppendLine("      label: datasetLabel,");
                     sb.AppendLine("      data: pts, borderColor: '#38bdf8',");
-                    sb.AppendLine("      backgroundColor: 'rgba(56,189,248,0.25)',");
-                    sb.AppendLine("      showLine: true, tension: 0.12, pointRadius: 3, borderWidth: 1.5");
+                    sb.AppendLine("      backgroundColor: pointBgFn,");
+                    sb.AppendLine("      pointBorderColor: pointBorderFn,");
+                    sb.AppendLine("      pointBorderWidth: 2,");
+                    sb.AppendLine("      showLine: true, tension: 0.12, pointRadius: pointRadiusFn, borderWidth: 1.5");
                     sb.AppendLine("    }]},");
                     sb.AppendLine("    options: {");
                     sb.AppendLine("      responsive: true, maintainAspectRatio: false,");
@@ -101,6 +127,17 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"        y: {{ title: {{ display: true, text: '{yTitle}', color: '#94a3b8' }}, grid: {{ color: 'rgba(148,163,184,0.12)' }}, ticks: {{ color: '#cbd5e1' }}, border: {{ color: '#475569' }} }}");
                     sb.AppendLine("      },");
                     sb.AppendLine("      plugins: {");
+                    sb.AppendLine("        tooltip: {");
+                    sb.AppendLine("          callbacks: {");
+                    sb.AppendLine("            title: function() { return ''; },");
+                    sb.AppendLine("            label: function(ctx) {");
+                    sb.AppendLine("              var raw = ctx.raw;");
+                    sb.AppendLine("              var fn = raw && raw.filename ? String(raw.filename) : '';");
+                    sb.AppendLine("              var line2 = 'ΔRA ' + ctx.parsed.x + '\" · ΔDec ' + ctx.parsed.y + '\"';");
+                    sb.AppendLine("              return fn ? [fn, line2] : [line2];");
+                    sb.AppendLine("            }");
+                    sb.AppendLine("          }");
+                    sb.AppendLine("        },");
                     sb.AppendLine("        legend: { labels: { color: '#e2e8f0' } },");
                     sb.AppendLine("        zoom: {");
                     sb.AppendLine("          pan: { enabled: true, mode: 'xy' },");
@@ -171,19 +208,16 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return "[]";
             var r0 = group[0].RawRaHours;
             var d0 = group[0].RawDecDeg;
-            var pts = new StringBuilder("[");
+            var points = new List<(double x, double y, string filename)>(group.Count);
             for (var i = 0; i < group.Count; i++) {
-                if (i > 0)
-                    pts.Append(',');
                 AstrometryMath.DeltaArcSec(r0, d0, group[i].RawRaHours, group[i].RawDecDeg,
                     out var dRa, out var dDec);
-                pts.AppendFormat(CultureInfo.InvariantCulture,
-                    "{{\"x\":{0},\"y\":{1}}}",
-                    Math.Round(dRa, 4),
-                    Math.Round(dDec, 4));
+                var fn = group[i].FileName ?? "";
+                points.Add((Math.Round(dRa, 4), Math.Round(dDec, 4), fn));
             }
-            pts.Append(']');
-            return pts.ToString();
+
+            return JsonSerializer.Serialize(
+                points.Select(p => new { x = p.x, y = p.y, filename = p.filename }));
         }
 
         private static bool SameSectionTarget(string? sampleTarget, string sectionTargetName) {
@@ -228,20 +262,20 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             sb.AppendLine("      <p class=\"mt-2 text-xs text-slate-500\">Between-frame triggers for this target (same-target consecutive frames only).</p>");
             sb.AppendLine("      <div class=\"mt-3 overflow-x-auto rounded-lg border border-slate-700\">");
-            sb.AppendLine("        <table class=\"min-w-full divide-y divide-slate-700 text-left text-xs\">");
+            sb.AppendLine("        <table class=\"seedrift-seq-table min-w-full table-fixed divide-y divide-slate-700 text-left text-xs\">");
             sb.AppendLine("          <thead class=\"bg-slate-900/80 text-sky-300\"><tr>");
-            sb.AppendLine("            <th class=\"whitespace-nowrap px-3 py-2 font-medium\">From frame</th>");
-            sb.AppendLine("            <th class=\"whitespace-nowrap px-3 py-2 font-medium\">To frame</th>");
-            sb.AppendLine("            <th class=\"whitespace-nowrap px-3 py-2 font-medium\">Kind</th>");
-            sb.AppendLine("            <th class=\"px-3 py-2 font-medium\">Detail</th>");
+            sb.AppendLine("            <th class=\"w-[22%] px-3 py-2 font-medium\">From frame</th>");
+            sb.AppendLine("            <th class=\"w-[22%] px-3 py-2 font-medium\">To frame</th>");
+            sb.AppendLine("            <th class=\"w-[14%] whitespace-nowrap px-3 py-2 font-medium\">Kind</th>");
+            sb.AppendLine("            <th class=\"w-[42%] px-3 py-2 font-medium\">Detail</th>");
             sb.AppendLine("          </tr></thead>");
             sb.AppendLine("          <tbody class=\"divide-y divide-slate-800 bg-slate-950/40 text-slate-300\">");
             foreach (var r in rows) {
                 sb.AppendLine("          <tr class=\"align-top\">");
-                sb.AppendLine($"            <td class=\"whitespace-nowrap px-3 py-2 font-mono text-[11px]\">{Escape(r.fromFn)}</td>");
-                sb.AppendLine($"            <td class=\"whitespace-nowrap px-3 py-2 font-mono text-[11px]\">{Escape(r.toFn)}</td>");
-                sb.AppendLine($"            <td class=\"whitespace-nowrap px-3 py-2\">{Escape(r.kind)}</td>");
-                sb.AppendLine($"            <td class=\"whitespace-pre-wrap px-3 py-2 text-[11px] text-slate-400\">{Escape(r.detail)}</td>");
+                sb.AppendLine($"            <td class=\"break-all px-3 py-2 font-mono text-[11px] leading-snug\">{Escape(r.fromFn)}</td>");
+                sb.AppendLine($"            <td class=\"break-all px-3 py-2 font-mono text-[11px] leading-snug\">{Escape(r.toFn)}</td>");
+                sb.AppendLine($"            <td class=\"whitespace-normal px-3 py-2 align-top\">{Escape(r.kind)}</td>");
+                sb.AppendLine($"            <td class=\"break-words px-3 py-2 text-[11px] leading-snug text-slate-400\">{Escape(r.detail)}</td>");
                 sb.AppendLine("          </tr>");
             }
             sb.AppendLine("          </tbody>");

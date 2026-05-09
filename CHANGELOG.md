@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.6.6] — 2026-05-09
+
+### Changed
+
+- **Night HTML:** Drift chart — **start/end** points emphasized (green/orange; single-frame runs use one amber marker); **tooltip** shows **FIT file name** first, then ΔRA/ΔDec. **Sequencer** table uses **wrapped** From/To paths and a fixed column layout so **Detail** stays readable.
+
 ## [0.6.5] — 2026-05-09
 
 ### Fixed
