@@ -90,6 +90,22 @@
                            IsEnabled="{Binding FolderImportUsesPixelRegistration}"/>
             </Grid>
 
+            <TextBlock Text="Mount mode" FontWeight="Bold" Margin="0,8,0,6"/>
+            <TextBlock Text="Controls how pixel shifts are converted to RA/Dec arcseconds."
+                       Foreground="#888" FontSize="11" Margin="0,0,0,6"
+                       IsEnabled="{Binding FolderImportUsesPixelRegistration}"/>
+            <StackPanel Margin="0,0,0,4"
+                        IsEnabled="{Binding FolderImportUsesPixelRegistration}">
+                <RadioButton Content="EQ (equatorial platform — field rotation cancelled, sensor ≈ North up)"
+                             GroupName="MountMode"
+                             IsChecked="{Binding MountModeIsEq}"
+                             Margin="0,0,0,4"/>
+                <RadioButton Content="Alt/Az (level tripod — parallactic angle applied per frame)"
+                             GroupName="MountMode"
+                             IsChecked="{Binding MountModeIsAltAz}"
+                             Margin="0,0,0,8"/>
+            </StackPanel>
+
             <TextBlock Text="HTML export" FontWeight="Bold" Margin="0,0,0,6"/>
             <Grid Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>

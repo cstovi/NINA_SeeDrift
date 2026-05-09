@@ -102,6 +102,24 @@ namespace NINA.Plugin.SeeDrift.Utility {
             return arcSecPerPx > 0;
         }
 
+        /// <summary>
+        /// Reads Alt/Az orientation keywords needed for parallactic angle calculation.
+        /// Returns false if any required keyword is missing or unparseable.
+        /// </summary>
+        public static bool TryReadAltAzOrientation(Dictionary<string, string> cards,
+            out double altDeg, out double azDeg, out double siteLatDeg, out double decDeg) {
+            altDeg = azDeg = siteLatDeg = decDeg = 0;
+            if (!cards.TryGetValue("CENTALT",  out var ca)) return false;
+            if (!cards.TryGetValue("CENTAZ",   out var cz)) return false;
+            if (!cards.TryGetValue("SITELAT",  out var sl)) return false;
+            if (!cards.TryGetValue("DEC",       out var dc)) return false;
+            if (!double.TryParse(ca.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out altDeg))   return false;
+            if (!double.TryParse(cz.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out azDeg))    return false;
+            if (!double.TryParse(sl.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out siteLatDeg)) return false;
+            if (!double.TryParse(dc.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out decDeg))   return false;
+            return true;
+        }
+
         internal static bool TryParsePointing(Dictionary<string, string> cards,
             out double raHours, out double decDeg,
             out string? objectName, out string? instrument) {

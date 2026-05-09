@@ -64,6 +64,12 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <summary>True when a NINA log file was found for the session date.</summary>
         public bool LogWasFound { get; private set; }
 
+        /// <summary>
+        /// Non-null when the mount mode self-check detects a likely mismatch between pixel-derived
+        /// RA/Dec jump magnitudes and header-coordinate jump magnitudes.
+        /// </summary>
+        public string? MountModeWarning { get; private set; }
+
         public DriftTrackingService(SeeDriftPlugin plugin, IImageSaveMediator imageSaveMediator) {
             _plugin = plugin;
             _imageSaveMediator = imageSaveMediator;
@@ -225,6 +231,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         private void ImportFitsFolderPixelRegistration(string folderPath) {
             var entries = FitsFolderImport.EnumerateSorted(folderPath);
             var cropSize = Math.Clamp(_plugin.Settings.RegistrationCropSize, 64, 4096);
+            var isEq = _plugin.Settings.MountMode == Models.MountMode.EQ;
             var importTrace = new TraceState();
             var built = new List<DriftSample>(entries.Count);
             var skippedParse = 0;
@@ -237,9 +244,6 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             // Frame-to-frame cumulative: compare each frame against the previous one.
-            // Sub-pixel parabolic refinement in the correlator means each step is a
-            // float (e.g. 0.43 px) rather than an integer, so the cumulative sum
-            // produces distinct positions for every frame even with slow drift.
             double[,]? prevCrop = null;
             double cumX = 0;
             double cumY = 0;
@@ -255,7 +259,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                     continue;
                 }
 
-                // Read plate scale from the first FITS that has the keywords.
                 if (plateScale == null && FitsCoordinates.TryReadPlateScale(cards, out var ps))
                     plateScale = ps;
 
@@ -267,9 +270,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var label = !string.IsNullOrEmpty(objectName) ? objectName! : e.TargetLabel;
 
                 if (prevCrop == null) {
-                    // Frame 1 is the origin.
                     prevCrop = crop;
                     AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, 0.0, 0.0, out var s0);
+                    s0.PixelDerivedRaArcSec  = 0.0;
+                    s0.PixelDerivedDecArcSec = 0.0;
                     built.Add(s0);
                     continue;
                 }
@@ -283,14 +287,28 @@ namespace NINA.Plugin.SeeDrift.Services {
                 cumY += dy;
 
                 AccumulateFromParsed(raHours, decDeg, e.ExposureUtc, e.Path, label, importTrace, cumX, cumY, out var sample);
-                built.Add(sample);
 
+                // Convert pixel shift to RA/Dec if plate scale is known.
+                if (plateScale.HasValue) {
+                    double q = 0;
+                    if (!isEq && FitsCoordinates.TryReadAltAzOrientation(cards,
+                            out var altD, out var azD, out var latD, out var decD))
+                        q = AstrometryMath.ParallacticAngle(latD, altD, azD, decD);
+
+                    AstrometryMath.PixelShiftToRaDec(cumX, cumY, plateScale.Value, decDeg, isEq, q,
+                        out var dRa, out var dDec);
+                    sample.PixelDerivedRaArcSec  = dRa;
+                    sample.PixelDerivedDecArcSec = dDec;
+                }
+
+                built.Add(sample);
                 prevCrop = crop;
             }
 
             JumpDetector.AnnotateJumps(built);
             var (logMatched2, logFound2) = NinaLogCorrelator.AnnotateWithLogEvents(built);
             var jumps = JumpDetector.CountJumps(built);
+            var mountWarning = CheckMountModeConsistency(built);
 
             Application.Current?.Dispatcher.Invoke(() => {
                 CopyTrace(importTrace, _trace);
@@ -298,12 +316,36 @@ namespace NINA.Plugin.SeeDrift.Services {
                 JumpCount = jumps;
                 LogCorrelatedCount = logMatched2;
                 LogWasFound = logFound2;
+                MountModeWarning = mountWarning;
                 Samples.ReplaceAll(built);
             });
 
             Logger.Info(
                 $"SeeDrift: pixel replay {built.Count}/{entries.Count} FITS from {folderPath} " +
-                $"(crop {cropSize}px, frame-to-frame + subpixel, skipped: no coords {skippedParse}, image {skippedImage}, jumps {jumps} logFound={logFound2} logMatched={logMatched2})");
+                $"(crop {cropSize}px, mode={_plugin.Settings.MountMode}, skipped: no coords {skippedParse}, " +
+                $"image {skippedImage}, jumps {jumps} logFound={logFound2} logMatched={logMatched2})");
+        }
+
+        /// <summary>
+        /// Compares pixel-derived jump magnitudes against header-coordinate jump magnitudes.
+        /// Returns a warning string if median disagreement exceeds 20%, otherwise null.
+        /// </summary>
+        private static string? CheckMountModeConsistency(List<DriftSample> samples) {
+            var ratios = new List<double>();
+            foreach (var s in samples) {
+                if (!s.IsJump || !s.HasPixelDerivedRaDec) continue;
+                var headerMag = Math.Sqrt(s.DeltaRaArcSec * s.DeltaRaArcSec + s.DeltaDecArcSec * s.DeltaDecArcSec);
+                if (headerMag < 0.5) continue; // skip near-zero header jumps (same coords every frame)
+                var pixelMag  = Math.Sqrt(s.PixelDerivedRaArcSec!.Value * s.PixelDerivedRaArcSec.Value
+                                        + s.PixelDerivedDecArcSec!.Value * s.PixelDerivedDecArcSec.Value);
+                ratios.Add(Math.Abs(pixelMag - headerMag) / headerMag);
+            }
+            if (ratios.Count < 2) return null;
+            ratios.Sort();
+            var median = ratios[ratios.Count / 2];
+            if (median > 0.20)
+                return $"Mount mode may be wrong — pixel jumps disagree with header coords by {median:P0} (check EQ vs Alt/Az setting)";
+            return null;
         }
 
         private static void CopyTrace(TraceState from, TraceState to) {
@@ -348,11 +390,20 @@ namespace NINA.Plugin.SeeDrift.Services {
                 // Mode is locked in at Arm() — not re-read per frame.
                 double? pixX = null;
                 double? pixY = null;
+                double? pixRa = null;
+                double? pixDec = null;
+
                 if (_armedMode == FolderPlotMode.PixelRegistration) {
                     var cropSize = Math.Clamp(_plugin.Settings.RegistrationCropSize, 64, 4096);
+                    FitsCoordinates.TryReadPrimaryHeader(path, out var liveCards);
+
+                    // Grab plate scale from any frame that carries the keywords.
+                    if (PlateScaleArcSecPerPx == null && liveCards.Count > 0 &&
+                        FitsCoordinates.TryReadPlateScale(liveCards, out var livePs))
+                        PlateScaleArcSecPerPx = livePs;
+
                     if (FitsImageCrop.TryLoadCentralCrop(path, cropSize, out var crop) && crop != null) {
                         if (_prevLiveCrop == null) {
-                            // First armed frame — this is the origin.
                             _prevLiveCrop = crop;
                             _liveCumX = 0;
                             _liveCumY = 0;
@@ -365,6 +416,22 @@ namespace NINA.Plugin.SeeDrift.Services {
                         }
                         pixX = _liveCumX;
                         pixY = _liveCumY;
+
+                        // Convert to RA/Dec if plate scale is available.
+                        if (PlateScaleArcSecPerPx.HasValue) {
+                            var isEq = _plugin.Settings.MountMode == Models.MountMode.EQ;
+                            double q = 0;
+                            if (!isEq && liveCards.Count > 0 &&
+                                FitsCoordinates.TryReadAltAzOrientation(liveCards,
+                                    out var altD, out var azD, out var latD, out var decD))
+                                q = AstrometryMath.ParallacticAngle(latD, altD, azD, decD);
+
+                            AstrometryMath.PixelShiftToRaDec(_liveCumX, _liveCumY,
+                                PlateScaleArcSecPerPx.Value, decDeg, isEq, q,
+                                out var dRa, out var dDec);
+                            pixRa  = dRa;
+                            pixDec = dDec;
+                        }
                     }
                 }
 
@@ -382,6 +449,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                     }
 
                     AccumulateFromParsed(raHours, decDeg, exposureUtc, path, label, _trace, pixX, pixY, out var sample);
+                    sample.PixelDerivedRaArcSec  = pixRa;
+                    sample.PixelDerivedDecArcSec = pixDec;
                     Samples.Add(sample);
                 });
             } catch (Exception ex) {

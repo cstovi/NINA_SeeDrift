@@ -16,6 +16,9 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Central crop edge length for phase correlation (pixels).</summary>
         public int RegistrationCropSize { get; set; } = 800;
 
+        /// <summary>Mount type — determines how pixel shifts are converted to RA/Dec arcseconds.</summary>
+        public MountMode MountMode { get; set; } = MountMode.EQ;
+
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "SeeDrift", "settings.json");

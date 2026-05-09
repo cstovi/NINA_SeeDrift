@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -89,38 +90,52 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             var samples = _tracker.Samples;
             var n = samples.Count;
             var pixelPlot = n > 0 && samples[0].IsPixelPath;
+            var ordered   = samples.OrderBy(x => x.FrameIndex).ToList();
+
+            // RA/Dec derived mode: pixel reg + conversion succeeded on the first frame.
+            var useRaDec = pixelPlot && ordered.Count > 0 && ordered[0].HasPixelDerivedRaDec;
 
             // Build plate-scale label from the tracker's cached value.
             string? psLabel = _tracker.PlateScaleArcSecPerPx.HasValue
                 ? $"{_tracker.PlateScaleArcSecPerPx.Value:F2}\"↗px"
                 : null;
 
-            var model = BuildEmptyModel(n, pixelPlot, psLabel);
-            var ordered = samples.OrderBy(x => x.FrameIndex).ToList();
+            var mountLabel = _plugin.Settings.MountMode == Models.MountMode.EQ ? "EQ" : "Alt/Az";
+            var model = BuildEmptyModel(n, pixelPlot, useRaDec, mountLabel, psLabel);
 
             if (pixelPlot) {
-                // Small dots so adjacent frames (which can be <1px apart) are visible.
-                // User can scroll-zoom on the plot to separate overlapping clusters.
-                var dotSize = 2.0;
+                var dotSize  = 2.0;
                 var dotColor = OxyColor.FromAColor(160, OxyColor.FromRgb(130, 180, 255));
 
-                // Y is negated for display: FITS rows increase downward, so positive
-                // cumulative Y (stars shifted to higher row numbers) appears DOWN on the
-                // plot, matching the natural orientation of the sensor.
-                static double PlotY(double y) => -y;
+                // Coordinate helpers: RA/Dec arcsec when available, else raw pixels.
+                // Raw pixel Y is negated so positive sensor shift = downward on plot.
+                Func<DriftSample, double> GetX = useRaDec
+                    ? (s => s.PixelDerivedRaArcSec!.Value)
+                    : (s => s.CumulativePixelX!.Value);
+                Func<DriftSample, double> GetY = useRaDec
+                    ? (s => s.PixelDerivedDecArcSec!.Value)
+                    : (s => -s.CumulativePixelY!.Value);
+
+                var pathFmt  = useRaDec
+                    ? "Path\nΔRA: {2:0.##}\"\nΔDec: {4:0.##}\""
+                    : "Path\n{1}: {2:0.##} px\n{3}: {4:0.##} px";
+                var frameFmt = useRaDec
+                    ? "Frame {Tag}\nΔRA: {2:0.##}\"\nΔDec: {4:0.##}\""
+                    : "Frame {Tag}\n{1}: {2:0.##} px\n{3}: {4:0.##} px";
+                var jumpFmt  = useRaDec
+                    ? "Jump · frame {Tag}\nΔRA: {2:0.##}\"\nΔDec: {4:0.##}\""
+                    : "Jump · frame {Tag}\n{1}: {2:0.##} px\n{3}: {4:0.##} px";
 
                 var pathLine = new LineSeries {
-                    Title                        = "Pixel drift path",
+                    Title                        = useRaDec ? "ΔRA / ΔDec path" : "Pixel drift path",
                     Color                        = OxyColor.FromAColor(55, dotColor),
                     StrokeThickness              = 0.8,
                     MarkerType                   = MarkerType.None,
                     CanTrackerInterpolatePoints  = false,
-                    TrackerFormatString          = "Path\n{1}: {2:0.##} px\n{3}: {4:0.##} px"
+                    TrackerFormatString          = pathFmt
                 };
                 foreach (var s in ordered)
-                    pathLine.Points.Add(new DataPoint(
-                        s.CumulativePixelX!.Value,
-                        PlotY(s.CumulativePixelY!.Value)));
+                    pathLine.Points.Add(new DataPoint(GetX(s), GetY(s)));
                 model.Series.Add(pathLine);
 
                 var scatter = new ScatterSeries {
@@ -129,12 +144,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     MarkerSize          = dotSize,
                     MarkerFill          = dotColor,
                     MarkerStroke        = OxyColors.Transparent,
-                    TrackerFormatString = "Frame {Tag}\n{1}: {2:0.##} px\n{3}: {4:0.##} px"
+                    TrackerFormatString = frameFmt
                 };
                 foreach (var s in ordered)
                     scatter.Points.Add(new ScatterPoint(
-                        s.CumulativePixelX!.Value,
-                        PlotY(s.CumulativePixelY!.Value),
+                        GetX(s), GetY(s),
                         tag: s.IsJump
                             ? $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss} · Jump: {s.JumpReason ?? "large shift"}"
                             : $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}"));
@@ -150,12 +164,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
                         MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
                         MarkerStrokeThickness = 1.0,
-                        TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##} px\n{3}: {4:0.##} px"
+                        TrackerFormatString   = jumpFmt
                     };
                     foreach (var s in jumpSamples)
                         jumpSeries.Points.Add(new ScatterPoint(
-                            s.CumulativePixelX!.Value,
-                            PlotY(s.CumulativePixelY!.Value),
+                            GetX(s), GetY(s),
                             tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
                     model.Series.Add(jumpSeries);
                 }
@@ -170,9 +183,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         MarkerStroke = OxyColor.FromRgb(220, 255, 220),
                         MarkerStrokeThickness = 1.2
                     };
-                    startDot.Points.Add(new ScatterPoint(
-                        first.CumulativePixelX!.Value,
-                        PlotY(first.CumulativePixelY!.Value)));
+                    startDot.Points.Add(new ScatterPoint(GetX(first), GetY(first)));
                     model.Series.Add(startDot);
                 }
 
@@ -186,13 +197,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         MarkerStroke = OxyColor.FromRgb(255, 220, 180),
                         MarkerStrokeThickness = 1.5
                     };
-                    endDot.Points.Add(new ScatterPoint(
-                        last.CumulativePixelX!.Value,
-                        PlotY(last.CumulativePixelY!.Value)));
+                    endDot.Points.Add(new ScatterPoint(GetX(last), GetY(last)));
                     model.Series.Add(endDot);
                 }
 
-                ApplyPixelAxes(model, samples);
+                ApplyPixelAxes(model, ordered, GetX, GetY, useRaDec);
             } else {
                 var dotColor2  = OxyColor.FromRgb(100, 200, 255);
                 var dotSize2   = n > 100 ? 2.5 : 3.5;
@@ -314,12 +323,21 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             yAxis.Maximum = maxY + padY;
         }
 
-        private static void ApplyPixelAxes(PlotModel model, ObservableCollection<DriftSample> samples) {
+        private static void ApplyPixelAxes(
+                PlotModel model,
+                List<DriftSample> samples,
+                Func<DriftSample, double> getX,
+                Func<DriftSample, double> getY,
+                bool useRaDec) {
             var xAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Bottom);
             var yAxis = model.Axes.OfType<LinearAxis>().First(a => a.Position == AxisPosition.Left);
 
-            // Update Y axis label to reflect the display convention.
-            yAxis.Title = "Cumulative Y (px, ↓ = sensor down)";
+            if (useRaDec) {
+                xAxis.Title = "ΔRA (arcsec)";
+                yAxis.Title = "ΔDec (arcsec)";
+            } else {
+                yAxis.Title = "Cumulative Y (px, ↓ = sensor down)";
+            }
 
             if (samples.Count == 0) {
                 xAxis.Minimum = -1; xAxis.Maximum = 1;
@@ -327,16 +345,15 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 return;
             }
 
-            // Y is negated for display (positive sensor shift = down on screen).
-            var xs = samples.Select(s => s.CumulativePixelX!.Value).ToList();
-            var ys = samples.Select(s => -s.CumulativePixelY!.Value).ToList();
-            const double padRatio = 0.10;
-            const double minSpanPx = 4.0;
+            var xs = samples.Select(getX).ToList();
+            var ys = samples.Select(getY).ToList();
+            var padRatio = 0.10;
+            var minSpan  = useRaDec ? 2.0 : 4.0; // arcsec vs pixels
 
             var minX = xs.Min(); var maxX = xs.Max();
             var minY = ys.Min(); var maxY = ys.Max();
-            var spanX = Math.Max(maxX - minX, minSpanPx);
-            var spanY = Math.Max(maxY - minY, minSpanPx);
+            var spanX = Math.Max(maxX - minX, minSpan);
+            var spanY = Math.Max(maxY - minY, minSpan);
 
             xAxis.Minimum = minX - spanX * padRatio;
             xAxis.Maximum = maxX + spanX * padRatio;
@@ -379,16 +396,20 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
         }
 
         private static PlotModel BuildEmptyModel(int frameCount, bool pixelPlot,
-                string? plateScaleLabel = null) {
+                bool useRaDec = false, string? mountLabel = null, string? plateScaleLabel = null) {
             var gridMajor = OxyColor.FromAColor(55, OxyColor.FromRgb(180, 180, 190));
             var gridMinor = OxyColor.FromAColor(35, OxyColor.FromRgb(140, 140, 155));
-            var axisLine = OxyColor.FromRgb(95, 95, 105);
+            var axisLine  = OxyColor.FromRgb(95, 95, 105);
 
-            var psHint = plateScaleLabel != null ? $" · {plateScaleLabel}" : "";
+            var psHint     = plateScaleLabel != null ? $" · {plateScaleLabel}" : "";
+            var modeHint   = mountLabel      != null ? $" ({mountLabel} mode)" : "";
 
             string subtitle;
             if (frameCount <= 0)
                 subtitle = "";
+            else if (useRaDec)
+                subtitle =
+                    $"{frameCount} frames · ΔRA / ΔDec in arcsec{psHint}{modeHint} · frame 1 = origin · scroll to zoom";
             else if (pixelPlot)
                 subtitle =
                     $"{frameCount} frames · cumulative Δx/Δy in pixels{psHint} · frame 1 = origin · scroll to zoom";
@@ -397,9 +418,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     $"{frameCount} frames · ΔRA / ΔDec in arcsec relative to frame 1{psHint} · sorted by DATE-OBS";
 
             var m = new PlotModel {
-                Title = pixelPlot
-                    ? "Detector drift — cumulative pixel shifts from frame 1"
-                    : "Pointing drift — ΔRA / ΔDec arcsec from frame 1",
+                Title = useRaDec
+                    ? "Detector drift — ΔRA / ΔDec arcsec (pixel reg)"
+                    : pixelPlot
+                        ? "Detector drift — cumulative pixel shifts from frame 1"
+                        : "Pointing drift — ΔRA / ΔDec arcsec from frame 1",
                 Subtitle = subtitle,
                 TitleColor = OxyColor.FromRgb(230, 230, 235),
                 SubtitleColor = OxyColor.FromRgb(170, 175, 185),
@@ -409,7 +432,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             };
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Bottom,
-                Title = pixelPlot ? "Cumulative X (px)" : "ΔRA (arcsec)",
+                Title = (pixelPlot && !useRaDec) ? "Cumulative X (px)" : "ΔRA (arcsec)",
                 TitleColor = OxyColor.FromRgb(200, 210, 230),
                 AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
@@ -420,7 +443,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             });
             m.Axes.Add(new LinearAxis {
                 Position = AxisPosition.Left,
-                Title = pixelPlot ? "Cumulative Y (px, ↓ = sensor down)" : "ΔDec (arcsec)",
+                Title = (pixelPlot && !useRaDec) ? "Cumulative Y (px, ↓ = sensor down)" : "ΔDec (arcsec)",
                 TitleColor = OxyColor.FromRgb(200, 210, 230),
                 AxislineColor = axisLine,
                 MajorGridlineStyle = LineStyle.Solid,
@@ -475,19 +498,36 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 var decRange = maxDec - minDec;
                 var spreadStr = $"ΔRA {minRa:+0.0;-0.0}″…{maxRa:+0.0;-0.0}″ ({raRange:F1}″ pp) · ΔDec {minDec:+0.0;-0.0}″…{maxDec:+0.0;-0.0}″ ({decRange:F1}″ pp)";
 
+                string mountWarn = !string.IsNullOrEmpty(_tracker.MountModeWarning)
+                    ? $"\n⚠ {_tracker.MountModeWarning}"
+                    : "";
+
                 if (samples[0].IsPixelPath) {
-                    var maxDist = samples.Max(s =>
-                        Math.Sqrt(s.CumulativePixelX!.Value * s.CumulativePixelX.Value +
-                                  s.CumulativePixelY!.Value * s.CumulativePixelY.Value));
-                    string psExtra = "";
-                    if (_tracker.PlateScaleArcSecPerPx.HasValue) {
-                        var ps = _tracker.PlateScaleArcSecPerPx.Value;
-                        psExtra = $" (≈{maxDist * ps:F0}″ · {ps:F2}″/px)";
+                    // Prefer derived RA/Dec spread when conversion succeeded.
+                    string pixSpreadStr;
+                    if (samples[0].HasPixelDerivedRaDec) {
+                        var minPxRa  = samples.Min(s => s.PixelDerivedRaArcSec!.Value);
+                        var maxPxRa  = samples.Max(s => s.PixelDerivedRaArcSec!.Value);
+                        var minPxDec = samples.Min(s => s.PixelDerivedDecArcSec!.Value);
+                        var maxPxDec = samples.Max(s => s.PixelDerivedDecArcSec!.Value);
+                        pixSpreadStr = $"ΔRA {minPxRa:+0.0;-0.0}″…{maxPxRa:+0.0;-0.0}″ ({maxPxRa - minPxRa:F1}″ pp) · " +
+                                       $"ΔDec {minPxDec:+0.0;-0.0}″…{maxPxDec:+0.0;-0.0}″ ({maxPxDec - minPxDec:F1}″ pp)" +
+                                       $" [{_plugin.Settings.MountMode}]";
+                    } else {
+                        var maxDist = samples.Max(s =>
+                            Math.Sqrt(s.CumulativePixelX!.Value * s.CumulativePixelX.Value +
+                                      s.CumulativePixelY!.Value * s.CumulativePixelY.Value));
+                        string psExtra = "";
+                        if (_tracker.PlateScaleArcSecPerPx.HasValue) {
+                            var ps = _tracker.PlateScaleArcSecPerPx.Value;
+                            psExtra = $" (≈{maxDist * ps:F0}″ · {ps:F2}″/px)";
+                        }
+                        pixSpreadStr = $"max drift {maxDist:F1}px{psExtra}";
                     }
-                    return $"{n} frames · max drift {maxDist:F1}px{psExtra}{jumpStr} · {spreadStr} · {last.TargetName}";
+                    return $"{n} frames · {pixSpreadStr}{jumpStr} · {last.TargetName}{mountWarn}";
                 }
 
-                return $"{n} frames · {spreadStr}{jumpStr} · {last.TargetName}";
+                return $"{n} frames · {spreadStr}{jumpStr} · {last.TargetName}{mountWarn}";
             }
         }
 

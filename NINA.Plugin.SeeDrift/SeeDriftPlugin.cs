@@ -42,6 +42,7 @@ namespace NINA.Plugin.SeeDrift {
             HtmlExportFolder = Settings.HtmlExportFolder;
             FolderImportPlotMode = Settings.FolderImportPlotMode;
             RegistrationCropSize = Settings.RegistrationCropSize;
+            MountMode = Settings.MountMode;
             _isInitializing = false;
         }
 
@@ -57,6 +58,7 @@ namespace NINA.Plugin.SeeDrift {
                 Settings.HtmlExportFolder = _htmlExportFolder;
                 Settings.FolderImportPlotMode = _folderImportPlotMode;
                 Settings.RegistrationCropSize = _registrationCropSize;
+                Settings.MountMode = _mountMode;
                 Settings.Save();
             } finally {
                 _isSyncing = false;
@@ -92,6 +94,31 @@ namespace NINA.Plugin.SeeDrift {
         public bool FolderImportUsesHeaderCoordinates {
             get => FolderImportPlotMode == FolderPlotMode.FitsHeaderCoordinates;
             set => FolderImportPlotMode = value ? FolderPlotMode.FitsHeaderCoordinates : FolderPlotMode.PixelRegistration;
+        }
+
+        private MountMode _mountMode = MountMode.EQ;
+        public MountMode MountMode {
+            get => _mountMode;
+            set {
+                if (_mountMode == value) return;
+                _mountMode = value;
+                RaisePropertyChanged();
+                RaisePropertyChanged(nameof(MountModeIsEq));
+                RaisePropertyChanged(nameof(MountModeIsAltAz));
+                SyncSettingsFromProperties();
+            }
+        }
+
+        /// <summary>UI helper — true when EQ mode is selected.</summary>
+        public bool MountModeIsEq {
+            get => MountMode == MountMode.EQ;
+            set => MountMode = value ? MountMode.EQ : MountMode.AltAz;
+        }
+
+        /// <summary>UI helper — true when Alt/Az mode is selected.</summary>
+        public bool MountModeIsAltAz {
+            get => MountMode == MountMode.AltAz;
+            set => MountMode = value ? MountMode.AltAz : MountMode.EQ;
         }
 
         private int _registrationCropSize = 800;
