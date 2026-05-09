@@ -61,7 +61,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 const string xTitle = "ΔRA (arcsec)";
                 const string yTitle = "ΔDec (arcsec)";
 
-                var batchTitle = SummarizeTargetsForBatch(samples);
+                var batchTitle = SummarizeTargetsForBatch(orderedFull);
 
                 sb.AppendLine($"<section class=\"{sectionClass}\">");
                 sb.AppendLine($"  <h2 class=\"text-lg font-semibold text-sky-300\">{Escape(batchTitle)}</h2>");
@@ -198,24 +198,26 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>
-        /// One Stop/Test batch may include frames with different FITS OBJECT names; builds a readable heading from distinct <see cref="DriftSample.TargetName"/> values.
+        /// One Stop/Test batch may include frames with different FITS OBJECT names; builds a readable heading from distinct
+        /// targets in first-seen frame order (same order as Target subsections and charts below).
         /// </summary>
         public static string SummarizeTargetsForBatch(IReadOnlyList<DriftSample> samples) {
-            var distinct = samples
-                .Select(s => s.TargetName?.Trim())
-                .Where(n => !string.IsNullOrEmpty(n))
-                .Select(n => n!)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (distinct.Count == 0)
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var order = new List<string>();
+            foreach (var s in samples) {
+                var label = string.IsNullOrWhiteSpace(s.TargetName) ? "Unknown" : s.TargetName.Trim();
+                if (seen.Add(label))
+                    order.Add(label);
+            }
+
+            if (order.Count == 0)
                 return "Unknown";
-            if (distinct.Count == 1)
-                return distinct[0];
+            if (order.Count == 1)
+                return order[0];
             const int maxListed = 4;
-            if (distinct.Count <= maxListed)
-                return string.Join(" · ", distinct);
-            return string.Join(" · ", distinct.Take(maxListed)) + $" (+{distinct.Count - maxListed} more)";
+            if (order.Count <= maxListed)
+                return string.Join(" · ", order);
+            return string.Join(" · ", order.Take(maxListed)) + $" (+{order.Count - maxListed} more)";
         }
 
         /// <summary>Groups samples by target; order of groups follows first appearance in frame sequence.</summary>
