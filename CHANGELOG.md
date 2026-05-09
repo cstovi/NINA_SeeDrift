@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.14] — 2026-05-09
+
+### Changed
+
+- **Night HTML:** Page header shows the **SeeDrift** icon (**same 24×24 vector** as `SeeDrift_Icon` in `Resources.xaml`) **top-left** beside the title.
+- **Plugin listing:** Short description no longer mentions **Chart.js** or **optional** sequencer wording; it now ends with **drift HTML with sequencer markers.**
+
 ## [0.7.13] — 2026-05-09
 
 ### Changed

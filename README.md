@@ -1,6 +1,6 @@
 # SeeDrift — NINA plugin
 
-**Plate-solves** **LIGHT** frames whose paths appear on **NINA “Saved image to …”** lines in your session **logs** (`%LocalAppData%\NINA\Logs`). **SeeDrift Start→Stop** keeps saves whose log timestamp falls between Start and Stop; **Test report** lets you pick a **historic `.log` file** and solves everything it references — no imaging-folder tree scan. Drift is **ΔRA / ΔDec in arcseconds** vs the **first solved frame per FITS target** (one chart per `OBJECT` when a batch mixes targets). Output is **HTML** (**Tailwind**, **Chart.js** with zoom/pan) and optional **dither** / **center-after-drift** rows when logs correlate between consecutive frames of the same target.
+**Plate-solves** **LIGHT** frames whose paths appear on **NINA “Saved image to …”** lines in your session **logs** (`%LocalAppData%\NINA\Logs`). **SeeDrift Start→Stop** keeps saves whose log timestamp falls between Start and Stop; **Test report** lets you pick a **historic `.log` file** and solves everything it references — no imaging-folder tree scan. Drift is **ΔRA / ΔDec in arcseconds** vs the **first solved frame per FITS target** (one chart per `OBJECT` when a batch mixes targets). Output is **HTML** (**Tailwind**, **Chart.js** with zoom/pan) with **dither** / **center-after-drift** and sequencer context in the report when logs correlate between consecutive frames of the same target.
 
 There is **no live dockable chart** and **no pixel / header-only drift path** in this version.
 

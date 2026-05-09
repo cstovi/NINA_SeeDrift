@@ -17,6 +17,12 @@ namespace NINA.Plugin.SeeDrift.Services {
         private const string CdnChartZoom = "https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js";
         private const string CdnTailwind = "https://cdn.tailwindcss.com";
 
+        /// <summary>Same path as <c>SeeDrift_Icon</c> in <c>Resources.xaml</c> (24×24), for parity with the plugin/sequencer icon size.</summary>
+        private const string SeeDriftLogoSvg =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" class=\"shrink-0\" aria-hidden=\"true\" focusable=\"false\">" +
+            "<path d=\"M3 12h18M12 3v18M6 6l12 12M18 6L6 18\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2\" stroke-linecap=\"round\"/>" +
+            "</svg>";
+
         /// <summary>
         /// Writes a single rolling nightly HTML with one subsection per target within each batch (each Stop/Test run).
         /// Drift is re-anchored to the first solved frame <em>of that target</em>; sequencer rows only include edges where
@@ -47,10 +53,17 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("</head>");
             sb.AppendLine("<body class=\"min-h-full bg-slate-950 text-slate-200 antialiased\">");
             sb.AppendLine("<main class=\"mx-auto max-w-5xl px-4 py-8 sm:px-6\">");
-            sb.AppendLine($"<header class=\"mb-10 border-b border-slate-800 pb-6\">");
-            sb.AppendLine($"  <h1 class=\"text-xl font-semibold tracking-tight text-white\">SeeDrift — night {Escape(DateTime.Now.ToString("yyyy-MM-dd"))}</h1>");
-            sb.AppendLine($"  <p class=\"mt-2 text-sm text-slate-400\">Generated {DateTime.Now:HH:mm} · <span class=\"text-slate-300\">{targets.Count}</span> batch{(targets.Count == 1 ? "" : "es")}</p>");
-            sb.AppendLine($"  <p class=\"mt-3 text-xs text-slate-500\">Drag to pan · Wheel to zoom in/out (can zoom out past the data for context) · Double-click chart to reset zoom</p>");
+            sb.AppendLine("<header class=\"mb-10 border-b border-slate-800 pb-6\">");
+            sb.AppendLine("  <div class=\"flex flex-row items-start gap-4\">");
+            sb.AppendLine("    <div class=\"flex-shrink-0 pt-0.5\" role=\"img\" aria-label=\"SeeDrift\">");
+            sb.AppendLine("      " + SeeDriftLogoSvg);
+            sb.AppendLine("    </div>");
+            sb.AppendLine("    <div class=\"min-w-0 flex-1\">");
+            sb.AppendLine($"      <h1 class=\"text-xl font-semibold tracking-tight text-white\">SeeDrift — night {Escape(DateTime.Now.ToString("yyyy-MM-dd"))}</h1>");
+            sb.AppendLine($"      <p class=\"mt-2 text-sm text-slate-400\">Generated {DateTime.Now:HH:mm} · <span class=\"text-slate-300\">{targets.Count}</span> batch{(targets.Count == 1 ? "" : "es")}</p>");
+            sb.AppendLine("      <p class=\"mt-3 text-xs text-slate-500\">Drag to pan · Wheel to zoom in/out (can zoom out past the data for context) · Double-click chart to reset zoom</p>");
+            sb.AppendLine("    </div>");
+            sb.AppendLine("  </div>");
             sb.AppendLine("</header>");
 
             for (var t = 0; t < targets.Count; t++) {
