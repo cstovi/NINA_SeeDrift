@@ -71,7 +71,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>
-        /// Writes a single rolling nightly HTML with one subsection per target within each batch (each Stop or previous-session-report run).
+        /// Writes a single rolling HTML report with one subsection per target within each batch (each Stop or previous-session-report run).
         /// Drift is re-anchored to the first solved frame <em>of that target</em>; sequencer rows only include edges where
         /// both consecutive frames belong to the same target.
         /// </summary>
@@ -82,11 +82,13 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var min = Math.Max(1, minExposuresPerTarget);
+            var sessionLogDay = SessionReportDates.ResolveSessionCalendarDay(targets);
+            var sessionLogLabel = sessionLogDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             var sb = new StringBuilder();
             sb.AppendLine("<!DOCTYPE html>");
             sb.AppendLine("<html lang=\"en\" class=\"h-full\">");
             sb.AppendLine("<head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>");
-            sb.AppendLine($"<title>SeeDrift — night {DateTime.Now:yyyy-MM-dd}</title>");
+            sb.AppendLine($"<title>SeeDrift — Session Log {sessionLogLabel}</title>");
             sb.AppendLine($"<script src=\"{CdnTailwind}\"></script>");
             sb.AppendLine($"<script src=\"{CdnHammer}\"></script>");
             sb.AppendLine($"<script src=\"{CdnChartJs}\"></script>");
@@ -106,7 +108,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("      " + BuildHeaderBrandMarkup());
             sb.AppendLine("    </div>");
             sb.AppendLine("    <div class=\"min-w-0 flex-1\">");
-            sb.AppendLine($"      <h1 class=\"text-xl font-semibold tracking-tight text-white\">SeeDrift — night {Escape(DateTime.Now.ToString("yyyy-MM-dd"))}</h1>");
+            sb.AppendLine($"      <h1 class=\"text-xl font-semibold tracking-tight text-white\">SeeDrift — Session Log {Escape(sessionLogLabel)}</h1>");
             sb.AppendLine(
                 $"      <p class=\"mt-2 text-sm text-slate-400\">Generated {Escape(DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))} <span class=\"text-slate-500\">(local)</span></p>");
             sb.Append(FormatPageHeaderLogsHtml(targets));

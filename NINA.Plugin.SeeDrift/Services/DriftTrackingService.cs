@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -466,47 +467,16 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
         }
 
-        /// <summary>Night report file name: local run date + local calendar day of earliest exposure (or log-file hint).</summary>
+        /// <summary>Night report file name: local run date + session calendar day (NINA log filename date when available — same as HTML header).</summary>
         private static string FormatNightReportHtmlFileName(IReadOnlyList<CompletedTarget> targets) {
             var ran = DateTime.Now.ToString("yyyyMMdd");
             var sess = ResolveSessionDateStamp(targets);
             return $"SeeDrift_ran{ran}_sess{sess}.html";
         }
 
-        /// <summary>Local <c>YYYYMMDD</c> for the imaging session: min exposure start among samples, else earliest source log mtime, else today.</summary>
-        private static string ResolveSessionDateStamp(IReadOnlyList<CompletedTarget> targets) {
-            DateTime? minUtc = null;
-            foreach (var t in targets) {
-                foreach (var s in t.Samples) {
-                    var u = s.ExposureStartUtc;
-                    u = u.Kind == DateTimeKind.Utc ? u : u.ToUniversalTime();
-                    minUtc = minUtc.HasValue ? (u < minUtc.Value ? u : minUtc.Value) : u;
-                }
-            }
-            if (minUtc.HasValue)
-                return minUtc.Value.ToLocalTime().ToString("yyyyMMdd");
-
-            long? minLogTicks = null;
-            foreach (var t in targets) {
-                if (t.SourceLogPaths == null)
-                    continue;
-                foreach (var p in t.SourceLogPaths) {
-                    try {
-                        if (string.IsNullOrWhiteSpace(p) || !File.Exists(p))
-                            continue;
-                        var w = File.GetLastWriteTimeUtc(p);
-                        var ticks = w.Ticks;
-                        minLogTicks = minLogTicks.HasValue ? Math.Min(minLogTicks.Value, ticks) : ticks;
-                    } catch {
-                        // ignore optional log path hints
-                    }
-                }
-            }
-            if (minLogTicks.HasValue)
-                return new DateTime(minLogTicks.Value, DateTimeKind.Utc).ToLocalTime().ToString("yyyyMMdd");
-
-            return DateTime.Now.ToString("yyyyMMdd");
-        }
+        /// <summary>Local <c>YYYYMMDD</c> for the imaging session (same rule as HTML header — log filename date first).</summary>
+        private static string ResolveSessionDateStamp(IReadOnlyList<CompletedTarget> targets) =>
+            SessionReportDates.ResolveSessionCalendarDay(targets).ToString("yyyyMMdd", CultureInfo.InvariantCulture);
 
         /// <summary>Largest number of plate-solved samples on a single FITS OBJECT in this run.</summary>
         private static int MaxSolvedSamplesPerBestTarget(IReadOnlyList<DriftSample> built) {

@@ -6,11 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.27] — 2026-05-09
+
+### Changed
+
+- **HTML report header:** Title and main heading use **Session Log** (replacing “night”) and the **session calendar date** derived from **NINA log file names** when possible (`yyyyMMdd-…` prefix, e.g. `20260421-221631-….log`). If no listed log path matches that pattern, SeeDrift uses the **earliest solved exposure** local day, then log **last-write** time, then today — same rule as the **`sess`** segment in **`SeeDrift_ran*_sess*.html`**. **Generated** still shows when the file was written.
+
 ## [0.7.26] — 2026-05-09
 
 ### Changed
 
-- **Night HTML filename:** rolling report files are named **`SeeDrift_ranYYYYMMDD_sessYYYYMMDD.html`**: **`ran`** is the local calendar day when the report is written; **`sess`** is the local calendar day of the **earliest solved exposure** across all batches in the file. If there are no samples (e.g. presolve-only batch), **`sess`** falls back to the **earliest last-write time** among associated NINA log paths, then to today.
+- **Night HTML filename:** rolling report files are named **`SeeDrift_ranYYYYMMDD_sessYYYYMMDD.html`**: **`ran`** is the local calendar day when the report is written; **`sess`** is the session calendar day (**leading date in NINA log file names** when present; otherwise **earliest solved exposure**, then **earliest log file mtime**, then today).
 
 ## [0.7.25] — 2026-05-09
 
