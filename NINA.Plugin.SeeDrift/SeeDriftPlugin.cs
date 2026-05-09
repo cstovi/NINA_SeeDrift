@@ -41,8 +41,9 @@ namespace NINA.Plugin.SeeDrift {
         public SeeDriftSettings Settings { get; }
         public DriftTrackingService DriftTracker { get; }
 
-        /// <summary>Concurrency dropdown entries (1–16).</summary>
-        public IReadOnlyList<int> PlateSolveParallelismOptions { get; } = Enumerable.Range(1, 16).ToList();
+        /// <summary>Concurrency dropdown entries (1 … <see cref="CpuTopology.MaxPlateSolveParallelism"/>).</summary>
+        public IReadOnlyList<int> PlateSolveParallelismOptions { get; } =
+            Enumerable.Range(1, CpuTopology.MaxPlateSolveParallelism).ToList();
 
         public ICommand RunTestReportCommand { get; }
         public ICommand BrowseTestReportLogCommand { get; }
@@ -231,9 +232,10 @@ namespace NINA.Plugin.SeeDrift {
             set { _htmlExportFolder = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
         }
 
-        private int _plateSolveParallelism = Math.Clamp(CpuTopology.PhysicalCoreCount, 1, 16);
+        private int _plateSolveParallelism =
+            Math.Clamp(CpuTopology.PhysicalCoreCount, 1, CpuTopology.MaxPlateSolveParallelism);
 
-        /// <summary>Concurrent plate solves during Stop/Test (1–16). Fresh defaults match physical CPU cores (clamped).</summary>
+        /// <summary>Concurrent plate solves during Stop/Test (clamped to 1 … <see cref="CpuTopology.MaxPlateSolveParallelism"/>). Fresh defaults match physical CPU cores (clamped to that ceiling).</summary>
         public int PlateSolveParallelism {
             get => _plateSolveParallelism;
             set {
@@ -246,8 +248,9 @@ namespace NINA.Plugin.SeeDrift {
         }
 
         private static int NormalizePlateSolveParallelism(int value) {
-            if (value < 1) return Math.Clamp(CpuTopology.PhysicalCoreCount, 1, 16);
-            if (value > 16) return 16;
+            var max = CpuTopology.MaxPlateSolveParallelism;
+            if (value < 1) return Math.Clamp(CpuTopology.PhysicalCoreCount, 1, max);
+            if (value > max) return max;
             return value;
         }
 

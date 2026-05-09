@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.13] — 2026-05-09
+
+### Changed
+
+- **Plugins → SeeDrift → Concurrency:** The dropdown is no longer fixed **1–16**. The maximum is **80% of reported CPU cores** (physical cores from WMI, or logical count if WMI fails), **rounded down**—e.g. **12 cores → 9**. Defaults and saved values are **clamped** to this ceiling so older settings above the new max drop to the max on load.
+
 ## [0.7.11] — 2026-05-09
 
 ### Added

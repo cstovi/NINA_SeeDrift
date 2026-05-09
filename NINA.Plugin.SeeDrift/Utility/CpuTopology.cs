@@ -8,12 +8,23 @@ namespace NINA.Plugin.SeeDrift.Utility {
     /// </summary>
     internal static class CpuTopology {
 
+        /// <summary>
+        /// Concurrent plate solves are capped at this fraction of <see cref="PhysicalCoreCount"/> (floor), leaving headroom for the OS and NINA.
+        /// </summary>
+        private const double PlateSolveParallelismFraction = 0.8;
+
         private static readonly Lazy<int> PhysicalCoreCountLazy = new(ComputePhysicalCoreCount);
 
         /// <summary>
         /// Physical CPU cores. Uses WMI; falls back to <see cref="Environment.ProcessorCount"/> if WMI fails.
         /// </summary>
         public static int PhysicalCoreCount => PhysicalCoreCountLazy.Value;
+
+        /// <summary>
+        /// Upper bound for the concurrency dropdown and clamps: <c>floor(PhysicalCoreCount × 0.8)</c>, at least 1.
+        /// </summary>
+        public static int MaxPlateSolveParallelism =>
+            Math.Max(1, (int)Math.Floor(PhysicalCoreCount * PlateSolveParallelismFraction));
 
         private static int ComputePhysicalCoreCount() {
             try {

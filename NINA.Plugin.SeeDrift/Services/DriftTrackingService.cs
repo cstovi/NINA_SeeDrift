@@ -220,7 +220,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 MaxProgress = windowed.Count
             });
 
-            var parallelismCfg = Math.Clamp(_plugin.Settings.PlateSolveParallelism, 1, 16);
+            var parallelismCfg = Math.Clamp(
+                _plugin.Settings.PlateSolveParallelism,
+                1,
+                CpuTopology.MaxPlateSolveParallelism);
             var poolSize = Math.Min(parallelismCfg, windowed.Count);
             SeeDriftLog.Info($"SeeDrift: plate-solve concurrency={poolSize} (setting max={parallelismCfg})");
 

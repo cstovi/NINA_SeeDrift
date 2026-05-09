@@ -13,8 +13,9 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Historic Test report: path to a NINA .log file (Saved image to … lines).</summary>
         public string TestReportLogFilePath { get; set; } = "";
 
-        /// <summary>Max concurrent plate solves (1–16). Default on fresh settings matches physical CPU cores (clamped).</summary>
-        public int PlateSolveParallelism { get; set; } = Math.Clamp(CpuTopology.PhysicalCoreCount, 1, 16);
+        /// <summary>Max concurrent plate solves (1 … <see cref="CpuTopology.MaxPlateSolveParallelism"/>). Default on fresh settings matches physical CPU cores (clamped to that ceiling).</summary>
+        public int PlateSolveParallelism { get; set; } =
+            Math.Clamp(CpuTopology.PhysicalCoreCount, 1, CpuTopology.MaxPlateSolveParallelism);
 
         /// <summary>
         /// Night HTML lists only targets with at least this many solved frames in the batch (default 50).
