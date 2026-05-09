@@ -426,7 +426,8 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>
-        /// Writes all <see cref="CompletedTargets"/> to the rolling night HTML file.
+        /// Writes all <see cref="CompletedTargets"/> to the rolling night HTML file
+        /// (<c>SeeDrift_ranYYYYMMDD_sessYYYYMMDD.html</c> — run date when written, session date from data).
         /// Uses <see cref="SeeDriftPlugin.HtmlExportFolder"/> when set (trimmed); otherwise
         /// <c>%USERPROFILE%\Documents\SeeDrift</c> — not the Desktop unless you set that folder explicitly.
         /// </summary>
@@ -447,7 +448,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     : raw.Trim();
                 folder = Path.GetFullPath(folder);
                 Directory.CreateDirectory(folder);
-                var path = Path.Combine(folder, $"SeeDrift_night_{DateTime.Now:yyyyMMdd}.html");
+                var path = Path.Combine(folder, FormatNightReportHtmlFileName(CompletedTargets));
                 path = Path.GetFullPath(path);
                 HtmlReportExporter.WriteNightReport(CompletedTargets, path, _plugin.MinExposuresPerTarget);
                 if (!File.Exists(path)) {
@@ -463,6 +464,48 @@ namespace NINA.Plugin.SeeDrift.Services {
                 SeeDriftLog.Error($"SeeDrift: failed to write night report: {ex.Message}");
                 return false;
             }
+        }
+
+        /// <summary>Night report file name: local run date + local calendar day of earliest exposure (or log-file hint).</summary>
+        private static string FormatNightReportHtmlFileName(IReadOnlyList<CompletedTarget> targets) {
+            var ran = DateTime.Now.ToString("yyyyMMdd");
+            var sess = ResolveSessionDateStamp(targets);
+            return $"SeeDrift_ran{ran}_sess{sess}.html";
+        }
+
+        /// <summary>Local <c>YYYYMMDD</c> for the imaging session: min exposure start among samples, else earliest source log mtime, else today.</summary>
+        private static string ResolveSessionDateStamp(IReadOnlyList<CompletedTarget> targets) {
+            DateTime? minUtc = null;
+            foreach (var t in targets) {
+                foreach (var s in t.Samples) {
+                    var u = s.ExposureStartUtc;
+                    u = u.Kind == DateTimeKind.Utc ? u : u.ToUniversalTime();
+                    minUtc = minUtc.HasValue ? (u < minUtc.Value ? u : minUtc.Value) : u;
+                }
+            }
+            if (minUtc.HasValue)
+                return minUtc.Value.ToLocalTime().ToString("yyyyMMdd");
+
+            long? minLogTicks = null;
+            foreach (var t in targets) {
+                if (t.SourceLogPaths == null)
+                    continue;
+                foreach (var p in t.SourceLogPaths) {
+                    try {
+                        if (string.IsNullOrWhiteSpace(p) || !File.Exists(p))
+                            continue;
+                        var w = File.GetLastWriteTimeUtc(p);
+                        var ticks = w.Ticks;
+                        minLogTicks = minLogTicks.HasValue ? Math.Min(minLogTicks.Value, ticks) : ticks;
+                    } catch {
+                        // ignore optional log path hints
+                    }
+                }
+            }
+            if (minLogTicks.HasValue)
+                return new DateTime(minLogTicks.Value, DateTimeKind.Utc).ToLocalTime().ToString("yyyyMMdd");
+
+            return DateTime.Now.ToString("yyyyMMdd");
         }
 
         /// <summary>Largest number of plate-solved samples on a single FITS OBJECT in this run.</summary>
