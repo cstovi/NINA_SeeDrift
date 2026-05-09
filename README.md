@@ -1,6 +1,6 @@
 # SeeDrift — NINA plugin
 
-**Plate-solves** **LIGHT** frames whose paths appear on **NINA “Saved image to …”** lines in your session **logs** (`%LocalAppData%\NINA\Logs`). **SeeDrift Start→Stop** keeps saves whose log timestamp falls between Start and Stop; **Test report** lets you pick a **historic `.log` file** and solves everything it references — no imaging-folder tree scan. Drift is **ΔRA / ΔDec in arcseconds** vs the **first solved frame per FITS target** (one chart per `OBJECT` when a batch mixes targets). Output is **HTML** (**Tailwind**, **Chart.js** with zoom/pan) with **dither** / **center-after-drift** and sequencer context in the report when logs correlate between consecutive frames of the same target.
+**Plate-solves** **LIGHT** frames whose paths appear on **NINA “Saved image to …”** lines in your session **logs** (`%LocalAppData%\NINA\Logs`). **SeeDrift Start→Stop** keeps saves whose log timestamp falls between Start and Stop; **Previous session report** (plugin options) lets you pick a **saved `.log` file** from an earlier session and solves everything it references — no imaging-folder tree scan. Drift is **ΔRA / ΔDec in arcseconds** vs the **first solved frame per FITS target** (one chart per `OBJECT` when a batch mixes targets). Output is **HTML** (**Tailwind**, **Chart.js** with zoom/pan) with **dither** / **center-after-drift** and sequencer context in the report when logs correlate between consecutive frames of the same target.
 
 There is **no live dockable chart** and **no pixel / header-only drift path** in this version.
 
@@ -34,9 +34,9 @@ Set **Options → Imaging → image file path** in NINA so saved lights land whe
 1. Add **SeeDrift Start** before capture and **SeeDrift Stop** when finished.
 2. **Stop** reads NINA log files, collects **Saved image to …** paths between Start and Stop, plate-solves each **LIGHT** (header filter), builds drift samples, and **appends** to the rolling **night HTML** (one drift chart and sequencer block per target when the batch spans multiple `OBJECT` names). **NINA’s status bar** shows the **full path** on success; if **Night report folder** is empty, the default is **`Documents\SeeDrift`** (not Desktop).
 
-### Test report (options panel)
+### Previous session Log (options panel)
 
-Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste its path), then **Run test report**. The entire log file is used. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving).
+Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste its path), then **Run previous session report**. The entire log file is used. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving).
 
 **Concurrency** is a **dropdown** from **1** up to **80% of physical cores** (rounded down, min **1**); on a fresh install it defaults to **physical core count** clamped to that maximum. WMI provides physical cores; if WMI fails, SeeDrift uses logical processor count for the cap and default. **Minimum exposures per target** hides targets with fewer solved frames in each batch’s night HTML section (default **50**). Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
 

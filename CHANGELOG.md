@@ -6,14 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.20] — 2026-05-09
+
 ### Changed
+
+- **Plugins → SeeDrift:** Renamed **Test report** to **Previous session Log**; primary action **Run previous session report**; status heading **Previous session report status**. Dialogs, log lines, night HTML copy, and docs use the same wording.
 
 - **Plugins → SeeDrift:** **Concurrency** and **Minimum exposures** fields use a **narrow** value column (width tuned to the numeric range) instead of stretching full width.
 
 - **MANUAL:** Explains that **one session is usually one NINA log**, but **log rotation** (e.g. **month** boundary) can split a session across **two** files—matching why **Stop** reads **all** `*.log` files under NINA Logs.
 
 - **Plugins → SeeDrift:** Inline help for **Night report folder**, **Concurrency**, and **Minimum exposures** moved into **hover tooltips** on each row (longer read time on hover).
-- **Plugins → SeeDrift:** Removed the static line under the test-report status panel that compared in-plugin status to **Stop** (details remain in the manual).
+- **Plugins → SeeDrift:** Removed the static line under the previous-session-report status panel that compared in-plugin status to **Stop** (details remain in the manual).
 
 ### Added
 

@@ -17,7 +17,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
     /// <summary>
     /// Plate-solves LIGHT files referenced by NINA “Saved image to …” log lines (SeeDrift Start→Stop scans logs under
-    /// <c>%LocalAppData%\NINA\Logs</c>; Test report uses a log file you choose) and writes the rolling night HTML report.
+    /// <c>%LocalAppData%\NINA\Logs</c>; previous session report uses a log file you choose) and writes the rolling night HTML report.
     /// </summary>
     public sealed class DriftTrackingService : IDisposable {
 
@@ -25,7 +25,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             public string Name { get; init; } = "";
             public IReadOnlyList<DriftSample> Samples { get; init; } = Array.Empty<DriftSample>();
 
-            /// <summary>NINA log file path(s) read for this batch (Stop = folder listing; Test = chosen file).</summary>
+            /// <summary>NINA log file path(s) read for this batch (Stop = folder listing; previous session report = chosen file).</summary>
             public IReadOnlyList<string> SourceLogPaths { get; init; } = Array.Empty<string>();
 
             /// <summary>
@@ -101,28 +101,28 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
         }
 
-        /// <summary>Test report: plate-solves lights listed in the chosen NINA log file (full file).</summary>
+        /// <summary>Previous session report: plate-solves lights listed in the chosen NINA log file (full file).</summary>
         /// <returns><c>true</c> if a batch was written to the night HTML.</returns>
         public async Task<bool> RunTestReportFromLogAsync(
                 string logFilePath,
                 IProgress<ApplicationStatus>? progress,
                 CancellationToken token) {
             if (string.IsNullOrWhiteSpace(logFilePath)) {
-                SeeDriftLog.Error("SeeDrift: Test report — no log file path.");
-                progress?.Report(StatusOnly("Test report failed — no log file path."));
+                SeeDriftLog.Error("SeeDrift: Previous session report — no log file path.");
+                progress?.Report(StatusOnly("Previous session report failed — no log file path."));
                 return false;
             }
 
             try {
                 logFilePath = Path.GetFullPath(logFilePath.Trim());
             } catch {
-                SeeDriftLog.Error("SeeDrift: Test report — invalid log file path.");
-                progress?.Report(StatusOnly("Test report failed — invalid log file path."));
+                SeeDriftLog.Error("SeeDrift: Previous session report — invalid log file path.");
+                progress?.Report(StatusOnly("Previous session report failed — invalid log file path."));
                 return false;
             }
 
             if (!File.Exists(logFilePath)) {
-                SeeDriftLog.Error($"SeeDrift: Test report — log file not found: {logFilePath}");
+                SeeDriftLog.Error($"SeeDrift: Previous session report — log file not found: {logFilePath}");
                 progress?.Report(StatusOnly($"Log file not found — {Path.GetFileName(logFilePath)}"));
                 return false;
             }

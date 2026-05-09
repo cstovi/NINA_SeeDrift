@@ -11,13 +11,13 @@ using System.Windows;
 [assembly: AssemblyMetadata("ChangelogURL", "https://github.com/cstovi/NINA_SeeDrift/releases")]
 [assembly: AssemblyDescription("Plate-solves LIGHT frames referenced by NINA session logs (Saved image to …) and writes drift HTML with sequencer markers.")]
 [assembly: AssemblyMetadata("ShortDescription", "Plate-solved drift HTML from LIGHT frames in your NINA image directory.")]
-[assembly: AssemblyMetadata("LongDescription", @"SeeDrift reads NINA session logs (%LocalAppData%\NINA\Logs): Saved image to … lines give the FITS paths to solve. Start→Stop keeps lines between arm and disarm times; Test report lets you pick a historic .log file. Each frame is plate-solved using your NINA plate-solve profile; drift is shown as ΔRA/ΔDec arcseconds vs the first solved frame.
+[assembly: AssemblyMetadata("LongDescription", @"SeeDrift reads NINA session logs (%LocalAppData%\NINA\Logs): Saved image to … lines give the FITS paths to solve. Start→Stop keeps lines between arm and disarm times; previous session report lets you pick a saved .log file from an earlier session. Each frame is plate-solved using your NINA plate-solve profile; drift is shown as ΔRA/ΔDec arcseconds vs the first solved frame.
 
 When log lines correlate between exposures, dither and center-after-drift triggers appear in the HTML report.")]
 [assembly: AssemblyCompany("Carl Stovell")]
 [assembly: AssemblyProduct("NINA.Plugin.SeeDrift")]
-[assembly: AssemblyVersion("0.7.19.0")]
-[assembly: AssemblyFileVersion("0.7.19.0")]
+[assembly: AssemblyVersion("0.7.20.0")]
+[assembly: AssemblyFileVersion("0.7.20.0")]
 [assembly: AssemblyMetadata("id", "E8D4C2F1-6B7A-4E9D-8C3F-1A2B5D7E9F0C")]
 [assembly: Guid("E8D4C2F1-6B7A-4E9D-8C3F-1A2B5D7E9F0C")]
 [assembly: ThemeInfo(

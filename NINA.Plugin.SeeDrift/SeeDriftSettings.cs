@@ -10,7 +10,7 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Folder for rolling night HTML exports.</summary>
         public string HtmlExportFolder { get; set; } = "";
 
-        /// <summary>Historic Test report: path to a NINA .log file (Saved image to … lines).</summary>
+        /// <summary>Previous session report: path to a NINA .log file (Saved image to … lines).</summary>
         public string TestReportLogFilePath { get; set; } = "";
 
         /// <summary>Max concurrent plate solves (1 … <see cref="CpuTopology.MaxPlateSolveParallelism"/>). Default on fresh settings matches physical CPU cores (clamped to that ceiling).</summary>

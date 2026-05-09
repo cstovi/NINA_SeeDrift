@@ -15,7 +15,7 @@
                 <Grid.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="420" TextWrapping="Wrap"
-                                   Text="Leave empty for Documents\SeeDrift (not Desktop). After Stop/Test, NINA’s status bar shows the full saved path."/>
+                                   Text="Leave empty for Documents\SeeDrift (not Desktop). After Stop or Run previous session report, NINA’s status bar shows the full saved path."/>
                     </ToolTip>
                 </Grid.ToolTip>
                 <Grid.ColumnDefinitions>
@@ -77,11 +77,11 @@
 
             <Separator Margin="0,0,0,12"/>
 
-            <TextBlock Text="Test report (historic session)" FontWeight="Bold" Margin="0,0,0,4"/>
-            <TextBlock Text="Pick a saved NINA .log file. SeeDrift plate-solves every LIGHT frame listed on “Saved image to …” lines in that file — fast, no date window. Same drift + sequencer correlation as Stop."
+            <TextBlock Text="Previous session Log" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBlock Text="Pick a saved NINA .log file from a prior session. SeeDrift plate-solves every LIGHT frame listed on “Saved image to …” lines in that file — fast, no date window. Same drift + sequencer correlation as Stop."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
-            <TextBlock Text="NINA log file" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBlock Text="Previous session Log file" FontWeight="SemiBold" Margin="0,0,0,4"/>
             <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -92,7 +92,7 @@
             </Grid>
 
             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                <Button Content="Run test report" Command="{Binding RunTestReportCommand}" Padding="12,6"
+                <Button Content="Run previous session report" Command="{Binding RunTestReportCommand}" Padding="12,6"
                         IsEnabled="{Binding TestReportNotBusy, Mode=OneWay}"/>
             </StackPanel>
 
@@ -100,7 +100,7 @@
                     Background="#1e293b" BorderBrush="#334155" BorderThickness="1"
                     Visibility="{Binding TestReportChromeVisibility, Mode=OneWay}">
                 <StackPanel>
-                    <TextBlock Text="Test report status" FontWeight="SemiBold" Foreground="#94a3b8" FontSize="10" Margin="0,0,0,6"/>
+                    <TextBlock Text="Previous session report status" FontWeight="SemiBold" Foreground="#94a3b8" FontSize="10" Margin="0,0,0,6"/>
                     <TextBlock Text="{Binding TestReportStatusText, Mode=OneWay}" Foreground="#7dd3fc" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,0,0,8"/>
                     <ProgressBar Height="16"
                                  Minimum="0"
