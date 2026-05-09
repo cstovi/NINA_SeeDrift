@@ -79,13 +79,15 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"    <div class=\"seedrift-chart-box mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-2\">");
                     sb.AppendLine($"      <canvas id=\"{canvasId}\"></canvas>");
                     sb.AppendLine("    </div>");
-                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Chart markers: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if only one frame). Hover lists the file name, then ΔRA/ΔDec.</p>");
+                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center — placed along the segment between frames. Hover path for file name; hover △/□ for log detail.</p>");
 
                     var ptsJson = FormatScatterPointsJsonAnchored(grp);
+                    var edgeJson = FormatEdgeMidpointMarkersJson(grp);
 
                     sb.AppendLine("<script>");
                     sb.AppendLine("(function(){");
                     sb.AppendLine($"  const pts = {ptsJson};");
+                    sb.AppendLine($"  const edgeMarkers = {edgeJson};");
                     sb.AppendLine($"  const datasetLabel = {labelJson};");
                     sb.AppendLine($"  const el = document.getElementById('{canvasId}');");
                     sb.AppendLine("  function pointRadiusFn(ctx) {");
@@ -110,16 +112,38 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("    if (i === n - 1) return '#fb923c';");
                     sb.AppendLine("    return '#38bdf8';");
                     sb.AppendLine("  }");
-                    sb.AppendLine("  const chart = new Chart(el, {");
-                    sb.AppendLine("    type: 'scatter',");
-                    sb.AppendLine("    data: { datasets: [{");
+                    sb.AppendLine("  var datasets = [{");
                     sb.AppendLine("      label: datasetLabel,");
                     sb.AppendLine("      data: pts, borderColor: '#38bdf8',");
                     sb.AppendLine("      backgroundColor: pointBgFn,");
                     sb.AppendLine("      pointBorderColor: pointBorderFn,");
                     sb.AppendLine("      pointBorderWidth: 2,");
                     sb.AppendLine("      showLine: true, tension: 0.12, pointRadius: pointRadiusFn, borderWidth: 1.5");
-                    sb.AppendLine("    }]},");
+                    sb.AppendLine("    }];");
+                    sb.AppendLine("  if (edgeMarkers.length > 0) {");
+                    sb.AppendLine("    datasets.push({");
+                    sb.AppendLine("      label: 'Sequencer (between frames)',");
+                    sb.AppendLine("      data: edgeMarkers,");
+                    sb.AppendLine("      showLine: false,");
+                    sb.AppendLine("      borderColor: '#f8fafc',");
+                    sb.AppendLine("      backgroundColor: function(ctx) {");
+                    sb.AppendLine("        var d = ctx.raw;");
+                    sb.AppendLine("        return d && d.isDither ? 'rgba(168,85,247,0.92)' : 'rgba(244,114,182,0.92)';");
+                    sb.AppendLine("      },");
+                    sb.AppendLine("      pointBorderColor: '#0f172a',");
+                    sb.AppendLine("      pointBorderWidth: 1,");
+                    sb.AppendLine("      pointRadius: 6,");
+                    sb.AppendLine("      pointHoverRadius: 8,");
+                    sb.AppendLine("      hitRadius: 14,");
+                    sb.AppendLine("      pointStyle: function(ctx) {");
+                    sb.AppendLine("        var d = ctx.raw;");
+                    sb.AppendLine("        return (d && d.isDither) ? 'triangle' : 'rect';");
+                    sb.AppendLine("      }");
+                    sb.AppendLine("    });");
+                    sb.AppendLine("  }");
+                    sb.AppendLine("  const chart = new Chart(el, {");
+                    sb.AppendLine("    type: 'scatter',");
+                    sb.AppendLine("    data: { datasets: datasets },");
                     sb.AppendLine("    options: {");
                     sb.AppendLine("      responsive: true, maintainAspectRatio: false,");
                     sb.AppendLine("      scales: {");
@@ -131,6 +155,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("          callbacks: {");
                     sb.AppendLine("            title: function() { return ''; },");
                     sb.AppendLine("            label: function(ctx) {");
+                    sb.AppendLine("              if (ctx.datasetIndex > 0) {");
+                    sb.AppendLine("                var raw = ctx.raw;");
+                    sb.AppendLine("                var tip = raw && raw.tooltip ? String(raw.tooltip) : '';");
+                    sb.AppendLine("                var kind = raw && raw.isDither ? 'DitherAfterExposures / pulse' : 'CenterAfterDrift';");
+                    sb.AppendLine("                var hdr = kind + ' · ΔRA ' + ctx.parsed.x + '\" · ΔDec ' + ctx.parsed.y + '\"';");
+                    sb.AppendLine("                var lines = tip ? tip.split(/\\r?\\n/) : [];");
+                    sb.AppendLine("                return [hdr].concat(lines);");
+                    sb.AppendLine("              }");
                     sb.AppendLine("              var raw = ctx.raw;");
                     sb.AppendLine("              var fn = raw && raw.filename ? String(raw.filename) : '';");
                     sb.AppendLine("              var line2 = 'ΔRA ' + ctx.parsed.x + '\" · ΔDec ' + ctx.parsed.y + '\"';");
@@ -203,21 +235,59 @@ namespace NINA.Plugin.SeeDrift.Services {
             return orderKeys.Select(k => (k, groups[k])).ToList();
         }
 
+        /// <summary>ΔRA/ΔDec arcseconds for frame <paramref name="index"/> vs first frame of <paramref name="group"/>.</summary>
+        private static void GetAnchoredPlotPoint(IReadOnlyList<DriftSample> group, int index, out double x, out double y) {
+            var r0 = group[0].RawRaHours;
+            var d0 = group[0].RawDecDeg;
+            AstrometryMath.DeltaArcSec(r0, d0, group[index].RawRaHours, group[index].RawDecDeg,
+                out var dRa, out var dDec);
+            x = Math.Round(dRa, 4);
+            y = Math.Round(dDec, 4);
+        }
+
         private static string FormatScatterPointsJsonAnchored(IReadOnlyList<DriftSample> group) {
             if (group.Count == 0)
                 return "[]";
-            var r0 = group[0].RawRaHours;
-            var d0 = group[0].RawDecDeg;
             var points = new List<(double x, double y, string filename)>(group.Count);
             for (var i = 0; i < group.Count; i++) {
-                AstrometryMath.DeltaArcSec(r0, d0, group[i].RawRaHours, group[i].RawDecDeg,
-                    out var dRa, out var dDec);
+                GetAnchoredPlotPoint(group, i, out var px, out var py);
                 var fn = group[i].FileName ?? "";
-                points.Add((Math.Round(dRa, 4), Math.Round(dDec, 4), fn));
+                points.Add((px, py, fn));
             }
 
             return JsonSerializer.Serialize(
                 points.Select(p => new { x = p.x, y = p.y, filename = p.filename }));
+        }
+
+        /// <summary>
+        /// Midpoints along each consecutive pair (in plot space), spaced along the chord when multiple markers share one edge.
+        /// </summary>
+        private static string FormatEdgeMidpointMarkersJson(IReadOnlyList<DriftSample> group) {
+            if (group.Count < 2)
+                return "[]";
+            var list = new List<object>();
+            for (var i = 1; i < group.Count; i++) {
+                var markers = group[i].EdgeSequencerMarkers;
+                if (markers == null || markers.Count == 0)
+                    continue;
+
+                GetAnchoredPlotPoint(group, i - 1, out var px, out var py);
+                GetAnchoredPlotPoint(group, i, out var cx, out var cy);
+                var n = markers.Count;
+                for (var j = 0; j < n; j++) {
+                    var t = (j + 1.0) / (n + 1.0);
+                    var mx = px + t * (cx - px);
+                    var my = py + t * (cy - py);
+                    list.Add(new {
+                        x = Math.Round(mx, 4),
+                        y = Math.Round(my, 4),
+                        isDither = markers[j].IsDither,
+                        tooltip = markers[j].Tooltip ?? ""
+                    });
+                }
+            }
+
+            return JsonSerializer.Serialize(list);
         }
 
         private static bool SameSectionTarget(string? sampleTarget, string sectionTargetName) {

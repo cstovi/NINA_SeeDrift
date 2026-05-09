@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.6.7] — 2026-05-09
+
+### Changed
+
+- **Night HTML:** Correlated **dither** (triangle) and **center-after-drift** (square) markers are drawn **along the drift segment between the two frames** they belong to — at the midpoint when there is one event, or **evenly spaced** along that chord when several fall in the same interval. Hover shows the same log detail as the table.
+
 ## [0.6.6] — 2026-05-09
 
 ### Changed
