@@ -35,14 +35,16 @@
                 </Grid.ToolTip>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="160"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Concurrency:" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <ComboBox Grid.Column="1"
                           ItemsSource="{Binding PlateSolveParallelismOptions}"
                           SelectedItem="{Binding PlateSolveParallelism, Mode=TwoWay}"
                           VerticalAlignment="Center"
-                          MinWidth="72"
+                          HorizontalAlignment="Left"
+                          MinWidth="44"
+                          MaxWidth="68"
                           Foreground="#e2e8f0">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
@@ -56,15 +58,21 @@
                 <Grid.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="420" TextWrapping="Wrap"
-                                   Text="Night HTML lists only targets with at least this many solved frames in each batch (1–500). Default 50."/>
+                                   Text="Night HTML lists only targets with at least this many solved frames in each run (1–500). Default 50."/>
                     </ToolTip>
                 </Grid.ToolTip>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="160"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Minimum exposures:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="1" Text="{Binding MinExposuresPerTarget, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
+                <TextBox Grid.Column="1"
+                         Text="{Binding MinExposuresPerTarget, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalAlignment="Center"
+                         HorizontalAlignment="Left"
+                         MinWidth="40"
+                         MaxWidth="56"
+                         MaxLength="3"/>
             </Grid>
 
             <Separator Margin="0,0,0,12"/>

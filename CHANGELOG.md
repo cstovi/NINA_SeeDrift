@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Plugins → SeeDrift:** **Concurrency** and **Minimum exposures** fields use a **narrow** value column (width tuned to the numeric range) instead of stretching full width.
+
 - **MANUAL:** Explains that **one session is usually one NINA log**, but **log rotation** (e.g. **month** boundary) can split a session across **two** files—matching why **Stop** reads **all** `*.log` files under NINA Logs.
 
 - **Plugins → SeeDrift:** Inline help for **Night report folder**, **Concurrency**, and **Minimum exposures** moved into **hover tooltips** on each row (longer read time on hover).
