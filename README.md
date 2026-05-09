@@ -38,6 +38,8 @@ Set **Options → Imaging → image file path** in NINA so saved lights land whe
 
 Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste its path), then **Run previous session report**. The entire log file is used. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving). When the run finishes successfully, **Open** appears as an underlined **file name** you can click to launch the night HTML.
 
+Successful runs show **wall-clock time** (log read through plate solves and HTML save) in the **night HTML** batch line and in the **completion** line (**NINA status bar** after **Stop**; **Previous session report status** in the plugin panel).
+
 **Concurrency** is a **dropdown** from **1** up to **80% of physical cores** (rounded down, min **1**); on a fresh install it defaults to **physical core count** clamped to that maximum. Physical cores come from **`GetLogicalProcessorInformation`**; if that fails, SeeDrift uses **`Environment.ProcessorCount`** (logical processors) for the cap and default. **Minimum exposures per target** hides targets with fewer solved frames in each batch’s night HTML section (default **50**). Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
 
 SeeDrift also writes **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** (plugin messages, in addition to NINA’s own log).

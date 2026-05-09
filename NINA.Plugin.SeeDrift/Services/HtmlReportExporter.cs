@@ -141,7 +141,8 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 sb.AppendLine($"<section class=\"{sectionClass}\">");
                 sb.AppendLine($"  <h2 class=\"text-lg font-semibold text-sky-300\">{Escape(batchTitle)}</h2>");
-                sb.AppendLine($"  <p class=\"mt-1 text-sm text-slate-400\">{samples.Count} frame{(samples.Count == 1 ? "" : "s")}</p>");
+                sb.AppendLine(
+                    $"  <p class=\"mt-1 text-sm text-slate-400\">{Escape(FormatBatchFramesAndDuration(samples.Count, batch.RunDuration))}</p>");
 
                 if (filteredGroups.Count == 0) {
                     sb.AppendLine("  <div class=\"mt-6 rounded-lg border border-amber-900/40 bg-slate-900/60 p-4\">");
@@ -555,6 +556,13 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             sb.AppendLine("      </div>");
             return sb.ToString();
+        }
+
+        private static string FormatBatchFramesAndDuration(int sampleCount, TimeSpan runDuration) {
+            var frames = $"{sampleCount} frame{(sampleCount == 1 ? "" : "s")}";
+            if (runDuration.TotalMilliseconds < 0.5)
+                return frames;
+            return $"{frames} · Wall time {RunDurationFormatter.ToReadable(runDuration)}";
         }
 
         /// <summary>First/last exposure start from solved frames (DATE-OBS / log timing), shown in local wall time.</summary>

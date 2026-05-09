@@ -12,6 +12,9 @@
     <DataTemplate x:Key="SeeDrift_Options" DataType="{x:Type local:SeeDriftPlugin}">
         <StackPanel Margin="8" MaxWidth="620">
 
+            <TextBlock TextWrapping="Wrap" Foreground="#cbd5e1" FontSize="12" Margin="0,0,0,14"
+                       Text="Sequence tip: add SeeDrift Start at the top of your night's sequence and SeeDrift Stop at the bottom. When Stop runs, SeeDrift reads logs, plate-solves saved LIGHT frames from that window, and appends the drift HTML report. Many exposures mean many solves - it can be CPU- and memory-heavy; reduce Concurrency below if needed."/>
+
             <Grid Margin="0,0,0,16" ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="400">
                 <Grid.ToolTip>
                     <ToolTip>
@@ -82,7 +85,6 @@
             <TextBlock Text="Pick a saved NINA .log file from a prior session. SeeDrift plate-solves every LIGHT frame listed on “Saved image to …” lines in that file — fast, no date window. Same drift + sequencer correlation as Stop."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
-            <TextBlock Text="Previous session Log file" FontWeight="SemiBold" Margin="0,0,0,4"/>
             <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>

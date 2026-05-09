@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -34,6 +35,9 @@ namespace NINA.Plugin.SeeDrift.Services {
             /// LIGHT frame count seen on any single target (from headers before solve).
             /// </summary>
             public int? PresolveMaxLightsPerBestTarget { get; init; }
+
+            /// <summary>Wall time for this run (log read, plate solves, correlation, HTML write).</summary>
+            public TimeSpan RunDuration { get; init; }
         }
 
         private sealed class TraceState {
@@ -171,6 +175,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 });
             }
 
+            var runStopwatch = Stopwatch.StartNew();
+
             if (resetSession)
                 ResetSession();
 
@@ -239,7 +245,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                         Name = "",
                         Samples = Array.Empty<DriftSample>(),
                         SourceLogPaths = logFilesToRead,
-                        PresolveMaxLightsPerBestTarget = maxLightsAnyTarget
+                        PresolveMaxLightsPerBestTarget = maxLightsAnyTarget,
+                        RunDuration = runStopwatch.Elapsed
                     });
                     if (!TryWriteNightReport(out presolveNightPath, out presolveNightErr)) {
                         if (CompletedTargets.Count > 0)
@@ -255,14 +262,15 @@ namespace NINA.Plugin.SeeDrift.Services {
                     return false;
                 }
 
+                var dur = RunDurationFormatter.ToReadable(runStopwatch.Elapsed);
                 var completeDetail =
-                    $"Complete — night report saved. No target in this run had at least {minExpTarget} LIGHT frame(s) for any FITS target " +
+                    $"Complete — night report saved in {dur}. No target in this run had at least {minExpTarget} LIGHT frame(s) for any FITS target " +
                     $"(best target: {maxLightsAnyTarget}); plate solving was skipped. " +
                     "Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
                     $"{presolveNightPath}";
                 _plugin.NotifyNightReportSaved(presolveNightPath!, completeDetail);
                 Report(completeDetail, 1, 1);
-                SeeDriftLog.Info($"SeeDrift: run finished without plate solve — HTML → {presolveNightPath}");
+                SeeDriftLog.Info($"SeeDrift: run finished without plate solve in {dur} — HTML → {presolveNightPath}");
                 return true;
             }
 
@@ -377,7 +385,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 CompletedTargets.Add(new CompletedTarget {
                     Name = targetName,
                     Samples = built,
-                    SourceLogPaths = logFilesToRead
+                    SourceLogPaths = logFilesToRead,
+                    RunDuration = runStopwatch.Elapsed
                 });
                 if (!TryWriteNightReport(out nightSavedPath, out nightSaveError)) {
                     // Avoid leaving a batch in memory that never reached disk.
@@ -396,20 +405,22 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return false;
             }
 
+            var elapsedReadable = RunDurationFormatter.ToReadable(runStopwatch.Elapsed);
             if (skipLogCorrelation) {
                 var msgSkip =
-                    $"Complete — night report saved. No target in this run had at least {minExpTarget} solved exposure(s) for any FITS target " +
+                    $"Complete — night report saved in {elapsedReadable}. No target in this run had at least {minExpTarget} solved exposure(s) for any FITS target " +
                     $"(best target: {maxSolvedPerTarget}). Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
                     $"{nightSavedPath}";
                 _plugin.NotifyNightReportSaved(nightSavedPath!, msgSkip);
                 Report(msgSkip, built.Count, built.Count);
             } else {
-                var msgOk = $"Complete — night report saved ({built.Count} frames): {nightSavedPath}";
+                var msgOk =
+                    $"Complete — night report saved ({built.Count} frames, {elapsedReadable}): {nightSavedPath}";
                 _plugin.NotifyNightReportSaved(nightSavedPath!, msgOk);
                 Report(msgOk, built.Count, built.Count);
             }
 
-            SeeDriftLog.Info($"SeeDrift: batch complete — {built.Count} solved frames → {nightSavedPath}");
+            SeeDriftLog.Info($"SeeDrift: batch complete — {built.Count} solved frames in {elapsedReadable} → {nightSavedPath}");
             return true;
         }
 
