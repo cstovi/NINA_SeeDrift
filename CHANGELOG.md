@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.6] — 2026-05-09
+
+### Fixed
+
+- **Plot tracker:** Tooltips now **hide when the pointer leaves** the snap radius around any series point (no need to click or exit the chart).
+
 ## [0.4.5] — 2026-05-09
 
 ### Added

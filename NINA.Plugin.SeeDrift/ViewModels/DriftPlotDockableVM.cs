@@ -9,6 +9,7 @@ using NINA.Core.Utility;
 using NINA.Equipment.Interfaces.ViewModel;
 using NINA.Plugin.SeeDrift.Models;
 using NINA.Plugin.SeeDrift.Services;
+using NINA.Plugin.SeeDrift.Utility;
 using NINA.Profile.Interfaces;
 using NINA.WPF.Base.ViewModel;
 using OxyPlot;
@@ -36,7 +37,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             c.BindMouseEnter(new DelegatePlotCommand<OxyMouseEventArgs>(
                 (view, ctrl, args) =>
                     ctrl.AddHoverManipulator(view,
-                        new TrackerManipulator(view) { Snap = false, PointsOnly = true, FiresDistance = 32.0 },
+                        new DismissWhenAwayTrackerManipulator(view) {
+                            Snap = false,
+                            PointsOnly = true,
+                            FiresDistance = 32.0
+                        },
                         args)));
             return c;
         }
