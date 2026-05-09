@@ -40,9 +40,16 @@
                 <TextBlock Grid.Column="0" Text="Concurrency:" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <ComboBox Grid.Column="1"
                           ItemsSource="{Binding PlateSolveParallelismOptions}"
-                          SelectedItem="{Binding PlateSolveParallelism}"
+                          SelectedItem="{Binding PlateSolveParallelism, Mode=TwoWay}"
                           VerticalAlignment="Center"
-                          MinWidth="72"/>
+                          MinWidth="72"
+                          Foreground="#e2e8f0">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" Foreground="#e2e8f0"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
             </Grid>
 
             <Grid Margin="0,0,0,16" ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="400">

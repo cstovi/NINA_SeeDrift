@@ -21,6 +21,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Night HTML:** Under each target drift chart, show **total ΔRA and ΔDec movement** along the plotted trace as **Σ |Δstep|** between consecutive solved frames (arcseconds, matching chart geometry).
 
+## [0.7.12] — 2026-05-09
+
+### Fixed
+
+- **Plugins → SeeDrift:** Restored **`PlateSolveParallelismOptions`** on the plugin (required for the concurrency **ComboBox** `ItemsSource`). Dropdown lists **1–16** again; explicit **foreground** on items for dark UIs.
+
 ## [0.7.10] — 2026-05-09
 
 ### Changed

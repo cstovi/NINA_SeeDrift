@@ -41,6 +41,9 @@ namespace NINA.Plugin.SeeDrift {
         public SeeDriftSettings Settings { get; }
         public DriftTrackingService DriftTracker { get; }
 
+        /// <summary>Concurrency dropdown entries (1–16).</summary>
+        public IReadOnlyList<int> PlateSolveParallelismOptions { get; } = Enumerable.Range(1, 16).ToList();
+
         public ICommand RunTestReportCommand { get; }
         public ICommand BrowseTestReportLogCommand { get; }
 
