@@ -91,28 +91,32 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>Test report: plate-solves lights listed in the chosen NINA log file (full file).</summary>
-        public async Task RunTestReportFromLogAsync(
+        /// <returns><c>true</c> if a batch was written to the night HTML.</returns>
+        public async Task<bool> RunTestReportFromLogAsync(
                 string logFilePath,
                 IProgress<ApplicationStatus>? progress,
                 CancellationToken token) {
             if (string.IsNullOrWhiteSpace(logFilePath)) {
                 Logger.Error("SeeDrift: Test report — no log file path.");
-                return;
+                progress?.Report(StatusOnly("Test report failed — no log file path."));
+                return false;
             }
 
             try {
                 logFilePath = Path.GetFullPath(logFilePath.Trim());
             } catch {
                 Logger.Error("SeeDrift: Test report — invalid log file path.");
-                return;
+                progress?.Report(StatusOnly("Test report failed — invalid log file path."));
+                return false;
             }
 
             if (!File.Exists(logFilePath)) {
                 Logger.Error($"SeeDrift: Test report — log file not found: {logFilePath}");
-                return;
+                progress?.Report(StatusOnly($"Log file not found — {Path.GetFileName(logFilePath)}"));
+                return false;
             }
 
-            await RunBatchFromLogsAsync(
+            return await RunBatchFromLogsAsync(
                     new[] { logFilePath },
                     windowStartUtc: null,
                     windowEndUtc: null,
@@ -121,6 +125,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                     token)
                 .ConfigureAwait(false);
         }
+
+        private static ApplicationStatus StatusOnly(string msg) =>
+            new ApplicationStatus { Source = "SeeDrift", Status = msg, Progress = 0, MaxProgress = 0 };
 
         public void ResetSession() {
             CompletedTargets.Clear();
@@ -135,7 +142,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             LogTraceCenterTriggerCount = 0;
         }
 
-        private async Task RunBatchFromLogsAsync(
+        private async Task<bool> RunBatchFromLogsAsync(
                 IReadOnlyList<string> logFilesToRead,
                 DateTime? windowStartUtc,
                 DateTime? windowEndUtc,
@@ -143,26 +150,34 @@ namespace NINA.Plugin.SeeDrift.Services {
                 IProgress<ApplicationStatus>? progress,
                 CancellationToken token) {
 
+            void Report(string msg, int prog = 0, int max = 0) {
+                progress?.Report(new ApplicationStatus {
+                    Source = "SeeDrift",
+                    Status = msg,
+                    Progress = prog,
+                    MaxProgress = max
+                });
+            }
+
             if (resetSession)
                 ResetSession();
 
             var profile = _plugin.ProfileService.ActiveProfile;
             if (profile?.PlateSolveSettings == null) {
                 Logger.Error("SeeDrift: No active NINA profile or plate-solve settings.");
-                return;
+                Report("Stopped — no plate-solve settings in the active NINA profile.");
+                return false;
             }
 
             if (logFilesToRead == null || logFilesToRead.Count == 0) {
                 Logger.Warning("SeeDrift: no NINA log files to read — check %LocalAppData%\\NINA\\Logs exists and contains .log files.");
-                return;
+                Report("Stopped — no .log files found under %LocalAppData%\\NINA\\Logs.");
+                return false;
             }
 
-            progress?.Report(new ApplicationStatus {
-                Source = "SeeDrift",
-                Status = "Reading NINA logs for saved light paths…",
-                Progress = 0,
-                MaxProgress = 0
-            });
+            Report(windowStartUtc.HasValue && windowEndUtc.HasValue
+                ? "Reading log(s) for “Saved image to …” lines between Start and Stop…"
+                : "Reading log file for “Saved image to …” lines (large logs can take a bit)…");
 
             if (!NinaLogCorrelator.TryCollectSavedImagePathsFromLogs(
                     logFilesToRead,
@@ -172,15 +187,21 @@ namespace NINA.Plugin.SeeDrift.Services {
                     out _) || orderedSaves.Count < 2) {
                 Logger.Warning(
                     $"SeeDrift: fewer than 2 saved-light lines in log(s) — no report ({orderedSaves.Count} candidates).");
-                return;
+                Report($"Stopped — only {orderedSaves.Count} usable saved-light path(s) in the log (need ≥2). Expect BaseImageData SaveToDisk lines.");
+                return false;
             }
 
-            var windowed = FitsFolderImport.BuildEntriesFromLogSaveOrder(orderedSaves);
+            Report($"Found {orderedSaves.Count} saved paths — checking FITS headers (LIGHT vs calibration)…");
+
+            var windowed = FitsFolderImport.BuildEntriesFromLogSaveOrder(orderedSaves, msg => Report(msg));
 
             if (windowed.Count < 2) {
                 Logger.Warning($"SeeDrift: fewer than 2 LIGHT frames after FITS filter — no report ({windowed.Count} kept).");
-                return;
+                Report($"Stopped — only {windowed.Count} LIGHT frame(s) after FITS filter (paths missing, wrong type, or not FITS).");
+                return false;
             }
+
+            Report("Initializing plate solver…");
 
             progress?.Report(new ApplicationStatus {
                 Source = "SeeDrift",
@@ -240,8 +261,11 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             if (built.Count < 2) {
                 Logger.Warning($"SeeDrift: fewer than 2 plate-solved frames — no report segment.");
-                return;
+                Report("Stopped — fewer than 2 frames solved (check plate solver profile and FITS readability).");
+                return false;
             }
+
+            Report("Correlating sequencer lines and writing HTML…", built.Count, Math.Max(built.Count, 1));
 
             ApplyJumpAndLogAnnotation(built, logFilesToRead);
 
@@ -256,7 +280,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 WriteNightReport();
             });
 
+            Report($"Done — added {built.Count} solved frames to tonight’s HTML report.", built.Count, built.Count);
+
             Logger.Info($"SeeDrift: batch complete — {built.Count} solved frames → night report.");
+            return true;
         }
 
         private void ApplyJumpAndLogAnnotation(List<DriftSample> frames, IReadOnlyList<string>? correlatorLogPaths) {

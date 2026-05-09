@@ -45,7 +45,7 @@
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
             <TextBlock Text="NINA log file" FontWeight="SemiBold" Margin="0,0,0,4"/>
-            <Grid Margin="0,0,0,8">
+            <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
@@ -54,27 +54,32 @@
                 <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseTestReportLogCommand}" Padding="10,4" MinWidth="88"/>
             </Grid>
 
-            <TextBlock Text="Progress and status appear only while Run test report is active (then hidden). SeeDrift Stop reports progress in NINA’s main status bar."
-                       FontSize="10" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,8"/>
-
-            <StackPanel Margin="0,0,0,12" Visibility="{Binding TestReportChromeVisibility, Mode=OneWay}">
-                <TextBlock Text="{Binding TestReportStatusText, Mode=OneWay}" Foreground="#AAC8FF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <ProgressBar Height="14"
-                             Minimum="0"
-                             Background="#2D3748"
-                             Foreground="#38BDF8"
-                             BorderBrush="#4A5568"
-                             BorderThickness="1"
-                             Maximum="{Binding TestReportProgressMaximum, Mode=OneWay}"
-                             Value="{Binding TestReportProgressValue, Mode=OneWay}"
-                             IsIndeterminate="{Binding TestReportIndeterminate, Mode=OneWay}"/>
-            </StackPanel>
-
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                 <Button Content="Run test report" Command="{Binding RunTestReportCommand}" Padding="12,6" Margin="0,0,12,0"
                         IsEnabled="{Binding TestReportNotBusy, Mode=OneWay}"/>
                 <Button Content="Clear completed targets (session)" Command="{Binding ResetSessionCommand}" Padding="12,6"/>
             </StackPanel>
+
+            <Border Margin="0,0,0,12" Padding="8,8,8,8" CornerRadius="4"
+                    Background="#1e293b" BorderBrush="#334155" BorderThickness="1"
+                    Visibility="{Binding TestReportChromeVisibility, Mode=OneWay}">
+                <StackPanel>
+                    <TextBlock Text="Test report progress" FontWeight="SemiBold" Foreground="#94a3b8" FontSize="10" Margin="0,0,0,6"/>
+                    <TextBlock Text="{Binding TestReportStatusText, Mode=OneWay}" Foreground="#7dd3fc" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <ProgressBar Height="16"
+                                 Minimum="0"
+                                 Background="#2D3748"
+                                 Foreground="#38BDF8"
+                                 BorderBrush="#4A5568"
+                                 BorderThickness="1"
+                                 Maximum="{Binding TestReportProgressMaximum, Mode=OneWay}"
+                                 Value="{Binding TestReportProgressValue, Mode=OneWay}"
+                                 IsIndeterminate="{Binding TestReportIndeterminate, Mode=OneWay}"/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="While Test report runs, status updates directly under the Run button. SeeDrift Stop uses NINA’s main status bar instead."
+                       FontSize="10" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,16"/>
 
             <TextBlock Text="Tip: plate solving uses your NINA plate-solve profile (same solvers as the Plate Solve tool)." FontSize="11" Foreground="#888" TextWrapping="Wrap"/>
         </StackPanel>

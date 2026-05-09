@@ -36,7 +36,7 @@ Set **Options → Imaging → image file path** in NINA so saved lights land whe
 
 ### Test report (options panel)
 
-Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste its path), then **Run test report**. The entire log file is used. **While the run is active**, progress appears on the plugin page.
+Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste its path), then **Run test report**. The entire log file is used. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving).
 
 ### Session bookkeeping
 

@@ -102,14 +102,25 @@ namespace NINA.Plugin.SeeDrift {
             }
 
             await Application.Current!.Dispatcher.InvokeAsync(BeginTestReportUi);
+            await Task.Yield();
+            Logger.Info($"SeeDrift: Test report starting — {TestReportLogFilePath.Trim()}");
+            var ok = false;
             try {
                 var progress = new Progress<ApplicationStatus>(OnTestReportApplicationStatus);
-                await DriftTracker.RunTestReportFromLogAsync(TestReportLogFilePath.Trim(), progress, CancellationToken.None)
+                ok = await DriftTracker.RunTestReportFromLogAsync(TestReportLogFilePath.Trim(), progress, CancellationToken.None)
                     .ConfigureAwait(false);
             } catch (Exception ex) {
                 Logger.Error($"SeeDrift: Test report failed — {ex.Message}");
             } finally {
                 await Application.Current!.Dispatcher.InvokeAsync(EndTestReportUi);
+            }
+
+            if (!ok) {
+                MessageBox.Show(
+                    "Test report did not add a batch to the night HTML. Typical causes: fewer than two saved-light paths in the log (look for BaseImageData SaveToDisk lines), files missing on disk, frames skipped as calibration, or plate solve failures. Check the NINA application log for messages starting with SeeDrift.",
+                    "SeeDrift — Test report",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
             }
         }
 
@@ -136,7 +147,7 @@ namespace NINA.Plugin.SeeDrift {
 
         private void BeginTestReportUi() {
             _testReportBusy = true;
-            _testReportStatusText = "Starting…";
+            _testReportStatusText = "Test report — starting (status updates appear here)…";
             _testReportProgressValue = 0;
             _testReportProgressMaximum = 1;
             _testReportIndeterminate = true;

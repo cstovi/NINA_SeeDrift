@@ -130,13 +130,24 @@ namespace NINA.Plugin.SeeDrift.Utility {
         /// Builds LIGHT replay entries from ordered “Saved image to …” paths (see NINA logs). Preserves log order,
         /// skips duplicates, missing files, non-FITS extensions, and calibration frames per <see cref="FitsCoordinates.PassesLightFilterForReplay"/>.
         /// </summary>
+        /// <param name="onStatus">Optional human status lines (e.g. for plugin progress UI while headers are read).</param>
         public static IReadOnlyList<FitsReplayEntry> BuildEntriesFromLogSaveOrder(
-                IReadOnlyList<(string path, DateTime logLineUtc)> orderedSaves) {
+                IReadOnlyList<(string path, DateTime logLineUtc)> orderedSaves,
+                Action<string>? onStatus = null) {
 
             var result = new List<FitsReplayEntry>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            var totalLines = orderedSaves.Count;
+            var lineIndex = 0;
             foreach (var (path, logUtc) in orderedSaves) {
+                lineIndex++;
+                if (onStatus != null && totalLines > 0) {
+                    var step = lineIndex;
+                    if (step == 1 || step == totalLines || step % 10 == 0 || totalLines <= 20)
+                        onStatus.Invoke($"Checking FITS headers — {step}/{totalLines} · {Path.GetFileName(path)}");
+                }
+
                 if (string.IsNullOrWhiteSpace(path) || !seen.Add(path))
                     continue;
 

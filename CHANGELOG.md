@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.6.1] — 2026-05-09
+
+### Fixed
+
+- **Test report:** Clear step-by-step status while reading the log, scanning FITS headers, initializing the solver, and solving; bordered progress panel directly under **Run test report**; dialog when no batch is produced; INFO log line when a run starts.
+
 ## [0.6.0] — 2026-05-09
 
 ### Changed
