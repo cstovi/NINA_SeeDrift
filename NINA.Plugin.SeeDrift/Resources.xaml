@@ -11,13 +11,6 @@
     <DataTemplate x:Key="SeeDrift_Options" DataType="{x:Type local:SeeDriftPlugin}">
         <StackPanel Margin="8" MaxWidth="620">
 
-            <TextBlock Text="Drift report (plate solving)" FontWeight="Bold" Margin="0,0,0,4"/>
-            <TextBlock Text="SeeDrift uses your NINA session log: Start→Stop reads all .log files under %LocalAppData%\\NINA\\Logs and plate-solves LIGHT paths from “Saved image to …” lines between Start and Stop (no full-folder scan). Configure NINA Options → Imaging so saved paths match where you store lights."
-                       Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"/>
-
-            <TextBlock Text="NINA image folder (read-only)" FontWeight="Bold" Margin="0,0,0,4"/>
-            <TextBlock Text="{Binding NINAImageDirectoryDisplay}" TextWrapping="Wrap" Foreground="#CCC" Margin="0,0,0,16"/>
-
             <TextBlock Text="HTML export" FontWeight="Bold" Margin="0,0,0,6"/>
             <Grid Margin="0,0,0,16">
                 <Grid.ColumnDefinitions>
@@ -42,8 +35,7 @@
                 <TextBox Grid.Column="1" Text="{Binding TempWorkingFolder, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
             </Grid>
 
-            <TextBlock Text="Plate solve speed" FontWeight="Bold" Margin="0,0,0,6"/>
-            <Grid Margin="0,0,0,16">
+            <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="160"/>
                     <ColumnDefinition Width="*"/>
@@ -52,6 +44,19 @@
                 <StackPanel Grid.Column="1">
                     <TextBox Text="{Binding PlateSolveParallelism, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
                     <TextBlock Text="How many frames to plate-solve at once (1–16). Default 4. Each slot uses a separate solver instance; higher values use more RAM and CPU. Downsampling still comes only from your NINA Plate Solve profile."
+                               FontSize="10" Foreground="#777" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Grid>
+
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="160"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Minimum exposures:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <StackPanel Grid.Column="1">
+                    <TextBox Text="{Binding MinExposuresPerTarget, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Night HTML lists only targets with at least this many solved frames in each batch (1–500). Default 1 includes every target."
                                FontSize="10" Foreground="#777" TextWrapping="Wrap" Margin="0,4,0,0"/>
                 </StackPanel>
             </Grid>

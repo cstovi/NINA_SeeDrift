@@ -22,10 +22,13 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// Drift is re-anchored to the first solved frame <em>of that target</em>; sequencer rows only include edges where
         /// both consecutive frames belong to the same target.
         /// </summary>
+        /// <param name="minExposuresPerTarget">Targets with fewer solved frames in the batch are omitted from headings and subsections (minimum 1).</param>
         public static void WriteNightReport(
-                IReadOnlyList<DriftTrackingService.CompletedTarget> targets, string path) {
+                IReadOnlyList<DriftTrackingService.CompletedTarget> targets, string path,
+                int minExposuresPerTarget = 1) {
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var min = Math.Max(1, minExposuresPerTarget);
             var sb = new StringBuilder();
             sb.AppendLine("<!DOCTYPE html>");
             sb.AppendLine("<html lang=\"en\" class=\"h-full\">");
@@ -61,15 +64,30 @@ namespace NINA.Plugin.SeeDrift.Services {
                 const string xTitle = "ΔRA (arcsec)";
                 const string yTitle = "ΔDec (arcsec)";
 
-                var batchTitle = SummarizeTargetsForBatch(orderedFull);
+                var targetGroups = SplitBatchByTargetInOrder(orderedFull);
+                var filteredGroups = targetGroups.Where(g => g.Samples.Count >= min).ToList();
+                var allowed = new HashSet<string>(
+                    filteredGroups.Select(g => g.Name),
+                    StringComparer.OrdinalIgnoreCase);
+                var titleSamples = orderedFull.Where(s => allowed.Contains(TargetKey(s))).ToList();
+                var batchTitle = filteredGroups.Count == 0
+                    ? $"No qualifying targets (≥{min} exposures)"
+                    : SummarizeTargetsForBatch(titleSamples);
 
                 sb.AppendLine($"<section class=\"{sectionClass}\">");
                 sb.AppendLine($"  <h2 class=\"text-lg font-semibold text-sky-300\">{Escape(batchTitle)}</h2>");
                 sb.AppendLine($"  <p class=\"mt-1 text-sm text-slate-400\">{samples.Count} frames · stopped {batch.StoppedUtc.ToLocalTime():HH:mm}</p>");
 
-                var targetGroups = SplitBatchByTargetInOrder(orderedFull);
-                for (var g = 0; g < targetGroups.Count; g++) {
-                    var (targetName, grp) = targetGroups[g];
+                if (filteredGroups.Count == 0) {
+                    sb.AppendLine("  <div class=\"mt-6 rounded-lg border border-amber-900/40 bg-slate-900/60 p-4\">");
+                    sb.AppendLine($"    <p class=\"text-sm text-slate-300\">No target in this batch had at least <span class=\"text-amber-300\">{min}</span> solved exposure{(min == 1 ? "" : "s")}. Lower <span class=\"text-sky-300\">Minimum exposures per target</span> in Plugins → SeeDrift, or capture more frames per target.</p>");
+                    sb.AppendLine("  </div>");
+                    sb.AppendLine("</section>");
+                    continue;
+                }
+
+                for (var g = 0; g < filteredGroups.Count; g++) {
+                    var (targetName, grp) = filteredGroups[g];
                     var canvasId = $"c{t}_{g}";
                     var labelJson = JsonSerializer.Serialize($"{targetName} — drift path");
 
@@ -233,8 +251,11 @@ namespace NINA.Plugin.SeeDrift.Services {
                 }
                 list.Add(s);
             }
-            return orderKeys.Select(k => (k, groups[k])).ToList();
+            return orderKeys.Select(k => (Name: k, Samples: groups[k])).ToList();
         }
+
+        private static string TargetKey(DriftSample s) =>
+            string.IsNullOrWhiteSpace(s.TargetName) ? "Unknown" : s.TargetName.Trim();
 
         /// <summary>ΔRA/ΔDec arcseconds for frame <paramref name="index"/> vs first frame of <paramref name="group"/>.</summary>
         private static void GetAnchoredPlotPoint(IReadOnlyList<DriftSample> group, int index, out double x, out double y) {

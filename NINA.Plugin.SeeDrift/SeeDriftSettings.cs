@@ -18,6 +18,11 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Max concurrent plate solves (1–16). Each slot uses its own solver instance; higher uses more RAM/CPU.</summary>
         public int PlateSolveParallelism { get; set; } = 4;
 
+        /// <summary>
+        /// Night HTML lists only targets with at least this many solved frames in the batch (default 1 = include all).
+        /// </summary>
+        public int MinExposuresPerTarget { get; set; } = 1;
+
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "SeeDrift", "settings.json");

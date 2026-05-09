@@ -57,6 +57,7 @@ namespace NINA.Plugin.SeeDrift {
             HtmlExportFolder = Settings.HtmlExportFolder;
             TempWorkingFolder = Settings.TempWorkingFolder;
             PlateSolveParallelism = NormalizePlateSolveParallelism(Settings.PlateSolveParallelism);
+            MinExposuresPerTarget = NormalizeMinExposuresPerTarget(Settings.MinExposuresPerTarget);
             _testReportLogFilePath = Settings.TestReportLogFilePath ?? "";
             _isInitializing = false;
             RaisePropertyChanged(nameof(TestReportLogFilePath));
@@ -216,6 +217,7 @@ namespace NINA.Plugin.SeeDrift {
                 Settings.TempWorkingFolder = _tempWorkingFolder;
                 Settings.TestReportLogFilePath = _testReportLogFilePath;
                 Settings.PlateSolveParallelism = _plateSolveParallelism;
+                Settings.MinExposuresPerTarget = _minExposuresPerTarget;
                 Settings.Save();
             } finally {
                 _isSyncing = false;
@@ -254,8 +256,26 @@ namespace NINA.Plugin.SeeDrift {
             return value;
         }
 
-        /// <summary>NINA image save root from the active profile (read-only).</summary>
-        public string NINAImageDirectoryDisplay =>
-            NinaPaths.TryGetDefaultImageDirectory(ProfileService) ?? "(not set or folder missing)";
+        private int _minExposuresPerTarget = 1;
+
+        /// <summary>
+        /// Minimum solved frames per FITS target for that target to appear in the night HTML (1–500; default 1).
+        /// </summary>
+        public int MinExposuresPerTarget {
+            get => _minExposuresPerTarget;
+            set {
+                var v = NormalizeMinExposuresPerTarget(value);
+                if (v == _minExposuresPerTarget) return;
+                _minExposuresPerTarget = v;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        private static int NormalizeMinExposuresPerTarget(int value) {
+            if (value < 1) return 1;
+            if (value > 500) return 500;
+            return value;
+        }
     }
 }

@@ -27,7 +27,7 @@ The csproj may post-build copy to that folder when NINA is not locking the DLL. 
 
 ### Configure imaging path
 
-Set **Options → Imaging → image file path** in NINA so saved lights land where you expect. SeeDrift resolves the paths recorded in the log; the read-only path on the plugin page is your active profile root.
+Set **Options → Imaging → image file path** in NINA so saved lights land where you expect. SeeDrift resolves the paths recorded in the session log.
 
 ### Sequencer (recommended)
 
@@ -42,7 +42,7 @@ Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste i
 
 **Clear completed targets (session)** resets in-memory completed targets for the rolling night file layout (see manual if you re-run the same night).
 
-Under **Plugins → SeeDrift**, **Concurrency** controls how many frames are plate-solved in parallel (default 4). Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
+Under **Plugins → SeeDrift**, **Concurrency** controls how many frames are plate-solved in parallel (default 4), and **Minimum exposures per target** hides targets with fewer solved frames in each batch’s night HTML section (default 1 lists every target). Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
 
 SeeDrift also writes **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** (plugin messages, in addition to NINA’s own log).
 

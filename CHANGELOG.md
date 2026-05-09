@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.4] — 2026-05-09
+
+### Added
+
+- **Plugins → SeeDrift → Minimum exposures:** Night HTML includes **only** FITS targets that have at least **N** solved frames in that batch (1–500; default **1** preserves prior behavior). Batch headings and charts follow the same filter.
+
+### Changed
+
+- **Options UI:** Removed the introductory drift-report paragraph, the read-only NINA image path row, and the **Plate solve speed** section title; **Concurrency** and the new minimum-exposures row appear without that extra heading.
+
 ## [0.7.3] — 2026-05-09
 
 ### Fixed

@@ -367,7 +367,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 Directory.CreateDirectory(folder);
                 var path = Path.Combine(folder, $"SeeDrift_night_{DateTime.Now:yyyyMMdd}.html");
                 path = Path.GetFullPath(path);
-                HtmlReportExporter.WriteNightReport(CompletedTargets, path);
+                HtmlReportExporter.WriteNightReport(CompletedTargets, path, _plugin.MinExposuresPerTarget);
                 if (!File.Exists(path)) {
                     errorMessage = "file missing after write";
                     return false;
