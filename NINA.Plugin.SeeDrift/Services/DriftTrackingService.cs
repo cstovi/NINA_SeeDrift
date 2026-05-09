@@ -24,6 +24,9 @@ namespace NINA.Plugin.SeeDrift.Services {
         public sealed class CompletedTarget {
             public string Name { get; init; } = "";
             public IReadOnlyList<DriftSample> Samples { get; init; } = Array.Empty<DriftSample>();
+
+            /// <summary>NINA log file path(s) read for this batch (Stop = folder listing; Test = chosen file).</summary>
+            public IReadOnlyList<string> SourceLogPaths { get; init; } = Array.Empty<string>();
         }
 
         private sealed class TraceState {
@@ -303,7 +306,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             await Application.Current!.Dispatcher.InvokeAsync(() => {
                 CompletedTargets.Add(new CompletedTarget {
                     Name = targetName,
-                    Samples = built
+                    Samples = built,
+                    SourceLogPaths = logFilesToRead
                 });
                 if (!TryWriteNightReport(out nightSavedPath, out nightSaveError)) {
                     // Avoid leaving a batch in memory that never reached disk.

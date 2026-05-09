@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.15] — 2026-05-09
+
+### Changed
+
+- **Night HTML:** Header **no longer** shows batch count or chart zoom/pan hints. It lists **full paths** to **NINA log files** used (union across batches on the page; scrollable list when there are many). Each **Target** block shows **Start / End** exposure times (**local**) beside the title, from the solved frames for that target.
+
 ## [0.7.14] — 2026-05-09
 
 ### Changed

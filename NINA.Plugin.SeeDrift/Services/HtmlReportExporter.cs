@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -60,8 +61,9 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("    </div>");
             sb.AppendLine("    <div class=\"min-w-0 flex-1\">");
             sb.AppendLine($"      <h1 class=\"text-xl font-semibold tracking-tight text-white\">SeeDrift — night {Escape(DateTime.Now.ToString("yyyy-MM-dd"))}</h1>");
-            sb.AppendLine($"      <p class=\"mt-2 text-sm text-slate-400\">Generated {DateTime.Now:HH:mm} · <span class=\"text-slate-300\">{targets.Count}</span> batch{(targets.Count == 1 ? "" : "es")}</p>");
-            sb.AppendLine("      <p class=\"mt-3 text-xs text-slate-500\">Drag to pan · Wheel to zoom in/out (can zoom out past the data for context) · Double-click chart to reset zoom</p>");
+            sb.AppendLine(
+                $"      <p class=\"mt-2 text-sm text-slate-400\">Generated {Escape(DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))} <span class=\"text-slate-500\">(local)</span></p>");
+            sb.Append(FormatPageHeaderLogsHtml(targets));
             sb.AppendLine("    </div>");
             sb.AppendLine("  </div>");
             sb.AppendLine("</header>");
@@ -105,8 +107,15 @@ namespace NINA.Plugin.SeeDrift.Services {
                     var labelJson = JsonSerializer.Serialize($"{targetName} — drift path");
 
                     sb.AppendLine($"  <div class=\"{(g > 0 ? "mt-12 border-t border-slate-800 pt-10" : "mt-8")}\">");
-                    sb.AppendLine($"    <h3 class=\"text-base font-semibold text-sky-200\">Target: {Escape(targetName)}</h3>");
-                    sb.AppendLine($"    <p class=\"mt-1 text-xs text-slate-500\">{grp.Count} frame{(grp.Count == 1 ? "" : "s")} · Δ vs first solved frame of this target</p>");
+                    sb.AppendLine("    <div class=\"flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between\">");
+                    sb.AppendLine("      <div class=\"min-w-0 flex-1\">");
+                    sb.AppendLine($"        <h3 class=\"text-base font-semibold text-sky-200\">Target: {Escape(targetName)}</h3>");
+                    sb.AppendLine(
+                        $"        <p class=\"mt-1 text-xs text-slate-500\">{grp.Count} frame{(grp.Count == 1 ? "" : "s")} · Δ vs first solved frame of this target</p>");
+                    sb.AppendLine("      </div>");
+                    sb.AppendLine(
+                        $"      <div class=\"shrink-0 text-xs leading-snug text-slate-400 sm:max-w-[min(100%,20rem)] sm:text-right\">{FormatTargetExposureRangeHtml(grp)}</div>");
+                    sb.AppendLine("    </div>");
                     sb.AppendLine($"    <div class=\"seedrift-chart-box mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-2\">");
                     sb.AppendLine($"      <canvas id=\"{canvasId}\"></canvas>");
                     sb.AppendLine("    </div>");
@@ -415,6 +424,56 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("        </table>");
             sb.AppendLine("      </div>");
             sb.AppendLine("    </div>");
+        }
+
+        private static string FormatPageHeaderLogsHtml(IReadOnlyList<DriftTrackingService.CompletedTarget> targets) {
+            var paths = targets
+                .SelectMany(t => t.SourceLogPaths ?? Array.Empty<string>())
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => p.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var sb = new StringBuilder();
+            if (paths.Count == 0) {
+                sb.AppendLine("      <div class=\"mt-3 text-sm text-slate-500\">");
+                sb.AppendLine("        <p class=\"font-medium text-slate-400\">NINA log files</p>");
+                sb.AppendLine("        <p class=\"mt-1 text-xs\">Paths were not recorded for this export (older SeeDrift build).</p>");
+                sb.AppendLine("      </div>");
+                return sb.ToString();
+            }
+
+            sb.AppendLine("      <div class=\"mt-3 text-sm\">");
+            sb.AppendLine("        <p class=\"font-medium text-slate-300\">NINA log files on this page</p>");
+            if (paths.Count == 1) {
+                sb.AppendLine($"        <p class=\"mt-1 break-all text-slate-400\">{Escape(paths[0])}</p>");
+            } else {
+                sb.AppendLine($"        <p class=\"mt-1 text-xs text-slate-500\">{paths.Count} files (union of all batches below)</p>");
+                sb.AppendLine("        <ul class=\"mt-2 max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-slate-400\">");
+                const int max = 16;
+                foreach (var p in paths.Take(max))
+                    sb.AppendLine($"          <li class=\"break-all\">{Escape(p)}</li>");
+                if (paths.Count > max)
+                    sb.AppendLine($"          <li class=\"text-slate-500\">… and {paths.Count - max} more</li>");
+                sb.AppendLine("        </ul>");
+            }
+
+            sb.AppendLine("      </div>");
+            return sb.ToString();
+        }
+
+        /// <summary>First/last exposure start from solved frames (DATE-OBS / log timing), shown in local wall time.</summary>
+        private static string FormatTargetExposureRangeHtml(IReadOnlyList<DriftSample> grp) {
+            if (grp.Count == 0)
+                return "";
+            var startUtc = grp.Min(s => s.ExposureStartUtc);
+            var endUtc = grp.Max(s => s.ExposureStartUtc);
+            var fmt = "yyyy-MM-dd HH:mm";
+            var sl = startUtc.ToLocalTime().ToString(fmt, CultureInfo.InvariantCulture);
+            if (startUtc == endUtc)
+                return $"<span class=\"text-slate-500\">Exposure</span> {Escape(sl)} <span class=\"text-slate-500\">(local)</span>";
+            var el = endUtc.ToLocalTime().ToString(fmt, CultureInfo.InvariantCulture);
+            return $"<span class=\"text-slate-500\">Start</span> {Escape(sl)} <span class=\"text-slate-500\">·</span> <span class=\"text-slate-500\">End</span> {Escape(el)} <span class=\"text-slate-500\">(local)</span>";
         }
 
         private static string Escape(string s) {
