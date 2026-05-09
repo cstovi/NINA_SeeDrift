@@ -173,6 +173,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (resetSession)
                 ResetSession();
 
+            _plugin.ClearNightReportLink();
+
             var profile = _plugin.ProfileService.ActiveProfile;
             if (profile?.PlateSolveSettings == null) {
                 SeeDriftLog.Error("SeeDrift: No active NINA profile or plate-solve settings.");
@@ -257,6 +259,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     $"(best target: {maxLightsAnyTarget}); plate solving was skipped. " +
                     "Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
                     $"{presolveNightPath}";
+                _plugin.NotifyNightReportSaved(presolveNightPath!, completeDetail);
                 Report(completeDetail, 1, 1);
                 SeeDriftLog.Info($"SeeDrift: run finished without plate solve — HTML → {presolveNightPath}");
                 return true;
@@ -393,17 +396,16 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             if (skipLogCorrelation) {
-                Report(
+                var msgSkip =
                     $"Complete — night report saved. No target in this run had at least {minExpTarget} solved exposure(s) for any FITS target " +
                     $"(best target: {maxSolvedPerTarget}). Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
-                    $"{nightSavedPath}",
-                    built.Count,
-                    built.Count);
+                    $"{nightSavedPath}";
+                _plugin.NotifyNightReportSaved(nightSavedPath!, msgSkip);
+                Report(msgSkip, built.Count, built.Count);
             } else {
-                Report(
-                    $"Complete — night report saved ({built.Count} frames): {nightSavedPath}",
-                    built.Count,
-                    built.Count);
+                var msgOk = $"Complete — night report saved ({built.Count} frames): {nightSavedPath}";
+                _plugin.NotifyNightReportSaved(nightSavedPath!, msgOk);
+                Report(msgOk, built.Count, built.Count);
             }
 
             SeeDriftLog.Info($"SeeDrift: batch complete — {built.Count} solved frames → {nightSavedPath}");

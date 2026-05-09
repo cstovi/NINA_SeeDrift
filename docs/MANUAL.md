@@ -38,7 +38,7 @@ SeeDrift also appends its own messages to **`%LocalAppData%\NINA\SeeDrift\SeeDri
 1. Under **Previous session Log**, set **Previous session Log file** (Browse or paste a full path to a `.log` file).
 2. Click **Run previous session report**. SeeDrift collects **every** saved-light path from that file (full file, no time picker), then solves and correlates like Stop.
 
-**While the run is in progress**, a **status panel** appears directly under **Run previous session report** (reading log → checking FITS headers → solving each frame). When the run ends, the **last status line stays visible** (for example **Complete — …** with the saved HTML path) until you start another run or leave the panel cleared by starting again. If nothing is added to the HTML, a dialog explains common causes. **SeeDrift Stop** uses **NINA’s main status bar** instead; successful Stop finishes with a **Complete — …** line there too.
+**While the run is in progress**, a **status panel** appears directly under **Run previous session report** (reading log → checking FITS headers → solving each frame). When the run ends, the **last status line stays visible** (for example **Complete — …**) until you start another run or leave the panel cleared by starting again. **Open** shows the saved HTML **file name** as an underlined control—click it to open the report in your default browser (hover for the full path). If nothing is added to the HTML, a dialog explains common causes. **SeeDrift Stop** uses **NINA’s main status bar** for progress and completion; that bar is plain text (not clickable). After Stop, open **Plugins → SeeDrift** to use **Open** for the same night HTML file when the run succeeded.
 
 ### Rolling HTML file
 

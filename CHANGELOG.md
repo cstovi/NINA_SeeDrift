@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.21] — 2026-05-09
+
+### Added
+
+- **Plugins → SeeDrift:** When a run finishes with a saved night HTML file, the status panel shows **Open** with the **file name** as an underlined click target (default browser via shell execute); tooltip shows the **full path**. The status sentence drops the duplicated trailing path when the link is shown. **NINA’s main status bar** remains plain text (host limitation).
+
 ## [0.7.20] — 2026-05-09
 
 ### Changed

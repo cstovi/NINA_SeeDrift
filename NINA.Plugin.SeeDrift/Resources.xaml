@@ -101,7 +101,36 @@
                     Visibility="{Binding TestReportChromeVisibility, Mode=OneWay}">
                 <StackPanel>
                     <TextBlock Text="Previous session report status" FontWeight="SemiBold" Foreground="#94a3b8" FontSize="10" Margin="0,0,0,6"/>
-                    <TextBlock Text="{Binding TestReportStatusText, Mode=OneWay}" Foreground="#7dd3fc" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,0,0,8"/>
+                    <TextBlock Text="{Binding TestReportStatusDisplayText, Mode=OneWay}" Foreground="#7dd3fc" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,0,0,4"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
+                                Visibility="{Binding NightReportLinkChromeVisibility, Mode=OneWay}">
+                        <TextBlock Text="Open " Foreground="#94a3b8" FontSize="12" VerticalAlignment="Center"/>
+                        <Button Content="{Binding NightReportLinkFileName, Mode=OneWay}"
+                                Command="{Binding OpenNightReportCommand}"
+                                Padding="0" Margin="0"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="#38bdf8" Cursor="Hand" FontSize="12"
+                                VerticalAlignment="Center">
+                            <Button.ToolTip>
+                                <ToolTip>
+                                    <TextBlock Text="{Binding NightReportLinkPathHint, Mode=OneWay}" MaxWidth="520" TextWrapping="Wrap"/>
+                                </ToolTip>
+                            </Button.ToolTip>
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <TextBlock Text="{TemplateBinding Content}"
+                                                           Foreground="{TemplateBinding Foreground}"
+                                                           TextDecorations="Underline"/>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
                     <ProgressBar Height="16"
                                  Minimum="0"
                                  Background="#2D3748"

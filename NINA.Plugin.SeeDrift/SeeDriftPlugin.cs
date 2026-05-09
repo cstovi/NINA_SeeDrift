@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -47,6 +48,7 @@ namespace NINA.Plugin.SeeDrift {
 
         public ICommand RunTestReportCommand { get; }
         public ICommand BrowseTestReportLogCommand { get; }
+        public ICommand OpenNightReportCommand { get; }
 
         [ImportingConstructor]
         public SeeDriftPlugin(
@@ -68,6 +70,7 @@ namespace NINA.Plugin.SeeDrift {
 
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
             BrowseTestReportLogCommand = new RelayCommand(_ => BrowseTestReportLog());
+            OpenNightReportCommand = new RelayCommand(_ => OpenNightReport());
         }
 
         /// <summary>Last-used NINA log path for previous session report (persisted).</summary>
@@ -136,6 +139,7 @@ namespace NINA.Plugin.SeeDrift {
 
         private bool _testReportBusy;
         private string _testReportStatusText = "";
+        private string? _nightReportLinkPath;
         private double _testReportProgressValue;
         private int _testReportProgressMaximum = 1;
         private bool _testReportIndeterminate;
@@ -153,9 +157,99 @@ namespace NINA.Plugin.SeeDrift {
 
         /// <summary>Shows the progress row while a previous session report runs, and keeps it visible after completion until the next run.</summary>
         public Visibility TestReportChromeVisibility =>
-            _testReportBusy || !string.IsNullOrWhiteSpace(_testReportStatusText)
+            _testReportBusy || !string.IsNullOrWhiteSpace(_testReportStatusText) || !string.IsNullOrWhiteSpace(_nightReportLinkPath)
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+
+        /// <summary>Status line with file path stripped when <see cref="NightReportLinkChromeVisibility"/> shows the open link (options UI only).</summary>
+        public string TestReportStatusDisplayText => FormatStatusForPanel(_testReportStatusText, _nightReportLinkPath);
+
+        /// <summary>Visible when the last completed run wrote a night HTML file path we can open.</summary>
+        public Visibility NightReportLinkChromeVisibility =>
+            string.IsNullOrWhiteSpace(_nightReportLinkPath) ? Visibility.Collapsed : Visibility.Visible;
+
+        /// <summary>File name only (for the open link label).</summary>
+        public string NightReportLinkFileName =>
+            string.IsNullOrWhiteSpace(_nightReportLinkPath) ? "" : Path.GetFileName(_nightReportLinkPath.Trim());
+
+        /// <summary>Full path for the open-link tooltip.</summary>
+        public string NightReportLinkPathHint => _nightReportLinkPath ?? "";
+
+        internal void ClearNightReportLink() {
+            void Apply() {
+                if (_nightReportLinkPath == null) return;
+                _nightReportLinkPath = null;
+                RaisePropertyChanged(nameof(NightReportLinkChromeVisibility));
+                RaisePropertyChanged(nameof(NightReportLinkFileName));
+                RaisePropertyChanged(nameof(NightReportLinkPathHint));
+                RaisePropertyChanged(nameof(TestReportStatusDisplayText));
+                RaisePropertyChanged(nameof(TestReportChromeVisibility));
+            }
+
+            var app = Application.Current;
+            if (app == null)
+                Apply();
+            else if (app.Dispatcher.CheckAccess())
+                Apply();
+            else
+                app.Dispatcher.Invoke(Apply);
+        }
+
+        internal void NotifyNightReportSaved(string absolutePath, string completeStatusLine) {
+            void Apply() {
+                _nightReportLinkPath = absolutePath;
+                _testReportStatusText = completeStatusLine;
+                RaisePropertyChanged(nameof(NightReportLinkChromeVisibility));
+                RaisePropertyChanged(nameof(NightReportLinkFileName));
+                RaisePropertyChanged(nameof(NightReportLinkPathHint));
+                RaisePropertyChanged(nameof(TestReportStatusText));
+                RaisePropertyChanged(nameof(TestReportStatusDisplayText));
+                RaisePropertyChanged(nameof(TestReportChromeVisibility));
+            }
+
+            var app = Application.Current;
+            if (app == null)
+                Apply();
+            else if (app.Dispatcher.CheckAccess())
+                Apply();
+            else
+                app.Dispatcher.Invoke(Apply);
+        }
+
+        private static string FormatStatusForPanel(string? status, string? path) {
+            if (string.IsNullOrEmpty(status))
+                return "";
+            if (string.IsNullOrEmpty(path))
+                return status;
+            var p = path.Trim();
+            if (status.Length >= p.Length && status.EndsWith(p, StringComparison.OrdinalIgnoreCase))
+                return status.AsSpan(0, status.Length - p.Length).TrimEnd().TrimEnd(':').ToString();
+            return status;
+        }
+
+        private void OpenNightReport() {
+            try {
+                if (string.IsNullOrWhiteSpace(_nightReportLinkPath))
+                    return;
+                var p = _nightReportLinkPath.Trim();
+                if (!File.Exists(p)) {
+                    MessageBox.Show(
+                        $"File no longer exists:\n{p}",
+                        "SeeDrift",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                Process.Start(new ProcessStartInfo(p) { UseShellExecute = true });
+            } catch (Exception ex) {
+                MessageBox.Show(
+                    $"Could not open file:\n{ex.Message}",
+                    "SeeDrift",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
 
         private void BeginTestReportUi() {
             _testReportBusy = true;
@@ -165,6 +259,7 @@ namespace NINA.Plugin.SeeDrift {
             _testReportIndeterminate = true;
             RaisePropertyChanged(nameof(TestReportNotBusy));
             RaisePropertyChanged(nameof(TestReportStatusText));
+            RaisePropertyChanged(nameof(TestReportStatusDisplayText));
             RaisePropertyChanged(nameof(TestReportProgressValue));
             RaisePropertyChanged(nameof(TestReportProgressMaximum));
             RaisePropertyChanged(nameof(TestReportIndeterminate));
@@ -177,6 +272,7 @@ namespace NINA.Plugin.SeeDrift {
             // Keep last status line (Complete — … or Stopped — …) so the panel does not go blank.
             RaisePropertyChanged(nameof(TestReportNotBusy));
             RaisePropertyChanged(nameof(TestReportStatusText));
+            RaisePropertyChanged(nameof(TestReportStatusDisplayText));
             RaisePropertyChanged(nameof(TestReportProgressValue));
             RaisePropertyChanged(nameof(TestReportProgressMaximum));
             RaisePropertyChanged(nameof(TestReportIndeterminate));
@@ -191,6 +287,7 @@ namespace NINA.Plugin.SeeDrift {
                 _testReportProgressValue = status.Progress;
                 _testReportIndeterminate = _testReportBusy && max <= 0;
                 RaisePropertyChanged(nameof(TestReportStatusText));
+                RaisePropertyChanged(nameof(TestReportStatusDisplayText));
                 RaisePropertyChanged(nameof(TestReportProgressValue));
                 RaisePropertyChanged(nameof(TestReportProgressMaximum));
                 RaisePropertyChanged(nameof(TestReportIndeterminate));

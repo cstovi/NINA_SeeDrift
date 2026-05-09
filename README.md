@@ -32,11 +32,11 @@ Set **Options → Imaging → image file path** in NINA so saved lights land whe
 ### Sequencer (recommended)
 
 1. Add **SeeDrift Start** before capture and **SeeDrift Stop** when finished.
-2. **Stop** reads NINA log files, collects **Saved image to …** paths between Start and Stop, plate-solves each **LIGHT** (header filter), builds drift samples, and **appends** to the rolling **night HTML** (one drift chart and sequencer block per target when the batch spans multiple `OBJECT` names). **NINA’s status bar** shows the **full path** on success; if **Night report folder** is empty, the default is **`Documents\SeeDrift`** (not Desktop).
+2. **Stop** reads NINA log files, collects **Saved image to …** paths between Start and Stop, plate-solves each **LIGHT** (header filter), builds drift samples, and **appends** to the rolling **night HTML** (one drift chart and sequencer block per target when the batch spans multiple `OBJECT` names). **NINA’s status bar** shows the **full path** on success (plain text). **Plugins → SeeDrift** also shows **Open** with the HTML **file name** as a click target after a successful run; if **Night report folder** is empty, the default is **`Documents\SeeDrift`** (not Desktop).
 
 ### Previous session Log (options panel)
 
-Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste its path), then **Run previous session report**. The entire log file is used. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving).
+Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste its path), then **Run previous session report**. The entire log file is used. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving). When the run finishes successfully, **Open** appears as an underlined **file name** you can click to launch the night HTML.
 
 **Concurrency** is a **dropdown** from **1** up to **80% of physical cores** (rounded down, min **1**); on a fresh install it defaults to **physical core count** clamped to that maximum. WMI provides physical cores; if WMI fails, SeeDrift uses logical processor count for the cap and default. **Minimum exposures per target** hides targets with fewer solved frames in each batch’s night HTML section (default **50**). Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
 
