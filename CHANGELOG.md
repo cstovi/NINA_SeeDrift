@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **README:** Clarify that `dotnet build` without `-c` is **Debug**; use `-c Release` for shipping and `bin\Release\...` artifacts.
 - Pointing plot **subtitle** shows how many frames were plotted so sparse traces are obvious at a glance.
 - Slightly smaller plot markers when many frames are loaded (>100) for readability.
 

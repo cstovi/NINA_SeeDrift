@@ -16,7 +16,7 @@ Plots **RA/Dec drift** from **saved LIGHT** frames (any camera): offsets in arcs
 
 3. Restart NINA.
 
-The csproj includes a post-build copy to that folder when NINA is not locking the DLL.
+The csproj includes a post-build copy to that folder when NINA is not locking the DLL. That copy uses **whichever configuration you built**: plain `dotnet build` defaults to **Debug** (`bin\Debug\net8.0-windows\`); use **`dotnet build -c Release`** for shipping (output under `bin\Release\...`).
 
 ## Usage
 
