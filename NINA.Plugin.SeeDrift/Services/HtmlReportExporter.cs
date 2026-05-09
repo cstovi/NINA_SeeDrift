@@ -4,11 +4,18 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using NINA.Plugin.SeeDrift.Models;
 
 namespace NINA.Plugin.SeeDrift.Services {
 
     public static class HtmlReportExporter {
+
+        // CDN pins (night HTML is opened offline-capable only after first load; versions documented for reproducibility)
+        private const string CdnHammer = "https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js";
+        private const string CdnChartJs = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js";
+        private const string CdnChartZoom = "https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js";
+        private const string CdnTailwind = "https://cdn.tailwindcss.com";
 
         /// <summary>
         /// Writes a single rolling nightly HTML with one chart section per completed batch (each SeeDrift Stop or Test report run).
@@ -20,36 +27,46 @@ namespace NINA.Plugin.SeeDrift.Services {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var sb = new StringBuilder();
             sb.AppendLine("<!DOCTYPE html>");
-            sb.AppendLine("<html lang=\"en\"><head><meta charset=\"utf-8\"/>");
+            sb.AppendLine("<html lang=\"en\" class=\"h-full\">");
+            sb.AppendLine("<head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>");
             sb.AppendLine($"<title>SeeDrift — night {DateTime.Now:yyyy-MM-dd}</title>");
-            sb.AppendLine("<script src=\"https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js\"></script>");
+            sb.AppendLine($"<script src=\"{CdnTailwind}\"></script>");
+            sb.AppendLine($"<script src=\"{CdnHammer}\"></script>");
+            sb.AppendLine($"<script src=\"{CdnChartJs}\"></script>");
+            sb.AppendLine($"<script src=\"{CdnChartZoom}\"></script>");
             sb.AppendLine("<style>");
-            sb.AppendLine("  body{font-family:Segoe UI,Arial,sans-serif;margin:24px;background:#141418;color:#e8e8ee}");
-            sb.AppendLine("  h1{font-size:1.3rem;margin-bottom:4px}");
-            sb.AppendLine("  h2{font-size:1.05rem;margin:32px 0 4px;color:#aac8ff}");
-            sb.AppendLine("  p{margin:2px 0 10px;font-size:0.85rem;color:#888}");
-            sb.AppendLine("  canvas{max-width:100%;max-height:55vh;margin-bottom:8px}");
-            sb.AppendLine("  hr{border:none;border-top:1px solid #333;margin:24px 0}");
-            sb.AppendLine("  table.logtbl{border-collapse:collapse;font-size:0.8rem;margin:12px 0 0}");
-            sb.AppendLine("  table.logtbl th,table.logtbl td{border:1px solid #333;padding:4px 8px;text-align:left}");
-            sb.AppendLine("  table.logtbl th{color:#aac8ff}");
-            sb.AppendLine("</style></head><body>");
-            sb.AppendLine($"<h1>SeeDrift — night {DateTime.Now:yyyy-MM-dd}</h1>");
-            sb.AppendLine($"<p>Generated {DateTime.Now:HH:mm} · {targets.Count} batch{(targets.Count == 1 ? "" : "es")}</p>");
+            sb.AppendLine("  /* Chart container needs explicit height for responsive canvas + pan/zoom */");
+            sb.AppendLine("  .seedrift-chart-box { position: relative; height: 24rem; width: 100%; }");
+            sb.AppendLine("</style>");
+            sb.AppendLine("</head>");
+            sb.AppendLine("<body class=\"min-h-full bg-slate-950 text-slate-200 antialiased\">");
+            sb.AppendLine("<main class=\"mx-auto max-w-5xl px-4 py-8 sm:px-6\">");
+            sb.AppendLine($"<header class=\"mb-10 border-b border-slate-800 pb-6\">");
+            sb.AppendLine($"  <h1 class=\"text-xl font-semibold tracking-tight text-white\">SeeDrift — night {Escape(DateTime.Now.ToString("yyyy-MM-dd"))}</h1>");
+            sb.AppendLine($"  <p class=\"mt-2 text-sm text-slate-400\">Generated {DateTime.Now:HH:mm} · <span class=\"text-slate-300\">{targets.Count}</span> batch{(targets.Count == 1 ? "" : "es")}</p>");
+            sb.AppendLine($"  <p class=\"mt-3 text-xs text-slate-500\">Drag to pan · Wheel to zoom · Double-click chart to reset zoom (Chart.js + zoom plugin)</p>");
+            sb.AppendLine("</header>");
 
             for (var t = 0; t < targets.Count; t++) {
                 var target = targets[t];
                 var samples = target.Samples;
-                if (t > 0) sb.AppendLine("<hr/>");
+                var sectionClass = t < targets.Count - 1
+                    ? "mb-12 border-b border-slate-800 pb-12"
+                    : "pb-4";
 
                 const string xTitle = "ΔRA (arcsec)";
                 const string yTitle = "ΔDec (arcsec)";
                 var canvasId = $"c{t}";
                 var title = SummarizeTargetsForBatch(samples);
+                var titleJson = JsonSerializer.Serialize(title);
+                var labelJson = JsonSerializer.Serialize(title + " — drift path");
 
-                sb.AppendLine($"<h2>{Escape(title)}</h2>");
-                sb.AppendLine($"<p>{samples.Count} frames · plate-solved drift · stopped {target.StoppedUtc.ToLocalTime():HH:mm}</p>");
-                sb.AppendLine($"<canvas id=\"{canvasId}\"></canvas>");
+                sb.AppendLine($"<section class=\"{sectionClass}\">");
+                sb.AppendLine($"  <h2 class=\"text-lg font-semibold text-sky-300\">{Escape(title)}</h2>");
+                sb.AppendLine($"  <p class=\"mt-1 text-sm text-slate-400\">{samples.Count} frames · plate-solved drift · stopped {target.StoppedUtc.ToLocalTime():HH:mm}</p>");
+                sb.AppendLine($"  <div class=\"seedrift-chart-box mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-2\">");
+                sb.AppendLine($"    <canvas id=\"{canvasId}\"></canvas>");
+                sb.AppendLine("  </div>");
 
                 var pts = new StringBuilder("[");
                 for (var i = 0; i < samples.Count; i++) {
@@ -62,30 +79,47 @@ namespace NINA.Plugin.SeeDrift.Services {
                 pts.Append(']');
 
                 sb.AppendLine("<script>");
-                sb.AppendLine($"(function(){{");
+                sb.AppendLine("(function(){");
                 sb.AppendLine($"  const pts = {pts};");
-                sb.AppendLine($"  new Chart(document.getElementById('{canvasId}'), {{");
+                sb.AppendLine($"  const datasetLabel = {labelJson};");
+                sb.AppendLine($"  const el = document.getElementById('{canvasId}');");
+                sb.AppendLine("  const chart = new Chart(el, {");
                 sb.AppendLine("    type: 'scatter',");
                 sb.AppendLine("    data: { datasets: [{");
-                sb.AppendLine($"      label: '{Escape(title)}',");
-                sb.AppendLine("      data: pts, borderColor: '#64c8ff',");
-                sb.AppendLine("      backgroundColor: 'rgba(100,200,255,0.35)',");
+                sb.AppendLine("      label: datasetLabel,");
+                sb.AppendLine("      data: pts, borderColor: '#38bdf8',");
+                sb.AppendLine("      backgroundColor: 'rgba(56,189,248,0.25)',");
                 sb.AppendLine("      showLine: true, tension: 0.12, pointRadius: 3, borderWidth: 1.5");
                 sb.AppendLine("    }]},");
-                sb.AppendLine("    options: { responsive: true, maintainAspectRatio: true,");
+                sb.AppendLine("    options: {");
+                sb.AppendLine("      responsive: true, maintainAspectRatio: false,");
                 sb.AppendLine("      scales: {");
-                sb.AppendLine($"        x: {{ title: {{ display: true, text: '{xTitle}', color: '#bbb' }}, grid: {{ color: 'rgba(255,255,255,0.08)' }}, ticks: {{ color: '#aaa' }} }},");
-                sb.AppendLine($"        y: {{ title: {{ display: true, text: '{yTitle}', color: '#bbb' }}, grid: {{ color: 'rgba(255,255,255,0.08)' }}, ticks: {{ color: '#aaa' }} }}");
+                sb.AppendLine($"        x: {{ title: {{ display: true, text: '{xTitle}', color: '#94a3b8' }}, grid: {{ color: 'rgba(148,163,184,0.12)' }}, ticks: {{ color: '#cbd5e1' }}, border: {{ color: '#475569' }} }},");
+                sb.AppendLine($"        y: {{ title: {{ display: true, text: '{yTitle}', color: '#94a3b8' }}, grid: {{ color: 'rgba(148,163,184,0.12)' }}, ticks: {{ color: '#cbd5e1' }}, border: {{ color: '#475569' }} }}");
                 sb.AppendLine("      },");
-                sb.AppendLine("      plugins: { legend: { labels: { color: '#ccc' } } }");
+                sb.AppendLine("      plugins: {");
+                sb.AppendLine("        legend: { labels: { color: '#e2e8f0' } },");
+                sb.AppendLine("        zoom: {");
+                sb.AppendLine("          pan: { enabled: true, mode: 'xy' },");
+                sb.AppendLine("          zoom: {");
+                sb.AppendLine("            wheel: { enabled: true },");
+                sb.AppendLine("            pinch: { enabled: true },");
+                sb.AppendLine("            mode: 'xy'");
+                sb.AppendLine("          },");
+                sb.AppendLine("          limits: { x: { min: 'original', max: 'original' }, y: { min: 'original', max: 'original' } }");
+                sb.AppendLine("        }");
+                sb.AppendLine("      }");
                 sb.AppendLine("    }");
                 sb.AppendLine("  });");
+                sb.AppendLine("  el.addEventListener('dblclick', function() { chart.resetZoom(); });");
                 sb.AppendLine("})();");
                 sb.AppendLine("</script>");
-                AppendSequencerEdgeTable(sb, samples);
+
+                AppendSequencerSection(sb, samples);
+                sb.AppendLine("</section>");
             }
 
-            sb.AppendLine("</body></html>");
+            sb.AppendLine("</main></body></html>");
             File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
         }
 
@@ -110,7 +144,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             return string.Join(" · ", distinct.Take(maxListed)) + $" (+{distinct.Count - maxListed} more)";
         }
 
-        private static void AppendSequencerEdgeTable(StringBuilder sb, IReadOnlyList<DriftSample> samples) {
+        private static void AppendSequencerSection(StringBuilder sb, IReadOnlyList<DriftSample> samples) {
             var rows = new List<(string fromFn, string toFn, string kind, string detail)>();
             for (var i = 0; i < samples.Count; i++) {
                 var m = samples[i].EdgeSequencerMarkers;
@@ -121,16 +155,41 @@ namespace NINA.Plugin.SeeDrift.Services {
                     rows.Add((prevFn, samples[i].FileName, kind, e.Tooltip));
                 }
             }
-            if (rows.Count == 0)
-                return;
 
-            sb.AppendLine("<h3 style=\"font-size:0.95rem;margin-top:18px;color:#aac8ff\">Sequencer events (NINA logs)</h3>");
-            sb.AppendLine("<p style=\"font-size:0.8rem;color:#888\">Between-frame triggers aligned to exposure intervals — requires matching session log.</p>");
-            sb.AppendLine("<table class=\"logtbl\"><thead><tr><th>From frame</th><th>To frame</th><th>Kind</th><th>Detail</th></tr></thead><tbody>");
-            foreach (var r in rows) {
-                sb.AppendLine($"<tr><td>{Escape(r.fromFn)}</td><td>{Escape(r.toFn)}</td><td>{Escape(r.kind)}</td><td style=\"white-space:pre-wrap\">{Escape(r.detail)}</td></tr>");
+            sb.AppendLine("  <div class=\"mt-8\">");
+            sb.AppendLine("    <h3 class=\"text-sm font-semibold uppercase tracking-wide text-sky-400\">Sequencer events (NINA logs)</h3>");
+
+            if (rows.Count == 0) {
+                sb.AppendLine("    <div class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/40 p-4\">");
+                sb.AppendLine("      <p class=\"text-sm text-slate-300\">No correlated dither or center-after-drift events for this batch.</p>");
+                sb.AppendLine("      <p class=\"mt-2 text-xs leading-relaxed text-slate-500\">SeeDrift matches lines in <code class=\"rounded bg-slate-800 px-1 py-0.5 text-slate-300\">%LocalAppData%\\NINA\\Logs</code> to your frame times. If logs were rotated, the UTC window does not overlap captures, or session paths differ, this section stays empty — it is not a bug in the drift chart.</p>");
+                sb.AppendLine("    </div>");
+                sb.AppendLine("  </div>");
+                return;
             }
-            sb.AppendLine("</tbody></table>");
+
+            sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Between-frame triggers aligned to exposure intervals (requires matching session log).</p>");
+            sb.AppendLine("    <div class=\"mt-3 overflow-x-auto rounded-lg border border-slate-700\">");
+            sb.AppendLine("      <table class=\"min-w-full divide-y divide-slate-700 text-left text-xs\">");
+            sb.AppendLine("        <thead class=\"bg-slate-900/80 text-sky-300\"><tr>");
+            sb.AppendLine("          <th class=\"whitespace-nowrap px-3 py-2 font-medium\">From frame</th>");
+            sb.AppendLine("          <th class=\"whitespace-nowrap px-3 py-2 font-medium\">To frame</th>");
+            sb.AppendLine("          <th class=\"whitespace-nowrap px-3 py-2 font-medium\">Kind</th>");
+            sb.AppendLine("          <th class=\"px-3 py-2 font-medium\">Detail</th>");
+            sb.AppendLine("        </tr></thead>");
+            sb.AppendLine("        <tbody class=\"divide-y divide-slate-800 bg-slate-950/40 text-slate-300\">");
+            foreach (var r in rows) {
+                sb.AppendLine("        <tr class=\"align-top\">");
+                sb.AppendLine($"          <td class=\"whitespace-nowrap px-3 py-2 font-mono text-[11px]\">{Escape(r.fromFn)}</td>");
+                sb.AppendLine($"          <td class=\"whitespace-nowrap px-3 py-2 font-mono text-[11px]\">{Escape(r.toFn)}</td>");
+                sb.AppendLine($"          <td class=\"whitespace-nowrap px-3 py-2\">{Escape(r.kind)}</td>");
+                sb.AppendLine($"          <td class=\"whitespace-pre-wrap px-3 py-2 text-[11px] text-slate-400\">{Escape(r.detail)}</td>");
+                sb.AppendLine("        </tr>");
+            }
+            sb.AppendLine("        </tbody>");
+            sb.AppendLine("      </table>");
+            sb.AppendLine("    </div>");
+            sb.AppendLine("  </div>");
         }
 
         private static string Escape(string s) {

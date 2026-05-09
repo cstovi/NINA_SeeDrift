@@ -15,7 +15,7 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 | Setting | Meaning |
 |--------|---------|
 | **NINA image folder** | Read-only display of `ActiveProfile.ImageFileSettings.FilePath`. Lights must land here (configure **NINA Options → Imaging → image file path**). |
-| **Night report folder** | Directory for the rolling **night HTML** file (`SeeDrift-night-YYYY-MM-DD.html`). Created if missing. |
+| **Night report folder** | Directory for the rolling **night HTML** file (`SeeDrift_night_YYYYMMDD.html`). Created if missing. |
 | **Working folder** | Reserved for possible future scratch use when solving; solving currently uses **`IImageDataFactory.CreateFromFile`** on originals. Default on first run: `%TEMP%\SeeDrift`. |
 | **Observation start / end (UTC)** | **Date picker** plus **hour** and **minute** dropdowns (UTC); used only by **Run test report**. Values are stored in settings as ISO strings for compatibility. |
 
@@ -32,15 +32,17 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 ### Offline-style test (same disk folder)
 
 1. Set **Observation start** and **Observation end** using the calendar and time lists (interpreted as **UTC**, not your PC’s local timezone).
-2. Click **Run test report**. A **progress bar** and status text appear on this options page during the scan and solve (indeterminate while scanning the folder; determinate while solving frames).
+2. Click **Run test report**. **Only while the run is in progress**, status text and a **progress bar** appear on this options page (they are hidden when idle). Indeterminate while scanning; determinate while solving frames. **SeeDrift Stop** does not use this row — progress appears in **NINA’s main status bar**.
 
 ### Rolling HTML file
 
 Each **SeeDrift Stop** or **Test report** completion adds or refreshes content in the night report under **Night report folder**. The subtitle counts **batches** (runs), not astronomical targets. A single batch can include frames from **several** FITS **OBJECT** names if they all fall in your UTC window—the heading lists the distinct target names; **Sequencer events** rows always show the actual file names from disk.
 
+The report page loads **Tailwind CSS**, **Chart.js**, **Hammer.js**, and **chartjs-plugin-zoom** from CDNs (needs network the first time you open the file, same as before). The drift chart supports **wheel zoom**, **drag pan**, and **double‑click to reset zoom**.
+
 ### Sequencer events in HTML
 
-When **`%LocalAppData%\NINA\Logs`** contains matching session lines, **between-frame** **dither** and **center-after-drift** triggers appear under **Sequencer events (NINA logs)** — same strict interval rules as earlier SeeDrift builds (paired save times when present, fractional seconds, etc.). If logs do not match the interval, the chart still shows drift; the table may be empty.
+When **`%LocalAppData%\NINA\Logs`** contains matching session lines, **between-frame** **dither** and **center-after-drift** triggers appear in a table under **Sequencer events (NINA logs)** — same strict interval rules as earlier SeeDrift builds (paired save times when present, fractional seconds, etc.). If nothing correlates, you still see that section with a short explanation (empty table is not a failed drift run).
 
 ## Technical notes
 

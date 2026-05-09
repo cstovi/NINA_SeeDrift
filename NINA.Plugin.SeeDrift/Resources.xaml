@@ -41,7 +41,7 @@
             <Separator Margin="0,0,0,12"/>
 
             <TextBlock Text="Test report" FontWeight="Bold" Margin="0,0,0,4"/>
-            <TextBlock Text="Uses the same pipeline as SeeDrift Stop: scans the NINA image folder recursively and filters by observation UTC. Pick calendar date and time in UTC (not your PC’s local zone)."
+            <TextBlock Text="Uses the same pipeline as SeeDrift Stop: walks your Imaging file pattern for LIGHT frames and filters by observation UTC. Pick calendar date and time in UTC (not your PC’s local zone)."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
             <TextBlock Text="Observation start (UTC)" FontWeight="SemiBold" Margin="0,0,0,4"/>
@@ -86,10 +86,17 @@
                 </ComboBox>
             </StackPanel>
 
+            <TextBlock Text="Progress and status appear only while Run test report is active (then hidden). SeeDrift Stop reports progress in NINA’s main status bar."
+                       FontSize="10" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
             <StackPanel Margin="0,0,0,12" Visibility="{Binding TestReportChromeVisibility, Mode=OneWay}">
                 <TextBlock Text="{Binding TestReportStatusText, Mode=OneWay}" Foreground="#AAC8FF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <ProgressBar Height="10"
+                <ProgressBar Height="14"
                              Minimum="0"
+                             Background="#2D3748"
+                             Foreground="#38BDF8"
+                             BorderBrush="#4A5568"
+                             BorderThickness="1"
                              Maximum="{Binding TestReportProgressMaximum, Mode=OneWay}"
                              Value="{Binding TestReportProgressValue, Mode=OneWay}"
                              IsIndeterminate="{Binding TestReportIndeterminate, Mode=OneWay}"/>
