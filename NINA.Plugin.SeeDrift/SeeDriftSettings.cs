@@ -16,9 +16,9 @@ namespace NINA.Plugin.SeeDrift {
         public int PlateSolveParallelism { get; set; } = 4;
 
         /// <summary>
-        /// Night HTML lists only targets with at least this many solved frames in the batch (default 1 = include all).
+        /// Night HTML lists only targets with at least this many solved frames in the batch (default 50).
         /// </summary>
-        public int MinExposuresPerTarget { get; set; } = 1;
+        public int MinExposuresPerTarget { get; set; } = 50;
 
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

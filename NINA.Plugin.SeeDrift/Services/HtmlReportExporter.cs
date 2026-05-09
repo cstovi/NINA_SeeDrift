@@ -25,7 +25,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <param name="minExposuresPerTarget">Targets with fewer solved frames in the batch are omitted from headings and subsections (minimum 1).</param>
         public static void WriteNightReport(
                 IReadOnlyList<DriftTrackingService.CompletedTarget> targets, string path,
-                int minExposuresPerTarget = 1) {
+                int minExposuresPerTarget = 50) {
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var min = Math.Max(1, minExposuresPerTarget);

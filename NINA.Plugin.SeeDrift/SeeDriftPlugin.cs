@@ -246,10 +246,10 @@ namespace NINA.Plugin.SeeDrift {
             return value;
         }
 
-        private int _minExposuresPerTarget = 1;
+        private int _minExposuresPerTarget = 50;
 
         /// <summary>
-        /// Minimum solved frames per FITS target for that target to appear in the night HTML (1–500; default 1).
+        /// Minimum solved frames per FITS target for that target to appear in the night HTML (1–500; default 50).
         /// </summary>
         public int MinExposuresPerTarget {
             get => _minExposuresPerTarget;

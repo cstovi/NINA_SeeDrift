@@ -13,8 +13,8 @@ using System.Windows;
 When log lines correlate between exposures, dither and center-after-drift triggers appear in the HTML report.")]
 [assembly: AssemblyCompany("Carl Stovell")]
 [assembly: AssemblyProduct("NINA.Plugin.SeeDrift")]
-[assembly: AssemblyVersion("0.7.5.0")]
-[assembly: AssemblyFileVersion("0.7.5.0")]
+[assembly: AssemblyVersion("0.7.6.0")]
+[assembly: AssemblyFileVersion("0.7.6.0")]
 [assembly: AssemblyMetadata("id", "E8D4C2F1-6B7A-4E9D-8C3F-1A2B5D7E9F0C")]
 [assembly: Guid("E8D4C2F1-6B7A-4E9D-8C3F-1A2B5D7E9F0C")]
 [assembly: ThemeInfo(
