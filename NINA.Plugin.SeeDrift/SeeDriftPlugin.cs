@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,8 +24,18 @@ namespace NINA.Plugin.SeeDrift {
     [Export(typeof(IPluginManifest))]
     [Export]
     public class SeeDriftPlugin : PluginBase, IPluginManifest, INotifyPropertyChanged {
+        private static readonly int[] UtcHourItems = Enumerable.Range(0, 24).ToArray();
+        private static readonly int[] UtcMinuteItems = Enumerable.Range(0, 60).ToArray();
+
         private bool _isInitializing;
         private bool _isSyncing;
+
+        private DateTime _testStartDateUtc;
+        private int _testStartHourUtc;
+        private int _testStartMinuteUtc;
+        private DateTime _testEndDateUtc;
+        private int _testEndHourUtc;
+        private int _testEndMinuteUtc;
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null)
@@ -36,6 +48,12 @@ namespace NINA.Plugin.SeeDrift {
 
         public ICommand ResetSessionCommand { get; }
         public ICommand RunTestReportCommand { get; }
+
+        /// <summary>ComboBox items for UTC hour (0–23).</summary>
+        public IReadOnlyList<int> UtcHours => UtcHourItems;
+
+        /// <summary>ComboBox items for UTC minute (0–59).</summary>
+        public IReadOnlyList<int> UtcMinutes => UtcMinuteItems;
 
         [ImportingConstructor]
         public SeeDriftPlugin(
@@ -50,24 +68,121 @@ namespace NINA.Plugin.SeeDrift {
             _isInitializing = true;
             HtmlExportFolder = Settings.HtmlExportFolder;
             TempWorkingFolder = Settings.TempWorkingFolder;
-            TestObservationStartUtcIso = Settings.TestObservationStartUtcIso;
-            TestObservationEndUtcIso = Settings.TestObservationEndUtcIso;
+            ApplyTestWindowFromSettingsStrings();
             _isInitializing = false;
+            if (string.IsNullOrWhiteSpace(Settings.TestObservationStartUtcIso) ||
+                    string.IsNullOrWhiteSpace(Settings.TestObservationEndUtcIso))
+                SyncSettingsFromProperties();
 
             ResetSessionCommand = new RelayCommand(_ => DriftTracker.ResetSession());
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
         }
 
+        /// <summary>UTC calendar date for test window start; time uses <see cref="TestObservationStartHourUtc"/> / Minute.</summary>
+        public DateTime TestObservationStartDateUtc {
+            get => _testStartDateUtc;
+            set {
+                var d = new DateTime(value.Year, value.Month, value.Day, 0, 0, 0, DateTimeKind.Utc);
+                if (d == _testStartDateUtc) return;
+                _testStartDateUtc = d;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        public int TestObservationStartHourUtc {
+            get => _testStartHourUtc;
+            set {
+                var h = Math.Clamp(value, 0, 23);
+                if (h == _testStartHourUtc) return;
+                _testStartHourUtc = h;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        public int TestObservationStartMinuteUtc {
+            get => _testStartMinuteUtc;
+            set {
+                var m = Math.Clamp(value, 0, 59);
+                if (m == _testStartMinuteUtc) return;
+                _testStartMinuteUtc = m;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        /// <summary>UTC calendar date for test window end.</summary>
+        public DateTime TestObservationEndDateUtc {
+            get => _testEndDateUtc;
+            set {
+                var d = new DateTime(value.Year, value.Month, value.Day, 0, 0, 0, DateTimeKind.Utc);
+                if (d == _testEndDateUtc) return;
+                _testEndDateUtc = d;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        public int TestObservationEndHourUtc {
+            get => _testEndHourUtc;
+            set {
+                var h = Math.Clamp(value, 0, 23);
+                if (h == _testEndHourUtc) return;
+                _testEndHourUtc = h;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        public int TestObservationEndMinuteUtc {
+            get => _testEndMinuteUtc;
+            set {
+                var m = Math.Clamp(value, 0, 59);
+                if (m == _testEndMinuteUtc) return;
+                _testEndMinuteUtc = m;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        private void ApplyTestWindowFromSettingsStrings() {
+            var today = DateTime.UtcNow.Date;
+
+            if (!string.IsNullOrWhiteSpace(Settings.TestObservationStartUtcIso) &&
+                    TryParseUtcIso(Settings.TestObservationStartUtcIso, out var s)) {
+                _testStartDateUtc = new DateTime(s.Year, s.Month, s.Day, 0, 0, 0, DateTimeKind.Utc);
+                _testStartHourUtc = s.Hour;
+                _testStartMinuteUtc = s.Minute;
+            } else {
+                _testStartDateUtc = today;
+                _testStartHourUtc = 0;
+                _testStartMinuteUtc = 0;
+            }
+
+            if (!string.IsNullOrWhiteSpace(Settings.TestObservationEndUtcIso) &&
+                    TryParseUtcIso(Settings.TestObservationEndUtcIso, out var e)) {
+                _testEndDateUtc = new DateTime(e.Year, e.Month, e.Day, 0, 0, 0, DateTimeKind.Utc);
+                _testEndHourUtc = e.Hour;
+                _testEndMinuteUtc = e.Minute;
+            } else {
+                _testEndDateUtc = today;
+                _testEndHourUtc = 23;
+                _testEndMinuteUtc = 59;
+            }
+
+            RaisePropertyChanged(nameof(TestObservationStartDateUtc));
+            RaisePropertyChanged(nameof(TestObservationStartHourUtc));
+            RaisePropertyChanged(nameof(TestObservationStartMinuteUtc));
+            RaisePropertyChanged(nameof(TestObservationEndDateUtc));
+            RaisePropertyChanged(nameof(TestObservationEndHourUtc));
+            RaisePropertyChanged(nameof(TestObservationEndMinuteUtc));
+        }
+
         private async Task RunTestReportFireAsync() {
             try {
-                if (!TryParseUtcIso(TestObservationStartUtcIso, out var startUtc)) {
-                    Logger.Error("SeeDrift: Test observation start time is not a valid UTC ISO 8601 string.");
-                    return;
-                }
-                if (!TryParseUtcIso(TestObservationEndUtcIso, out var endUtc)) {
-                    Logger.Error("SeeDrift: Test observation end time is not a valid UTC ISO 8601 string.");
-                    return;
-                }
+                var startUtc = CombineUtc(_testStartDateUtc, _testStartHourUtc, _testStartMinuteUtc);
+                var endUtc = CombineUtc(_testEndDateUtc, _testEndHourUtc, _testEndMinuteUtc);
                 await DriftTracker.RunTestReportAsync(startUtc, endUtc,
                         (IProgress<ApplicationStatus>?)null, CancellationToken.None)
                     .ConfigureAwait(false);
@@ -75,6 +190,9 @@ namespace NINA.Plugin.SeeDrift {
                 Logger.Error($"SeeDrift: Test report failed — {ex.Message}");
             }
         }
+
+        private static DateTime CombineUtc(DateTime dateUtc, int hour, int minute) =>
+            new DateTime(dateUtc.Year, dateUtc.Month, dateUtc.Day, hour, minute, 0, DateTimeKind.Utc);
 
         private static bool TryParseUtcIso(string? text, out DateTime utc) {
             utc = default;
@@ -88,6 +206,11 @@ namespace NINA.Plugin.SeeDrift {
             return false;
         }
 
+        private static string FormatUtcIso(DateTime dateUtc, int hour, int minute) {
+            var dt = CombineUtc(dateUtc, hour, minute);
+            return dt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+        }
+
         public override Task Teardown() {
             DriftTracker.Dispose();
             return base.Teardown();
@@ -99,8 +222,8 @@ namespace NINA.Plugin.SeeDrift {
             try {
                 Settings.HtmlExportFolder = _htmlExportFolder;
                 Settings.TempWorkingFolder = _tempWorkingFolder;
-                Settings.TestObservationStartUtcIso = _testObservationStartUtcIso;
-                Settings.TestObservationEndUtcIso = _testObservationEndUtcIso;
+                Settings.TestObservationStartUtcIso = FormatUtcIso(_testStartDateUtc, _testStartHourUtc, _testStartMinuteUtc);
+                Settings.TestObservationEndUtcIso = FormatUtcIso(_testEndDateUtc, _testEndHourUtc, _testEndMinuteUtc);
                 Settings.Save();
             } finally {
                 _isSyncing = false;
@@ -117,18 +240,6 @@ namespace NINA.Plugin.SeeDrift {
         public string TempWorkingFolder {
             get => _tempWorkingFolder;
             set { _tempWorkingFolder = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
-        }
-
-        private string _testObservationStartUtcIso = "";
-        public string TestObservationStartUtcIso {
-            get => _testObservationStartUtcIso;
-            set { _testObservationStartUtcIso = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
-        }
-
-        private string _testObservationEndUtcIso = "";
-        public string TestObservationEndUtcIso {
-            get => _testObservationEndUtcIso;
-            set { _testObservationEndUtcIso = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
         }
 
         /// <summary>NINA image save root from the active profile (read-only).</summary>

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-05-09
+
+### Changed
+
+- **Test report:** Observation window uses **DatePicker** and **hour/minute ComboBoxes** (UTC) instead of typing ISO 8601 text. Settings file still stores the same ISO keys.
+
 ## [0.5.1] — 2026-05-09
 
 ### Fixed

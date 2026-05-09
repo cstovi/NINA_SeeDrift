@@ -41,23 +41,50 @@
             <Separator Margin="0,0,0,12"/>
 
             <TextBlock Text="Test report" FontWeight="Bold" Margin="0,0,0,4"/>
-            <TextBlock Text="Uses the same pipeline as SeeDrift Stop: scans the NINA image folder recursively and filters by observation UTC. Enter times as UTC ISO 8601 (examples: 2025-05-09T21:30:00Z or 2025-05-09T21:30:00+00:00)."
+            <TextBlock Text="Uses the same pipeline as SeeDrift Stop: scans the NINA image folder recursively and filters by observation UTC. Pick calendar date and time in UTC (not your PC’s local zone)."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
-            <Grid Margin="0,0,0,8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="160"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="Observation start (UTC):" VerticalAlignment="Center" Margin="0,0,8,6"/>
-                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding TestObservationStartUtcIso, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,6"/>
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="Observation end (UTC):" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding TestObservationEndUtcIso, UpdateSourceTrigger=PropertyChanged}"/>
-            </Grid>
+            <TextBlock Text="Observation start (UTC)" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <DatePicker SelectedDate="{Binding TestObservationStartDateUtc}" Width="150" VerticalAlignment="Center"/>
+                <TextBlock Text="time" Margin="12,0,6,0" VerticalAlignment="Center" Foreground="#AAA" FontSize="11"/>
+                <ComboBox ItemsSource="{Binding UtcHours}" SelectedItem="{Binding TestObservationStartHourUtc}" Width="56" VerticalAlignment="Center" Margin="0,0,4,0">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat={}{0:D2}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text=":" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox ItemsSource="{Binding UtcMinutes}" SelectedItem="{Binding TestObservationStartMinuteUtc}" Width="56" VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat={}{0:D2}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+            <TextBlock Text="Observation end (UTC)" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <DatePicker SelectedDate="{Binding TestObservationEndDateUtc}" Width="150" VerticalAlignment="Center"/>
+                <TextBlock Text="time" Margin="12,0,6,0" VerticalAlignment="Center" Foreground="#AAA" FontSize="11"/>
+                <ComboBox ItemsSource="{Binding UtcHours}" SelectedItem="{Binding TestObservationEndHourUtc}" Width="56" VerticalAlignment="Center" Margin="0,0,4,0">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat={}{0:D2}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Text=":" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                <ComboBox ItemsSource="{Binding UtcMinutes}" SelectedItem="{Binding TestObservationEndMinuteUtc}" Width="56" VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat={}{0:D2}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
 
             <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                 <Button Content="Run test report" Command="{Binding RunTestReportCommand}" Padding="12,6" Margin="0,0,12,0"/>

@@ -17,7 +17,7 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 | **NINA image folder** | Read-only display of `ActiveProfile.ImageFileSettings.FilePath`. Lights must land here (configure **NINA Options → Imaging → image file path**). |
 | **Night report folder** | Directory for the rolling **night HTML** file (`SeeDrift-night-YYYY-MM-DD.html`). Created if missing. |
 | **Working folder** | Reserved for possible future scratch use when solving; solving currently uses **`IImageDataFactory.CreateFromFile`** on originals. Default on first run: `%TEMP%\SeeDrift`. |
-| **Observation start / end (UTC)** | ISO 8601 strings used only by **Run test report** (for example `2026-05-09T22:00:00Z`). |
+| **Observation start / end (UTC)** | **Date picker** plus **hour** and **minute** dropdowns (UTC); used only by **Run test report**. Values are stored in settings as ISO strings for compatibility. |
 
 **Tip:** Plate solving uses your **NINA plate-solve profile** (same engines/settings as the Plate Solve tool).
 
@@ -31,7 +31,7 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 
 ### Offline-style test (same disk folder)
 
-1. Set **Observation start** and **Observation end** to bracket your subs (UTC).
+1. Set **Observation start** and **Observation end** using the calendar and time lists (interpreted as **UTC**, not your PC’s local timezone).
 2. Click **Run test report**.
 
 ### Rolling HTML file
