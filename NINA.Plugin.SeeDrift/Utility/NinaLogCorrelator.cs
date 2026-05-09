@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -9,9 +10,8 @@ using NINA.Plugin.SeeDrift.Models;
 namespace NINA.Plugin.SeeDrift.Utility {
 
     /// <summary>
-    /// Correlates drift samples with NINA 3.x log lines. **Primary** sources are sequencer
-    /// <c>Starting Trigger:</c> lines (intent). Broad patterns (plate solve, per-frame drift metrics)
-    /// are not used for matching so the nearest event is not wrong noise.
+    /// Correlates drift samples with NINA 3.x log lines: sequencer
+    /// <c>Starting Trigger:</c>, <c>DirectGuider</c> dither pulses, and inter-frame intervals.
     /// </summary>
     internal static class NinaLogCorrelator {
 
@@ -33,6 +33,11 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static readonly Regex RxTriggerDither = new Regex(
             @"Starting\s+Trigger:.*DitherAfterExposures", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary>NINA guider commanded dither step (guider coordinate units).</summary>
+        private static readonly Regex RxDitherPulse = new Regex(
+            @"DirectGuider\.cs\|SelectDitherPulse\|.*\|Dither target from \(([-0-9.eE]+),([-0-9.eE]+)\) to \(([-0-9.eE]+),([-0-9.eE]+)\)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         // NINA 3.x log line timestamp — prefix before first | or INFO field.
         private static readonly Regex[] _tsPatterns = {
             new Regex(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", RegexOptions.Compiled),
@@ -40,33 +45,60 @@ namespace NINA.Plugin.SeeDrift.Utility {
             new Regex(@"^\[?(\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2})\]?", RegexOptions.Compiled),
         };
 
+        private enum TriggerKind {
+            Center,
+            Dither
+        }
+
+        private sealed class TimedTrigger {
+            public DateTime UtcTime { get; set; }
+            public TriggerKind Kind { get; set; }
+            public string Label { get; set; } = "";
+        }
+
+        private sealed class DitherPulse {
+            public DateTime UtcTime { get; set; }
+            public double Dx { get; set; }
+            public double Dy { get; set; }
+        }
+
         /// <summary>
-        /// Loads sequencer triggers from logs; sets <see cref="DriftSample.SequencerLogHint"/> on every
-        /// frame with a nearby trigger; augments <see cref="DriftSample.JumpReason"/> on jumps when matched.
-        /// Returns <c>(matched jump count, logFound)</c>.
+        /// Loads sequencer triggers and dither pulses; sets hints and inter-frame edge fields.
+        /// Returns matched jump count (including interval match to next frame), log found, trigger count, edge marker count.
         /// </summary>
-        public static (int Matched, bool LogFound) AnnotateWithLogEvents(List<DriftSample> samples) {
-            if (samples.Count == 0) return (0, false);
+        public static (int MatchedJumps, bool LogFound, int TriggersLoaded, int SequencerEdges) AnnotateWithLogEvents(
+                List<DriftSample> samples) {
+            if (samples.Count == 0) return (0, false, 0, 0);
             try {
-                foreach (var s in samples)
+                foreach (var s in samples) {
                     s.SequencerLogHint = null;
+                    s.EdgeHadDitherTrigger = false;
+                    s.EdgeHadCenterTrigger = false;
+                    s.EdgeDitherClaimedDx = null;
+                    s.EdgeDitherClaimedDy = null;
+                    s.EdgeSequencerHover = null;
+                }
 
                 var sessionDate = samples[0].ExposureStartUtc.Date;
                 Logger.Debug($"SeeDrift: log correlator — sessionDate={sessionDate:yyyy-MM-dd}, first sample UTC={samples[0].ExposureStartUtc:o}");
 
-                var triggers = new List<LogEvent>();
-                if (!LoadSequencerTriggers(sessionDate, triggers))
-                    return (0, false);
+                var triggers = new List<TimedTrigger>();
+                var pulses = new List<DitherPulse>();
+                if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses))
+                    return (0, false, 0, 0);
 
-                Logger.Debug($"SeeDrift: log correlator — sequencer triggers={triggers.Count}");
+                triggers.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
+                pulses.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
+
+                Logger.Debug($"SeeDrift: log correlator — triggers={triggers.Count}, dither pulses={pulses.Count}");
+                AssignInterFrameEdges(samples, triggers, pulses);
+
+                var logEventsForHints = triggers.Select(t => new LogEventLite { UtcTime = t.UtcTime, Label = t.Label }).ToList();
                 if (triggers.Count == 0) {
-                    foreach (var s in samples)
-                        s.SequencerLogHint = null;
-                    return (0, true);
+                    return (0, true, 0, CountSequencerEdges(samples));
                 }
 
-                var matchedJumps = 0;
-                var firstJump = samples.FirstOrDefault(s => s.IsJump);
+                var firstJump = samples.OrderBy(s => s.FrameIndex).FirstOrDefault(s => s.IsJump);
                 if (firstJump != null) {
                     var nearest = triggers.OrderBy(e => (e.UtcTime - firstJump!.ExposureStartUtc).Duration()).First();
                     var gap = (nearest.UtcTime - firstJump.ExposureStartUtc).Duration();
@@ -75,40 +107,145 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 }
 
                 foreach (var sample in samples.OrderBy(s => s.FrameIndex)) {
-                    var n = FindNearestWithinWindow(triggers, sample.ExposureStartUtc, TriggerMatchWindow);
+                    var n = FindNearestWithinWindow(logEventsForHints, sample.ExposureStartUtc, TriggerMatchWindow);
                     sample.SequencerLogHint = n == null
                         ? null
                         : $"{n.Label} @ {n.UtcTime.ToLocalTime():HH:mm:ss}";
+                }
 
-                    if (!sample.IsJump || n == null)
+                var matchedJumps = 0;
+                foreach (var sample in samples.OrderBy(s => s.FrameIndex)) {
+                    if (!sample.IsJump)
                         continue;
 
-                    var note = $"→ {n.Label} @ {n.UtcTime.ToLocalTime():HH:mm:ss}";
-                    sample.JumpReason = string.IsNullOrEmpty(sample.JumpReason)
-                        ? note
-                        : $"{sample.JumpReason} {note}";
-                    matchedJumps++;
+                    var matched = false;
+                    var n = FindNearestWithinWindow(logEventsForHints, sample.ExposureStartUtc, TriggerMatchWindow);
+                    if (n != null) {
+                        var note = $"→ {n.Label} @ {n.UtcTime.ToLocalTime():HH:mm:ss}";
+                        sample.JumpReason = string.IsNullOrEmpty(sample.JumpReason)
+                            ? note
+                            : $"{sample.JumpReason} {note}";
+                        matched = true;
+                    }
+
+                    var next = samples.FirstOrDefault(x => x.FrameIndex == sample.FrameIndex + 1);
+                    if (next != null && (next.EdgeHadDitherTrigger || next.EdgeHadCenterTrigger)) {
+                        if (!matched) {
+                            var bits = new List<string>();
+                            if (next.EdgeHadDitherTrigger) bits.Add("dither interval");
+                            if (next.EdgeHadCenterTrigger) bits.Add("center interval");
+                            var note = $"→ log: {string.Join(", ", bits)} (frames {sample.FrameIndex + 1}→{next.FrameIndex + 1})";
+                            sample.JumpReason = string.IsNullOrEmpty(sample.JumpReason)
+                                ? note
+                                : $"{sample.JumpReason} {note}";
+                        }
+                        matched = true;
+                    }
+
+                    if (matched)
+                        matchedJumps++;
                 }
 
                 Logger.Debug($"SeeDrift: log correlator — matched jumps={matchedJumps}");
-                return (matchedJumps, true);
+                return (matchedJumps, true, triggers.Count, CountSequencerEdges(samples));
             } catch (Exception ex) {
                 Logger.Debug($"SeeDrift: log correlation skipped: {ex.Message}");
-                return (0, false);
+                return (0, false, 0, 0);
             }
         }
 
-        private sealed class LogEvent {
+        private sealed class LogEventLite {
             public DateTime UtcTime { get; set; }
             public string Label { get; set; } = "";
         }
 
-        /// <summary>Smallest gap within window; null if none within maxGap (inclusive boundary).</summary>
-        private static LogEvent? FindNearestWithinWindow(
-                IReadOnlyList<LogEvent> events,
+        private static int CountSequencerEdges(List<DriftSample> samples) =>
+            samples.Count(s => s.EdgeHadDitherTrigger || s.EdgeHadCenterTrigger);
+
+        private static void AssignInterFrameEdges(
+                List<DriftSample> samples,
+                List<TimedTrigger> triggers,
+                List<DitherPulse> pulses) {
+
+            var ordered = samples.OrderBy(s => s.FrameIndex).ToList();
+            for (var i = 1; i < ordered.Count; i++) {
+                var prev = ordered[i - 1];
+                var cur = ordered[i];
+                var t0 = prev.ExposureStartUtc;
+                var t1 = cur.ExposureStartUtc;
+                if (t1 <= t0)
+                    continue;
+
+                DateTime? ditherTriggerUtc = null;
+                DateTime? centerTriggerUtc = null;
+                foreach (var tr in triggers.Where(t => t.UtcTime > t0 && t.UtcTime < t1).OrderBy(t => t.UtcTime)) {
+                    if (tr.Kind == TriggerKind.Dither) {
+                        cur.EdgeHadDitherTrigger = true;
+                        ditherTriggerUtc ??= tr.UtcTime;
+                    }
+                    if (tr.Kind == TriggerKind.Center) {
+                        cur.EdgeHadCenterTrigger = true;
+                        centerTriggerUtc ??= tr.UtcTime;
+                    }
+                }
+
+                DitherPulse? pulse = null;
+                if (cur.EdgeHadDitherTrigger && ditherTriggerUtc.HasValue) {
+                    pulse = pulses
+                        .Where(p => p.UtcTime >= ditherTriggerUtc.Value && p.UtcTime < t1)
+                        .OrderBy(p => p.UtcTime)
+                        .FirstOrDefault();
+                }
+                if (pulse == null && cur.EdgeHadDitherTrigger) {
+                    pulse = pulses
+                        .Where(p => p.UtcTime > t0 && p.UtcTime < t1)
+                        .OrderBy(p => p.UtcTime)
+                        .FirstOrDefault();
+                }
+                if (pulse != null) {
+                    cur.EdgeDitherClaimedDx = pulse.Dx;
+                    cur.EdgeDitherClaimedDy = pulse.Dy;
+                }
+
+                var lines = new List<string> {
+                    $"Between frames {prev.FrameIndex + 1} → {cur.FrameIndex + 1}"
+                };
+                if (cur.EdgeHadDitherTrigger)
+                    lines.Add(ditherTriggerUtc.HasValue
+                        ? $"DitherAfterExposures @ {ditherTriggerUtc.Value.ToLocalTime():HH:mm:ss}"
+                        : "DitherAfterExposures");
+                if (cur.EdgeHadCenterTrigger)
+                    lines.Add(centerTriggerUtc.HasValue
+                        ? $"CenterAfterDrift @ {centerTriggerUtc.Value.ToLocalTime():HH:mm:ss}"
+                        : "CenterAfterDrift");
+                if (cur.EdgeDitherClaimedDx.HasValue && cur.EdgeDitherClaimedDy.HasValue) {
+                    lines.Add(
+                        $"NINA guider Δ: ({cur.EdgeDitherClaimedDx.Value:F1}, {cur.EdgeDitherClaimedDy.Value:F1}) [guider units]");
+                }
+                var dHdrRa = cur.DeltaRaArcSec - prev.DeltaRaArcSec;
+                var dHdrDec = cur.DeltaDecArcSec - prev.DeltaDecArcSec;
+                lines.Add($"Measured header Δ: ΔRA {dHdrRa:F2}″, ΔDec {dHdrDec:F2}″ (frame-to-frame)");
+                if (cur.IsPixelPath && prev.CumulativePixelX.HasValue && cur.CumulativePixelX.HasValue) {
+                    var dpx = cur.CumulativePixelX.Value - prev.CumulativePixelX.Value;
+                    var dpy = cur.CumulativePixelY!.Value - prev.CumulativePixelY!.Value;
+                    lines.Add($"Measured cumulative-pixel step: Δx {dpx:F2} px, Δy {dpy:F2} px");
+                }
+                if (cur.HasPixelDerivedRaDec && prev.HasPixelDerivedRaDec) {
+                    var dRa = cur.PixelDerivedRaArcSec!.Value - prev.PixelDerivedRaArcSec!.Value;
+                    var dDec = cur.PixelDerivedDecArcSec!.Value - prev.PixelDerivedDecArcSec!.Value;
+                    lines.Add($"Measured derived Δ: ΔRA {dRa:F2}″, ΔDec {dDec:F2}″ (frame-to-frame)");
+                }
+
+                if (cur.EdgeHadDitherTrigger || cur.EdgeHadCenterTrigger)
+                    cur.EdgeSequencerHover = string.Join(Environment.NewLine, lines);
+            }
+        }
+
+        private static LogEventLite? FindNearestWithinWindow(
+                IReadOnlyList<LogEventLite> events,
                 DateTime sampleUtc,
                 TimeSpan maxGap) {
-            LogEvent? best = null;
+            LogEventLite? best = null;
             var bestGap = TimeSpan.MaxValue;
             foreach (var ev in events) {
                 var gap = (ev.UtcTime - sampleUtc).Duration();
@@ -122,46 +259,43 @@ namespace NINA.Plugin.SeeDrift.Utility {
             return best;
         }
 
-        /// <returns>False if NINA log folder missing or no log file read.</returns>
-        private static bool LoadSequencerTriggers(DateTime sessionDate, List<LogEvent> triggers) {
+        private static bool LoadAndParseSessionLogs(DateTime sessionDate, List<TimedTrigger> triggers, List<DitherPulse> pulses) {
             if (!Directory.Exists(LogFolder))
                 return false;
 
-            var logFound = false;
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var logFound = false;
 
             for (var offset = -1; offset <= 1; offset++) {
-                var candidate = FindLogFile(sessionDate.AddDays(offset));
-                if (candidate == null || !seen.Add(candidate)) continue;
-                logFound = true;
-                ParseSequencerTriggers(candidate, triggers);
+                foreach (var path in FindAllLogFilesForDate(sessionDate.AddDays(offset))) {
+                    if (!seen.Add(path)) continue;
+                    logFound = true;
+                    ParseLogLines(path, triggers, pulses);
+                }
             }
 
-            triggers.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
             return logFound;
         }
 
-        private static string? FindLogFile(DateTime date) {
-            if (!Directory.Exists(LogFolder)) return null;
+        /// <summary>All .log paths matching any date pattern (not only files[0]).</summary>
+        private static IEnumerable<string> FindAllLogFilesForDate(DateTime date) {
+            if (!Directory.Exists(LogFolder)) yield break;
 
             var patterns = new[] {
                 $"*{date:yyyy-MM-dd}*",
                 $"*{date:yyyyMMdd}*",
                 $"*{date:MM-dd-yyyy}*",
             };
-
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var p in patterns) {
-                var files = Directory.GetFiles(LogFolder, p, SearchOption.TopDirectoryOnly);
-                if (files.Length > 0) return files[0];
+                foreach (var f in Directory.GetFiles(LogFolder, p, SearchOption.TopDirectoryOnly)) {
+                    if (seen.Add(f))
+                        yield return f;
+                }
             }
-
-            var allLogs = Directory.GetFiles(LogFolder, "*.log", SearchOption.TopDirectoryOnly);
-            if (allLogs.Length == 0) return null;
-            Array.Sort(allLogs, (a, b) => File.GetLastWriteTimeUtc(b).CompareTo(File.GetLastWriteTimeUtc(a)));
-            return allLogs[0];
         }
 
-        private static void ParseSequencerTriggers(string path, List<LogEvent> triggers) {
+        private static void ParseLogLines(string path, List<TimedTrigger> triggers, List<DitherPulse> pulses) {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var sr = new StreamReader(fs);
             string? line;
@@ -170,14 +304,38 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     continue;
 
                 if (RxTriggerCenter.IsMatch(line)) {
-                    triggers.Add(new LogEvent { UtcTime = ts, Label = "Center after drift" });
+                    triggers.Add(new TimedTrigger {
+                        UtcTime = ts,
+                        Kind = TriggerKind.Center,
+                        Label = "Center after drift"
+                    });
                     continue;
                 }
-                if (RxTriggerDither.IsMatch(line))
-                    triggers.Add(new LogEvent { UtcTime = ts, Label = "Dither (after exposures)" });
+                if (RxTriggerDither.IsMatch(line)) {
+                    triggers.Add(new TimedTrigger {
+                        UtcTime = ts,
+                        Kind = TriggerKind.Dither,
+                        Label = "Dither (after exposures)"
+                    });
+                    continue;
+                }
+
+                var mPulse = RxDitherPulse.Match(line);
+                if (mPulse.Success
+                    && double.TryParse(mPulse.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var x0)
+                    && double.TryParse(mPulse.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var y0)
+                    && double.TryParse(mPulse.Groups[3].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var x1)
+                    && double.TryParse(mPulse.Groups[4].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var y1)) {
+                    pulses.Add(new DitherPulse {
+                        UtcTime = ts,
+                        Dx = x1 - x0,
+                        Dy = y1 - y0
+                    });
+                }
             }
         }
 
+        /// <summary>NINA file logs are usually local wall time without <c>Z</c>; FITS <c>DATE-OBS</c> may be UT — pairing uses interval logic within a session.</summary>
         private static bool TryParseTimestamp(string line, out DateTime utc) {
             utc = default;
             foreach (var rx in _tsPatterns) {
@@ -185,16 +343,16 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (!m.Success) continue;
 
                 if (DateTime.TryParse(m.Groups[1].Value,
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.RoundtripKind,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.RoundtripKind,
                         out var dtRoundtrip) && dtRoundtrip.Kind == DateTimeKind.Utc) {
                     utc = dtRoundtrip;
                     return true;
                 }
 
                 if (DateTime.TryParse(m.Groups[1].Value,
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.AssumeLocal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeLocal | DateTimeStyles.AdjustToUniversal,
                         out utc))
                     return true;
             }

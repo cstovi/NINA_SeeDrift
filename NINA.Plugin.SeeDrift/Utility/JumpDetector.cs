@@ -48,7 +48,17 @@ namespace NINA.Plugin.SeeDrift.Utility {
             var sorted = (double[])steps.Clone();
             Array.Sort(sorted);
             var median    = sorted[sorted.Length / 2];
-            var threshold = Math.Max(median * JumpMultiplier, MinThreshold);
+            double threshold;
+            if (isPixel) {
+                var dev = new double[steps.Length];
+                for (var k = 0; k < steps.Length; k++)
+                    dev[k] = Math.Abs(steps[k] - median);
+                Array.Sort(dev);
+                var mad = dev[dev.Length / 2];
+                threshold = Math.Max(Math.Max(median * JumpMultiplier, median + 3.5 * mad), MinThreshold);
+            } else {
+                threshold = Math.Max(median * JumpMultiplier, MinThreshold);
+            }
 
             for (var i = 1; i < samples.Count; i++) {
                 if (steps[i - 1] > threshold) {

@@ -64,6 +64,12 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <summary>True when a NINA log file was found for the session date.</summary>
         public bool LogWasFound { get; private set; }
 
+        /// <summary>Sequencer triggers parsed from NINA logs for the session date window (center + dither).</summary>
+        public int LogTriggerCount { get; private set; }
+
+        /// <summary>Frames where a dither or center trigger fell strictly between the previous and this exposure.</summary>
+        public int LogSequencerEdgeCount { get; private set; }
+
         public DriftTrackingService(SeeDriftPlugin plugin, IImageSaveMediator imageSaveMediator) {
             _plugin = plugin;
             _imageSaveMediator = imageSaveMediator;
@@ -121,6 +127,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 JumpCount = 0;
                 LogCorrelatedCount = 0;
                 LogWasFound = false;
+                LogTriggerCount = 0;
+                LogSequencerEdgeCount = 0;
             });
         }
 
@@ -322,10 +330,12 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// </summary>
         private void ApplyJumpAndLogAnnotation(List<DriftSample> frames) {
             JumpDetector.AnnotateJumps(frames);
-            var (logMatched, logFound) = NinaLogCorrelator.AnnotateWithLogEvents(frames);
+            var (logMatched, logFound, triggersLoaded, sequencerEdges) = NinaLogCorrelator.AnnotateWithLogEvents(frames);
             JumpCount = JumpDetector.CountJumps(frames);
             LogCorrelatedCount = logMatched;
             LogWasFound = logFound;
+            LogTriggerCount = triggersLoaded;
+            LogSequencerEdgeCount = sequencerEdges;
         }
 
         private void OnImageSaved(object? sender, ImageSavedEventArgs e) {

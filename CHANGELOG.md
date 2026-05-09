@@ -6,8 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.4] — 2026-05-09
+
 ### Added
 
+- **NINA log — between-frame markers:** Orange **triangles** (dither) and cyan **squares** (center-only) at segment **midpoints** when a sequencer trigger falls between consecutive exposure starts; tooltips show **guider Δ** from `SelectDitherPulse` and **measured** Δ (header / pixels / derived arcsec). Jump diamonds include the next-frame interval blurb when relevant.
+- **NINA log — merge all matching log files** for the session date ±1 day (not only the first filename match per pattern).
 - **Live — NINA log correlation:** While **armed**, each new saved LIGHT is annotated with the same **jump detection** and **`Starting Trigger:`** log matching (45-minute window) as **folder import**, so tooltips and the plot subtitle can show sequencer hints and log-correlated jumps during capture.
 - **Folder import — pixel path:** optional **phase correlation** on central image crops (like a Python `phase_cross_correlation` stack). Plots **cumulative Δx/Δy in detector pixels** starting at (0,0). Slower; shows dither/drift when FITS **RA/Dec** headers do not. Uses **Math.NET** FFT. Uncompressed primary HDU only.
 - **Dither log overlay:** extension point only (`DitherLogOverlay` placeholder) for a future iteration.
@@ -18,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Jump detection (pixel registration):** Threshold also uses **MAD** (median absolute deviation) so repeated similar dithers can still be flagged as jumps when they are outliers relative to the bulk of steps.
+- **Plot subtitle:** Reports **NINA log** trigger count and **between-frame interval** count; clarifies jump matching (nearest trigger **or** next-frame interval).
 - **README:** Clarify that `dotnet build` without `-c` is **Debug**; use `-c Release` for shipping and `bin\Release\...` artifacts.
 - Pointing plot **subtitle** shows how many frames were plotted so sparse traces are obvious at a glance.
 - Slightly smaller plot markers when many frames are loaded (>100) for readability.

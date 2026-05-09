@@ -199,13 +199,17 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         MarkerStrokeThickness = 1.0,
                         TrackerFormatString   = jumpFmt
                     };
-                    foreach (var s in jumpSamples)
-                        jumpSeries.Points.Add(new ScatterPoint(
-                            GetX(s), GetY(s),
-                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
+                    foreach (var s in jumpSamples) {
+                        var tag = $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}";
+                        var next = ordered.FirstOrDefault(x => x.FrameIndex == s.FrameIndex + 1);
+                        if (!string.IsNullOrEmpty(next?.EdgeSequencerHover))
+                            tag += "\n──\n" + next!.EdgeSequencerHover;
+                        jumpSeries.Points.Add(new ScatterPoint(GetX(s), GetY(s), tag: tag));
+                    }
                     model.Series.Add(jumpSeries);
                 }
 
+                AddSequencerMidpoints(model, ordered, GetX, GetY, dotSize);
                 ApplyPixelAxes(model, ordered, GetX, GetY, useRaDec);
             } else {
                 var dotColor2  = OxyColor.FromRgb(100, 200, 255);
@@ -276,13 +280,17 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         MarkerStrokeThickness = 1.0,
                         TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##}\"\n{3}: {4:0.##}\""
                     };
-                    foreach (var s in jumpSamples2)
-                        jumpSeries2.Points.Add(new ScatterPoint(
-                            s.DeltaRaArcSec, s.DeltaDecArcSec,
-                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
+                    foreach (var s in jumpSamples2) {
+                        var tag = $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}";
+                        var next = ordered.FirstOrDefault(x => x.FrameIndex == s.FrameIndex + 1);
+                        if (!string.IsNullOrEmpty(next?.EdgeSequencerHover))
+                            tag += "\n──\n" + next!.EdgeSequencerHover;
+                        jumpSeries2.Points.Add(new ScatterPoint(s.DeltaRaArcSec, s.DeltaDecArcSec, tag: tag));
+                    }
                     model.Series.Add(jumpSeries2);
                 }
 
+                AddSequencerMidpoints(model, ordered, s => s.DeltaRaArcSec, s => s.DeltaDecArcSec, dotSize2);
                 ApplyPointingAxes(model, samples);
             }
 
@@ -290,6 +298,53 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             PlotModel = model;
             RaisePropertyChanged(nameof(SampleCount));
             RaisePropertyChanged(nameof(LastSummary));
+        }
+
+        /// <summary>Midpoint markers between consecutive frames when NINA log shows dither or center in that interval.</summary>
+        private static void AddSequencerMidpoints(
+                PlotModel model,
+                IReadOnlyList<DriftSample> ordered,
+                Func<DriftSample, double> getX,
+                Func<DriftSample, double> getY,
+                double baseMarkerSize) {
+
+            var ditherSeries = new ScatterSeries {
+                Title               = "Dither (between frames)",
+                MarkerType          = MarkerType.Triangle,
+                MarkerSize          = baseMarkerSize + 2.5,
+                MarkerFill          = OxyColor.FromAColor(220, OxyColor.FromRgb(255, 152, 0)),
+                MarkerStroke        = OxyColor.FromRgb(200, 100, 0),
+                MarkerStrokeThickness = 1.0,
+                TrackerFormatString = "{Tag}"
+            };
+            var centerSeries = new ScatterSeries {
+                Title               = "Center (between frames)",
+                MarkerType          = MarkerType.Square,
+                MarkerSize          = baseMarkerSize + 2.0,
+                MarkerFill          = OxyColor.FromAColor(210, OxyColor.FromRgb(0, 188, 212)),
+                MarkerStroke        = OxyColor.FromRgb(0, 120, 140),
+                MarkerStrokeThickness = 1.0,
+                TrackerFormatString = "{Tag}"
+            };
+
+            for (var i = 1; i < ordered.Count; i++) {
+                var prev = ordered[i - 1];
+                var cur = ordered[i];
+                if (string.IsNullOrEmpty(cur.EdgeSequencerHover))
+                    continue;
+                var mx = (getX(prev) + getX(cur)) / 2;
+                var my = (getY(prev) + getY(cur)) / 2;
+                var tag = cur.EdgeSequencerHover;
+                if (cur.EdgeHadDitherTrigger)
+                    ditherSeries.Points.Add(new ScatterPoint(mx, my, tag: tag));
+                else if (cur.EdgeHadCenterTrigger)
+                    centerSeries.Points.Add(new ScatterPoint(mx, my, tag: tag));
+            }
+
+            if (ditherSeries.Points.Count > 0)
+                model.Series.Add(ditherSeries);
+            if (centerSeries.Points.Count > 0)
+                model.Series.Add(centerSeries);
         }
 
         private static void ApplyPointingAxes(PlotModel model,
@@ -486,10 +541,18 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 } else if (!_tracker.LogWasFound) {
                     jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")} (no NINA log found)";
                 } else if (_tracker.LogCorrelatedCount == 0) {
-                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")} (log found, no events matched)";
+                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")} (0 jump-time matches; see orange/cyan interval markers if present)";
                 } else {
-                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")}, {_tracker.LogCorrelatedCount} correlated from log";
+                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")}, {_tracker.LogCorrelatedCount} matched to log (time or interval)";
                 }
+
+                string logStr;
+                if (!_tracker.LogWasFound)
+                    logStr = " · NINA log: not found";
+                else if (_tracker.LogTriggerCount == 0)
+                    logStr = " · NINA log: read, 0 sequencer triggers in date window";
+                else
+                    logStr = $" · NINA log: {_tracker.LogTriggerCount} trigger(s), {_tracker.LogSequencerEdgeCount} between-frame interval(s)";
 
                 // RA/Dec spread (works for both modes from the delta values).
                 var minRa  = samples.Min(s => s.DeltaRaArcSec);
@@ -522,10 +585,10 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         }
                         pixSpreadStr = $"max drift {maxDist:F1}px{psExtra}";
                     }
-                    return $"{n} frames · {pixSpreadStr}{jumpStr} · {last.TargetName}";
+                    return $"{n} frames · {pixSpreadStr}{jumpStr}{logStr} · {last.TargetName}";
                 }
 
-                return $"{n} frames · {spreadStr}{jumpStr} · {last.TargetName}";
+                return $"{n} frames · {spreadStr}{jumpStr}{logStr} · {last.TargetName}";
             }
         }
 

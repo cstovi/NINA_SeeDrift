@@ -42,5 +42,23 @@ namespace NINA.Plugin.SeeDrift.Models {
         /// Used for frame hover tooltips; not the same as <see cref="JumpReason"/>.
         /// </summary>
         public string? SequencerLogHint { get; set; }
+
+        // --- Inter-frame edge (FrameIndex-1 → FrameIndex), from NINA log correlation ---
+
+        /// <summary>Log shows <c>DitherAfterExposures</c> strictly between previous and this exposure start.</summary>
+        public bool EdgeHadDitherTrigger { get; set; }
+
+        /// <summary>Log shows <c>CenterAfterDrift</c> strictly between previous and this exposure start.</summary>
+        public bool EdgeHadCenterTrigger { get; set; }
+
+        /// <summary>Guider-space Δx from <c>SelectDitherPulse</c> (NINA units), when parsed.</summary>
+        public double? EdgeDitherClaimedDx { get; set; }
+
+        /// <summary>Guider-space Δy from <c>SelectDitherPulse</c> (NINA units), when parsed.</summary>
+        public double? EdgeDitherClaimedDy { get; set; }
+
+        /// <summary>Multi-line hover for midpoint markers (dither/center between frames).</summary>
+        public string? EdgeSequencerHover { get; set; }
     }
 }
+
