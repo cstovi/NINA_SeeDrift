@@ -20,6 +20,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Pointing plot **subtitle** shows how many frames were plotted so sparse traces are obvious at a glance.
 - Slightly smaller plot markers when many frames are loaded (>100) for readability.
 
+## [0.4.2] — 2026-05-09
+
+### Fixed
+
+- **Plot hover:** Larger tracker snap radius (32 px); series order refactored so **Frames** scatter and **Jumps** draw above the path line and start/end markers — tooltips hit blue dots reliably. Frame tags include optional **SequencerLogHint**.
+- **NINA log correlation:** Match only **`Starting Trigger:`** lines for **Center after drift** and **Dither (after exposures)** (no plate-solve / drift-metric spam). Nearest trigger within **45 minutes** of each frame’s exposure time populates **SequencerLogHint** on every frame and augments **JumpReason** on detected jumps.
+
 ## [0.4.1] — 2026-05-09
 
 ### Fixed

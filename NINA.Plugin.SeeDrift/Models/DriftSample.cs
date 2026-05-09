@@ -36,5 +36,11 @@ namespace NINA.Plugin.SeeDrift.Models {
 
         /// <summary>Human-readable reason for the jump (pixel step, correlated log event, etc.).</summary>
         public string? JumpReason { get; set; }
+
+        /// <summary>
+        /// Nearest NINA <c>Starting Trigger:</c> line (center-after-drift / dither-after-exposures) for this exposure time, if any.
+        /// Used for frame hover tooltips; not the same as <see cref="JumpReason"/>.
+        /// </summary>
+        public string? SequencerLogHint { get; set; }
     }
 }

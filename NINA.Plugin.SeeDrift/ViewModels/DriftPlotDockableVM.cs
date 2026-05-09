@@ -36,7 +36,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             c.BindMouseEnter(new DelegatePlotCommand<OxyMouseEventArgs>(
                 (view, ctrl, args) =>
                     ctrl.AddHoverManipulator(view,
-                        new TrackerManipulator(view) { Snap = false, PointsOnly = true, FiresDistance = 15.0 },
+                        new TrackerManipulator(view) { Snap = false, PointsOnly = true, FiresDistance = 32.0 },
                         args)));
             return c;
         }
@@ -79,6 +79,16 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
         public string DriftModeLabel => _plugin.FolderImportPlotMode == Models.FolderPlotMode.PixelRegistration
             ? "pixel reg"
             : "header coords";
+
+        /// <summary>Text for blue frame dots — avoids duplicating sequencer text on jumps (already in JumpReason).</summary>
+        private static string BuildFrameScatterTag(DriftSample s) {
+            var t = $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}";
+            if (s.IsJump)
+                return $"{t} · Jump: {s.JumpReason ?? "large shift"}";
+            if (!string.IsNullOrEmpty(s.SequencerLogHint))
+                return $"{t} · {s.SequencerLogHint}";
+            return t;
+        }
 
         private PlotModel _plotModel = null!;
         public PlotModel PlotModel {
@@ -138,41 +148,6 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     pathLine.Points.Add(new DataPoint(GetX(s), GetY(s)));
                 model.Series.Add(pathLine);
 
-                var scatter = new ScatterSeries {
-                    Title               = "Frames",
-                    MarkerType          = MarkerType.Circle,
-                    MarkerSize          = dotSize,
-                    MarkerFill          = dotColor,
-                    MarkerStroke        = OxyColors.Transparent,
-                    TrackerFormatString = frameFmt
-                };
-                foreach (var s in ordered)
-                    scatter.Points.Add(new ScatterPoint(
-                        GetX(s), GetY(s),
-                        tag: s.IsJump
-                            ? $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss} · Jump: {s.JumpReason ?? "large shift"}"
-                            : $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}"));
-                model.Series.Add(scatter);
-
-                // Jumps first, then start/end on top so they're never obscured.
-                var jumpSamples = ordered.Where(s => s.IsJump).ToList();
-                if (jumpSamples.Count > 0) {
-                    var jumpSeries = new ScatterSeries {
-                        Title                 = $"Jumps ({jumpSamples.Count})",
-                        MarkerType            = MarkerType.Diamond,
-                        MarkerSize            = dotSize + 2.0,
-                        MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
-                        MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
-                        MarkerStrokeThickness = 1.0,
-                        TrackerFormatString   = jumpFmt
-                    };
-                    foreach (var s in jumpSamples)
-                        jumpSeries.Points.Add(new ScatterPoint(
-                            GetX(s), GetY(s),
-                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
-                    model.Series.Add(jumpSeries);
-                }
-
                 if (ordered.Count > 0) {
                     var first = ordered[0];
                     var startDot = new ScatterSeries {
@@ -201,12 +176,42 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     model.Series.Add(endDot);
                 }
 
+                var scatter = new ScatterSeries {
+                    Title               = "Frames",
+                    MarkerType          = MarkerType.Circle,
+                    MarkerSize          = dotSize,
+                    MarkerFill          = dotColor,
+                    MarkerStroke        = OxyColors.Transparent,
+                    TrackerFormatString = frameFmt
+                };
+                foreach (var s in ordered)
+                    scatter.Points.Add(new ScatterPoint(GetX(s), GetY(s), tag: BuildFrameScatterTag(s)));
+                model.Series.Add(scatter);
+
+                var jumpSamples = ordered.Where(s => s.IsJump).ToList();
+                if (jumpSamples.Count > 0) {
+                    var jumpSeries = new ScatterSeries {
+                        Title                 = $"Jumps ({jumpSamples.Count})",
+                        MarkerType            = MarkerType.Diamond,
+                        MarkerSize            = dotSize + 2.0,
+                        MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
+                        MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
+                        MarkerStrokeThickness = 1.0,
+                        TrackerFormatString   = jumpFmt
+                    };
+                    foreach (var s in jumpSamples)
+                        jumpSeries.Points.Add(new ScatterPoint(
+                            GetX(s), GetY(s),
+                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
+                    model.Series.Add(jumpSeries);
+                }
+
                 ApplyPixelAxes(model, ordered, GetX, GetY, useRaDec);
             } else {
                 var dotColor2  = OxyColor.FromRgb(100, 200, 255);
                 var dotSize2   = n > 100 ? 2.5 : 3.5;
 
-                // Header mode: faint line + dots + start/end highlights.
+                // Header mode: faint path, ref/end (under frames), frame dots, jump diamonds on top.
                 var line = new LineSeries {
                     Title                        = "ΔRA / ΔDec path",
                     Color                        = OxyColor.FromAColor(55, dotColor2),
@@ -218,41 +223,6 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 foreach (var s in ordered)
                     line.Points.Add(new DataPoint(s.DeltaRaArcSec, s.DeltaDecArcSec));
                 model.Series.Add(line);
-
-                var scatter2 = new ScatterSeries {
-                    Title               = "Frames",
-                    MarkerType          = MarkerType.Circle,
-                    MarkerSize          = dotSize2,
-                    MarkerFill          = dotColor2,
-                    MarkerStroke        = OxyColors.Transparent,
-                    TrackerFormatString = "Frame {Tag}\n{1}: {2:0.###}\"\n{3}: {4:0.###}\""
-                };
-                foreach (var s in ordered)
-                    scatter2.Points.Add(new ScatterPoint(
-                        s.DeltaRaArcSec, s.DeltaDecArcSec,
-                        tag: s.IsJump
-                            ? $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss} · Jump: {s.JumpReason ?? "large shift"}"
-                            : $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}"));
-                model.Series.Add(scatter2);
-
-                // Jumps first, then start/end on top.
-                var jumpSamples2 = ordered.Where(s => s.IsJump).ToList();
-                if (jumpSamples2.Count > 0) {
-                    var jumpSeries2 = new ScatterSeries {
-                        Title                 = $"Jumps ({jumpSamples2.Count})",
-                        MarkerType            = MarkerType.Diamond,
-                        MarkerSize            = dotSize2 + 2.0,
-                        MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
-                        MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
-                        MarkerStrokeThickness = 1.0,
-                        TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##}\"\n{3}: {4:0.##}\""
-                    };
-                    foreach (var s in jumpSamples2)
-                        jumpSeries2.Points.Add(new ScatterPoint(
-                            s.DeltaRaArcSec, s.DeltaDecArcSec,
-                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
-                    model.Series.Add(jumpSeries2);
-                }
 
                 if (ordered.Count > 0) {
                     var first = ordered[0];
@@ -279,6 +249,38 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     };
                     endDot2.Points.Add(new ScatterPoint(last.DeltaRaArcSec, last.DeltaDecArcSec));
                     model.Series.Add(endDot2);
+                }
+
+                var scatter2 = new ScatterSeries {
+                    Title               = "Frames",
+                    MarkerType          = MarkerType.Circle,
+                    MarkerSize          = dotSize2,
+                    MarkerFill          = dotColor2,
+                    MarkerStroke        = OxyColors.Transparent,
+                    TrackerFormatString = "Frame {Tag}\n{1}: {2:0.###}\"\n{3}: {4:0.###}\""
+                };
+                foreach (var s in ordered)
+                    scatter2.Points.Add(new ScatterPoint(
+                        s.DeltaRaArcSec, s.DeltaDecArcSec,
+                        tag: BuildFrameScatterTag(s)));
+                model.Series.Add(scatter2);
+
+                var jumpSamples2 = ordered.Where(s => s.IsJump).ToList();
+                if (jumpSamples2.Count > 0) {
+                    var jumpSeries2 = new ScatterSeries {
+                        Title                 = $"Jumps ({jumpSamples2.Count})",
+                        MarkerType            = MarkerType.Diamond,
+                        MarkerSize            = dotSize2 + 2.0,
+                        MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
+                        MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
+                        MarkerStrokeThickness = 1.0,
+                        TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##}\"\n{3}: {4:0.##}\""
+                    };
+                    foreach (var s in jumpSamples2)
+                        jumpSeries2.Points.Add(new ScatterPoint(
+                            s.DeltaRaArcSec, s.DeltaDecArcSec,
+                            tag: $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}"));
+                    model.Series.Add(jumpSeries2);
                 }
 
                 ApplyPointingAxes(model, samples);

@@ -9,36 +9,31 @@ using NINA.Plugin.SeeDrift.Models;
 namespace NINA.Plugin.SeeDrift.Utility {
 
     /// <summary>
-    /// Best-effort correlator: scans the nearest NINA log file for dither / slew / center /
-    /// flip / plate-solve events and appends those events to the JumpReason of any jump sample
-    /// whose timestamp is within a configurable window.
+    /// Correlates drift samples with NINA 3.x log lines. **Primary** sources are sequencer
+    /// <c>Starting Trigger:</c> lines (intent). Broad patterns (plate solve, per-frame drift metrics)
+    /// are not used for matching so the nearest event is not wrong noise.
     /// </summary>
     internal static class NinaLogCorrelator {
 
         /// <summary>
-        /// Maximum gap between a FITS frame timestamp and a log event to consider them correlated.
-        /// Jumps use exposure start time; sequencer triggers may log up to roughly one exposure later.
+        /// Max |Δt| between a FITS exposure start and a log event. Large enough for long subs +
+        /// delay before NINA logs the trigger after the last exposure of a group.
         /// </summary>
-        private static readonly TimeSpan MatchWindow = TimeSpan.FromSeconds(300);
+        private static readonly TimeSpan TriggerMatchWindow = TimeSpan.FromMinutes(45);
 
         private static readonly string LogFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "Logs");
 
-        // Patterns: first match wins per line. Put sequence *triggers* (intent) before generic guider text.
-        // NINA 3.2 uses names like CenterAfterDriftTrigger — not "center" + sep + "after".
-        private static readonly (Regex Pattern, string Label)[] _eventPatterns = {
-            (new Regex(@"Starting\s+Trigger:.*CenterAfterDrift", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Center after drift"),
-            (new Regex(@"Starting\s+Trigger:.*DitherAfterExposures", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Dither (after exposures)"),
-            (new Regex(@"centerafterdrift", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Center after drift"),
-            (new Regex(@"ditherafterexposures", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Dither (after exposures)"),
-            (new Regex(@"meridian.?flip", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Meridian flip"),
-            (new Regex(@"dither", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Dither"),
-            (new Regex(@"plate.?solv", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Plate solve"),
-            (new Regex(@"slewto|slew\.to|\bslewing\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Slew"),
-        };
+        /// <summary>Center-after-drift trigger fired (NINA sequencer).</summary>
+        private static readonly Regex RxTriggerCenter = new Regex(
+            @"Starting\s+Trigger:.*CenterAfterDrift", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        // NINA 3.x log line timestamp patterns — try several common NLog layouts.
+        /// <summary>Dither-after-exposures trigger fired (NINA sequencer).</summary>
+        private static readonly Regex RxTriggerDither = new Regex(
+            @"Starting\s+Trigger:.*DitherAfterExposures", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // NINA 3.x log line timestamp — prefix before first | or INFO field.
         private static readonly Regex[] _tsPatterns = {
             new Regex(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", RegexOptions.Compiled),
             new Regex(@"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", RegexOptions.Compiled),
@@ -46,82 +41,104 @@ namespace NINA.Plugin.SeeDrift.Utility {
         };
 
         /// <summary>
-        /// Tries to correlate jump samples with events in the NINA log for the session date.
-        /// Returns <c>(matched, logFound)</c> — <c>logFound</c> is true even if zero jumps
-        /// were within the match window, as long as the log file itself was readable.
+        /// Loads sequencer triggers from logs; sets <see cref="DriftSample.SequencerLogHint"/> on every
+        /// frame with a nearby trigger; augments <see cref="DriftSample.JumpReason"/> on jumps when matched.
+        /// Returns <c>(matched jump count, logFound)</c>.
         /// </summary>
         public static (int Matched, bool LogFound) AnnotateWithLogEvents(List<DriftSample> samples) {
             if (samples.Count == 0) return (0, false);
             try {
+                foreach (var s in samples)
+                    s.SequencerLogHint = null;
+
                 var sessionDate = samples[0].ExposureStartUtc.Date;
                 Logger.Debug($"SeeDrift: log correlator — sessionDate={sessionDate:yyyy-MM-dd}, first sample UTC={samples[0].ExposureStartUtc:o}");
 
-                var (events, logFound) = LoadEvents(sessionDate);
-                Logger.Debug($"SeeDrift: log correlator — logFound={logFound}, events loaded={events.Count}");
-                if (!logFound) return (0, false);
-                if (events.Count == 0) return (0, true);
+                var triggers = new List<LogEvent>();
+                if (!LoadSequencerTriggers(sessionDate, triggers))
+                    return (0, false);
 
-                var jumpSamples = samples.Where(s => s.IsJump).ToList();
-                Logger.Debug($"SeeDrift: log correlator — jump samples to match={jumpSamples.Count}, matchWindow={MatchWindow.TotalSeconds}s");
-                if (jumpSamples.Count > 0) {
-                    // Log the closest gap for the first jump so we can diagnose window issues.
-                    var firstJump = jumpSamples[0];
-                    var nearest = events.OrderBy(e => (e.UtcTime - firstJump.ExposureStartUtc).Duration()).First();
-                    Logger.Debug($"SeeDrift: log correlator — first jump UTC={firstJump.ExposureStartUtc:o}, nearest event '{nearest.Label}' UTC={nearest.UtcTime:o}, gap={( nearest.UtcTime - firstJump.ExposureStartUtc).Duration().TotalSeconds:F0}s");
+                Logger.Debug($"SeeDrift: log correlator — sequencer triggers={triggers.Count}");
+                if (triggers.Count == 0) {
+                    foreach (var s in samples)
+                        s.SequencerLogHint = null;
+                    return (0, true);
                 }
 
-                var matched = 0;
-                foreach (var sample in samples) {
-                    if (!sample.IsJump) continue;
-                    var closest = FindClosestEvent(events, sample.ExposureStartUtc);
-                    if (closest == null) continue;
+                var matchedJumps = 0;
+                var firstJump = samples.FirstOrDefault(s => s.IsJump);
+                if (firstJump != null) {
+                    var nearest = triggers.OrderBy(e => (e.UtcTime - firstJump!.ExposureStartUtc).Duration()).First();
+                    var gap = (nearest.UtcTime - firstJump.ExposureStartUtc).Duration();
+                    Logger.Debug(
+                        $"SeeDrift: log correlator — first jump UTC={firstJump.ExposureStartUtc:o}, nearest trigger '{nearest.Label}' UTC={nearest.UtcTime:o}, gap={gap.TotalSeconds:F0}s (window={TriggerMatchWindow.TotalMinutes:F0} min)");
+                }
 
+                foreach (var sample in samples.OrderBy(s => s.FrameIndex)) {
+                    var n = FindNearestWithinWindow(triggers, sample.ExposureStartUtc, TriggerMatchWindow);
+                    sample.SequencerLogHint = n == null
+                        ? null
+                        : $"{n.Label} @ {n.UtcTime.ToLocalTime():HH:mm:ss}";
+
+                    if (!sample.IsJump || n == null)
+                        continue;
+
+                    var note = $"→ {n.Label} @ {n.UtcTime.ToLocalTime():HH:mm:ss}";
                     sample.JumpReason = string.IsNullOrEmpty(sample.JumpReason)
-                        ? $"→ {closest.Label} @ {closest.UtcTime:HH:mm:ss}"
-                        : $"{sample.JumpReason} → {closest.Label} @ {closest.UtcTime:HH:mm:ss}";
-                    matched++;
+                        ? note
+                        : $"{sample.JumpReason} {note}";
+                    matchedJumps++;
                 }
-                Logger.Debug($"SeeDrift: log correlator — matched={matched}");
-                return (matched, true);
+
+                Logger.Debug($"SeeDrift: log correlator — matched jumps={matchedJumps}");
+                return (matchedJumps, true);
             } catch (Exception ex) {
                 Logger.Debug($"SeeDrift: log correlation skipped: {ex.Message}");
                 return (0, false);
             }
         }
 
-        // -------------------------------------------------------------------
-
         private sealed class LogEvent {
             public DateTime UtcTime { get; set; }
             public string Label { get; set; } = "";
         }
 
-        private static LogEvent? FindClosestEvent(List<LogEvent> events, DateTime sampleUtc) {
+        /// <summary>Smallest gap within window; null if none within maxGap (inclusive boundary).</summary>
+        private static LogEvent? FindNearestWithinWindow(
+                IReadOnlyList<LogEvent> events,
+                DateTime sampleUtc,
+                TimeSpan maxGap) {
             LogEvent? best = null;
-            var bestGap = MatchWindow;
+            var bestGap = TimeSpan.MaxValue;
             foreach (var ev in events) {
                 var gap = (ev.UtcTime - sampleUtc).Duration();
-                if (gap < bestGap) { bestGap = gap; best = ev; }
+                if (gap > maxGap)
+                    continue;
+                if (gap < bestGap) {
+                    bestGap = gap;
+                    best = ev;
+                }
             }
             return best;
         }
 
-        private static (List<LogEvent> Events, bool LogFound) LoadEvents(DateTime sessionDate) {
-            var events = new List<LogEvent>();
-            if (!Directory.Exists(LogFolder)) return (events, false);
+        /// <returns>False if NINA log folder missing or no log file read.</returns>
+        private static bool LoadSequencerTriggers(DateTime sessionDate, List<LogEvent> triggers) {
+            if (!Directory.Exists(LogFolder))
+                return false;
 
             var logFound = false;
-            var seen = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // Try ±1 day to handle evening sessions that roll past midnight.
             for (var offset = -1; offset <= 1; offset++) {
                 var candidate = FindLogFile(sessionDate.AddDays(offset));
                 if (candidate == null || !seen.Add(candidate)) continue;
                 logFound = true;
-                ParseLog(candidate, events);
+                ParseSequencerTriggers(candidate, triggers);
             }
 
-            return (events, logFound);
+            triggers.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
+            return logFound;
         }
 
         private static string? FindLogFile(DateTime date) {
@@ -138,25 +155,26 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (files.Length > 0) return files[0];
             }
 
-            // Fallback: newest .log file in the folder
             var allLogs = Directory.GetFiles(LogFolder, "*.log", SearchOption.TopDirectoryOnly);
             if (allLogs.Length == 0) return null;
             Array.Sort(allLogs, (a, b) => File.GetLastWriteTimeUtc(b).CompareTo(File.GetLastWriteTimeUtc(a)));
             return allLogs[0];
         }
 
-        private static void ParseLog(string path, List<LogEvent> events) {
+        private static void ParseSequencerTriggers(string path, List<LogEvent> triggers) {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var sr = new StreamReader(fs);
             string? line;
             while ((line = sr.ReadLine()) != null) {
-                if (!TryParseTimestamp(line, out var ts)) continue;
-                foreach (var (pattern, label) in _eventPatterns) {
-                    if (pattern.IsMatch(line)) {
-                        events.Add(new LogEvent { UtcTime = ts, Label = label });
-                        break; // only one label per line
-                    }
+                if (!TryParseTimestamp(line, out var ts))
+                    continue;
+
+                if (RxTriggerCenter.IsMatch(line)) {
+                    triggers.Add(new LogEvent { UtcTime = ts, Label = "Center after drift" });
+                    continue;
                 }
+                if (RxTriggerDither.IsMatch(line))
+                    triggers.Add(new LogEvent { UtcTime = ts, Label = "Dither (after exposures)" });
             }
         }
 
@@ -166,7 +184,6 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 var m = rx.Match(line);
                 if (!m.Success) continue;
 
-                // If the string carries an explicit UTC marker (Z / +00:00) honour it.
                 if (DateTime.TryParse(m.Groups[1].Value,
                         System.Globalization.CultureInfo.InvariantCulture,
                         System.Globalization.DateTimeStyles.RoundtripKind,
@@ -175,7 +192,6 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     return true;
                 }
 
-                // NINA logs local time (no UTC suffix) — treat as local and convert to UTC.
                 if (DateTime.TryParse(m.Groups[1].Value,
                         System.Globalization.CultureInfo.InvariantCulture,
                         System.Globalization.DateTimeStyles.AssumeLocal | System.Globalization.DateTimeStyles.AdjustToUniversal,
