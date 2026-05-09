@@ -133,6 +133,11 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return;
             }
 
+            if (profile.ImageFileSettings == null) {
+                Logger.Error("SeeDrift: Active profile has no image file settings.");
+                return;
+            }
+
             progress?.Report(new ApplicationStatus {
                 Source = "SeeDrift",
                 Status = "Scanning image folder for LIGHT files in your UTC window…",
@@ -142,6 +147,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             var windowed = FitsFolderImport.EnumerateSortedRecursiveForUtcWindow(
                 root,
+                profile.ImageFileSettings,
                 obsStartUtc,
                 obsEndUtc,
                 msg => progress?.Report(new ApplicationStatus {

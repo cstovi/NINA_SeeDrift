@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.6] — 2026-05-09
+
+### Changed
+
+- **Folder scan:** UTC-window discovery follows the active profile’s **NINA LIGHT file pattern** (directory segments derived from **Options → Imaging → File pattern**), matching each level with NINA’s pattern tokens—`$$IMAGETYPE$$` resolves to **LIGHT**—instead of a fixed list of skipped folder names.
+
 ## [0.5.5] — 2026-05-09
 
 ### Changed

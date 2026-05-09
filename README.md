@@ -1,6 +1,6 @@
 # SeeDrift — NINA plugin
 
-**Plate-solves** saved **LIGHT** frames under your **NINA image file directory** (recursive scan, skipping known processing folders such as `_rejected` / `calibrated`), filtered by a **UTC observation window**. Drift is reported as **ΔRA / ΔDec in arcseconds** versus the first solved frame of that window. Output is **HTML** with a **Chart.js** scatter plot; when session logs match the run, **dither** and **center-after-drift** sequencer triggers appear in a **table** (same correlation logic as before — strict between-frame intervals).
+**Plate-solves** saved **LIGHT** frames under your **NINA image file directory**, walking only the **folder layout implied by your Imaging file pattern for LIGHT frames** (active profile), filtered by a **UTC observation window**. Drift is reported as **ΔRA / ΔDec in arcseconds** versus the first solved frame of that window. Output is **HTML** with a **Chart.js** scatter plot; when session logs match the run, **dither** and **center-after-drift** sequencer triggers appear in a **table** (same correlation logic as before — strict between-frame intervals).
 
 There is **no live dockable chart** and **no pixel / header-only drift path** in this version.
 
@@ -32,7 +32,7 @@ Set **Options → Imaging → image file path** in NINA to the folder where ligh
 ### Sequencer (recommended)
 
 1. Add **SeeDrift Start** before capture and **SeeDrift Stop** when finished (same target / session as needed).
-2. **Stop** runs the batch: finds LIGHT `.fits` / `.fit` / `.fts` **under that folder and allowed subfolders** (does not descend into calibration / reject / master-style directories — see manual), keeps files whose observation UTC is **inside** `[Start, Stop]` (inclusive), sorts them (filename exposure index, then header times), plate-solves each frame, builds drift samples, and **appends** a section to the rolling **night HTML** in your configured export folder.
+2. **Stop** runs the batch: finds LIGHT `.fits` / `.fit` / `.fts` **only under paths that match your NINA LIGHT file pattern** (see manual), keeps files whose observation UTC is **inside** `[Start, Stop]` (inclusive), sorts them (filename exposure index, then header times), plate-solves each frame, builds drift samples, and **appends** a section to the rolling **night HTML** in your configured export folder.
 
 ### Test report (options panel)
 
