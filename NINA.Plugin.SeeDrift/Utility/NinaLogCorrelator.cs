@@ -48,8 +48,9 @@ namespace NINA.Plugin.SeeDrift.Utility {
             if (samples.Count == 0) return (0, false);
             try {
                 var sessionDate = samples[0].ExposureStartUtc.Date;
-                var events = LoadEvents(sessionDate);
-                if (events.Count == 0) return (0, false);
+                var (events, logFound) = LoadEvents(sessionDate);
+                if (!logFound) return (0, false);
+                if (events.Count == 0) return (0, true);
 
                 var matched = 0;
                 foreach (var sample in samples) {
@@ -86,18 +87,22 @@ namespace NINA.Plugin.SeeDrift.Utility {
             return best;
         }
 
-        private static List<LogEvent> LoadEvents(DateTime sessionDate) {
+        private static (List<LogEvent> Events, bool LogFound) LoadEvents(DateTime sessionDate) {
             var events = new List<LogEvent>();
-            if (!Directory.Exists(LogFolder)) return events;
+            if (!Directory.Exists(LogFolder)) return (events, false);
+
+            var logFound = false;
+            var seen = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // Try ±1 day to handle evening sessions that roll past midnight.
             for (var offset = -1; offset <= 1; offset++) {
                 var candidate = FindLogFile(sessionDate.AddDays(offset));
-                if (candidate == null) continue;
+                if (candidate == null || !seen.Add(candidate)) continue;
+                logFound = true;
                 ParseLog(candidate, events);
             }
 
-            return events;
+            return (events, logFound);
         }
 
         private static string? FindLogFile(DateTime date) {
@@ -141,18 +146,22 @@ namespace NINA.Plugin.SeeDrift.Utility {
             foreach (var rx in _tsPatterns) {
                 var m = rx.Match(line);
                 if (!m.Success) continue;
+
+                // If the string carries an explicit UTC marker (Z / +00:00) honour it.
                 if (DateTime.TryParse(m.Groups[1].Value,
                         System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
-                        out utc))
-                    return true;
-                if (DateTime.TryParse(m.Groups[1].Value,
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.None,
-                        out var dt)) {
-                    utc = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+                        System.Globalization.DateTimeStyles.RoundtripKind,
+                        out var dtRoundtrip) && dtRoundtrip.Kind == DateTimeKind.Utc) {
+                    utc = dtRoundtrip;
                     return true;
                 }
+
+                // NINA logs local time (no UTC suffix) — treat as local and convert to UTC.
+                if (DateTime.TryParse(m.Groups[1].Value,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AssumeLocal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                        out utc))
+                    return true;
             }
             return false;
         }
