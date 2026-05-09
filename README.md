@@ -1,6 +1,6 @@
 # SeeDrift — NINA plugin
 
-**Plate-solves** saved **LIGHT** frames under your **NINA image file directory**, walking only the **folder layout implied by your Imaging file pattern for LIGHT frames** (active profile), filtered by a **UTC observation window**. Drift is reported as **ΔRA / ΔDec in arcseconds** versus the first solved frame of that window. Output is **HTML** with a **Tailwind**-styled page, **Chart.js** drift plot (**pan**, **wheel zoom**, double‑click reset), and when session logs match the run, **dither** / **center-after-drift** rows in a **table** (same correlation logic — strict between-frame intervals). If logs do not correlate, the report still explains why the sequencer section may be empty.
+**Plate-solves** saved **LIGHT** frames under your **NINA image file directory**, walking only the **folder layout implied by your Imaging file pattern for LIGHT frames** (active profile), filtered by an **observation time window** (FITS times vs UTC bounds internally). Drift is reported as **ΔRA / ΔDec in arcseconds** versus the first solved frame of that window. Output is **HTML** with a **Tailwind**-styled page, **Chart.js** drift plot (**pan**, **wheel zoom**, double‑click reset), and when session logs match the run, **dither** / **center-after-drift** rows in a **table** (same correlation logic — strict between-frame intervals). If logs do not correlate, the report still explains why the sequencer section may be empty.
 
 There is **no live dockable chart** and **no pixel / header-only drift path** in this version.
 
@@ -32,11 +32,11 @@ Set **Options → Imaging → image file path** in NINA to the folder where ligh
 ### Sequencer (recommended)
 
 1. Add **SeeDrift Start** before capture and **SeeDrift Stop** when finished (same target / session as needed).
-2. **Stop** runs the batch: finds LIGHT `.fits` / `.fit` / `.fts` **only under paths that match your NINA LIGHT file pattern** (see manual), keeps files whose observation UTC is **inside** `[Start, Stop]` (inclusive), sorts them (filename exposure index, then header times), plate-solves each frame, builds drift samples, and **appends** a section to the rolling **night HTML** in your configured export folder.
+2. **Stop** runs the batch: finds LIGHT `.fits` / `.fit` / `.fts` **only under paths that match your NINA LIGHT file pattern** (see manual), keeps files whose observation time is **inside** `[Start, Stop]` (inclusive; FITS keywords converted to UTC), sorts them (filename exposure index, then header times), plate-solves each frame, builds drift samples, and **appends** a section to the rolling **night HTML** in your configured export folder.
 
 ### Test report (options panel)
 
-Under **Plugins → SeeDrift**, choose **observation start/end** with the **date picker** and **hour/minute** dropdowns (**UTC**). Click **Run test report**. Uses the same pipeline as Stop but with your persisted window instead of Arm timestamps. **While the run is active**, status text and a **progress bar** appear on this page (hidden when idle). If the year in your window does not match the files on disk (for example 2025 vs 2026), SeeDrift skips opening those FITS headers and finishes quickly.
+Under **Plugins → SeeDrift**, choose **observation start/end** with the **date picker** and **hour/minute** dropdowns (**your PC’s local time**). Click **Run test report**. Uses the same pipeline as Stop but with your persisted window instead of Arm timestamps. **While the run is active**, status text and a **progress bar** appear on this page (hidden when idle). If the year in your window does not match the files on disk (for example 2025 vs 2026), SeeDrift skips opening those FITS headers and finishes quickly.
 
 ### Session bookkeeping
 

@@ -12,10 +12,10 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Scratch folder for plate-solve intermediates (reserved for future use).</summary>
         public string TempWorkingFolder { get; set; } = "";
 
-        /// <summary>UTC ISO 8601 text for Test report observation window start (e.g. <c>2025-05-09T22:00:00Z</c>).</summary>
+        /// <summary>Test window start instant persisted as UTC ISO (derived from the plugin’s local date/time pickers).</summary>
         public string TestObservationStartUtcIso { get; set; } = "";
 
-        /// <summary>UTC ISO 8601 text for Test report observation window end.</summary>
+        /// <summary>Test window end instant persisted as UTC ISO (derived from the plugin’s local date/time pickers).</summary>
         public string TestObservationEndUtcIso { get; set; } = "";
 
         private static string SettingsPath => Path.Combine(

@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.5.10] — 2026-05-09
+
+### Changed
+
+- **Test report:** Observation start/end pickers use **local wall clock** (labels and defaults); values are still saved as UTC ISO in `settings.json` for compatibility. Existing saved windows reload as the correct local equivalent.
+- **Log correlation:** Chooses log files by **local calendar date** from the first frame (matches typical NINA log filenames and local timestamps). HTML empty-state copy clarifies local vs rotation/path mismatches.
+
 ## [0.5.9] — 2026-05-09
 
 ### Changed

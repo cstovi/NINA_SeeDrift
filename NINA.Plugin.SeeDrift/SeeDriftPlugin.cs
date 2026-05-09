@@ -26,18 +26,19 @@ namespace NINA.Plugin.SeeDrift {
     [Export(typeof(IPluginManifest))]
     [Export]
     public class SeeDriftPlugin : PluginBase, IPluginManifest, INotifyPropertyChanged {
-        private static readonly int[] UtcHourItems = Enumerable.Range(0, 24).ToArray();
-        private static readonly int[] UtcMinuteItems = Enumerable.Range(0, 60).ToArray();
+        private static readonly int[] ClockHourItems = Enumerable.Range(0, 24).ToArray();
+        private static readonly int[] ClockMinuteItems = Enumerable.Range(0, 60).ToArray();
 
         private bool _isInitializing;
         private bool _isSyncing;
 
-        private DateTime _testStartDateUtc;
-        private int _testStartHourUtc;
-        private int _testStartMinuteUtc;
-        private DateTime _testEndDateUtc;
-        private int _testEndHourUtc;
-        private int _testEndMinuteUtc;
+        /// <summary>Calendar date only (midnight, <see cref="DateTimeKind.Unspecified"/>).</summary>
+        private DateTime _testStartDate;
+        private int _testStartHour;
+        private int _testStartMinute;
+        private DateTime _testEndDate;
+        private int _testEndHour;
+        private int _testEndMinute;
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null)
@@ -51,11 +52,11 @@ namespace NINA.Plugin.SeeDrift {
         public ICommand ResetSessionCommand { get; }
         public ICommand RunTestReportCommand { get; }
 
-        /// <summary>ComboBox items for UTC hour (0–23).</summary>
-        public IReadOnlyList<int> UtcHours => UtcHourItems;
+        /// <summary>ComboBox items for hour (0–23), local wall clock.</summary>
+        public IReadOnlyList<int> ObservationClockHours => ClockHourItems;
 
-        /// <summary>ComboBox items for UTC minute (0–59).</summary>
-        public IReadOnlyList<int> UtcMinutes => UtcMinuteItems;
+        /// <summary>ComboBox items for minute (0–59), local wall clock.</summary>
+        public IReadOnlyList<int> ObservationClockMinutes => ClockMinuteItems;
 
         [ImportingConstructor]
         public SeeDriftPlugin(
@@ -80,112 +81,117 @@ namespace NINA.Plugin.SeeDrift {
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
         }
 
-        /// <summary>UTC calendar date for test window start; time uses <see cref="TestObservationStartHourUtc"/> / Minute.</summary>
-        public DateTime TestObservationStartDateUtc {
-            get => _testStartDateUtc;
+        /// <summary>Local calendar date for test window start; time uses <see cref="TestObservationStartHour"/> / <see cref="TestObservationStartMinute"/>.</summary>
+        public DateTime TestObservationStartDate {
+            get => _testStartDate;
             set {
-                var d = new DateTime(value.Year, value.Month, value.Day, 0, 0, 0, DateTimeKind.Utc);
-                if (d == _testStartDateUtc) return;
-                _testStartDateUtc = d;
+                var d = new DateTime(value.Year, value.Month, value.Day, 0, 0, 0, DateTimeKind.Unspecified);
+                if (d == _testStartDate) return;
+                _testStartDate = d;
                 RaisePropertyChanged();
                 SyncSettingsFromProperties();
             }
         }
 
-        public int TestObservationStartHourUtc {
-            get => _testStartHourUtc;
+        public int TestObservationStartHour {
+            get => _testStartHour;
             set {
                 var h = Math.Clamp(value, 0, 23);
-                if (h == _testStartHourUtc) return;
-                _testStartHourUtc = h;
+                if (h == _testStartHour) return;
+                _testStartHour = h;
                 RaisePropertyChanged();
                 SyncSettingsFromProperties();
             }
         }
 
-        public int TestObservationStartMinuteUtc {
-            get => _testStartMinuteUtc;
+        public int TestObservationStartMinute {
+            get => _testStartMinute;
             set {
                 var m = Math.Clamp(value, 0, 59);
-                if (m == _testStartMinuteUtc) return;
-                _testStartMinuteUtc = m;
+                if (m == _testStartMinute) return;
+                _testStartMinute = m;
                 RaisePropertyChanged();
                 SyncSettingsFromProperties();
             }
         }
 
-        /// <summary>UTC calendar date for test window end.</summary>
-        public DateTime TestObservationEndDateUtc {
-            get => _testEndDateUtc;
+        /// <summary>Local calendar date for test window end.</summary>
+        public DateTime TestObservationEndDate {
+            get => _testEndDate;
             set {
-                var d = new DateTime(value.Year, value.Month, value.Day, 0, 0, 0, DateTimeKind.Utc);
-                if (d == _testEndDateUtc) return;
-                _testEndDateUtc = d;
+                var d = new DateTime(value.Year, value.Month, value.Day, 0, 0, 0, DateTimeKind.Unspecified);
+                if (d == _testEndDate) return;
+                _testEndDate = d;
                 RaisePropertyChanged();
                 SyncSettingsFromProperties();
             }
         }
 
-        public int TestObservationEndHourUtc {
-            get => _testEndHourUtc;
+        public int TestObservationEndHour {
+            get => _testEndHour;
             set {
                 var h = Math.Clamp(value, 0, 23);
-                if (h == _testEndHourUtc) return;
-                _testEndHourUtc = h;
+                if (h == _testEndHour) return;
+                _testEndHour = h;
                 RaisePropertyChanged();
                 SyncSettingsFromProperties();
             }
         }
 
-        public int TestObservationEndMinuteUtc {
-            get => _testEndMinuteUtc;
+        public int TestObservationEndMinute {
+            get => _testEndMinute;
             set {
                 var m = Math.Clamp(value, 0, 59);
-                if (m == _testEndMinuteUtc) return;
-                _testEndMinuteUtc = m;
+                if (m == _testEndMinute) return;
+                _testEndMinute = m;
                 RaisePropertyChanged();
                 SyncSettingsFromProperties();
             }
         }
 
         private void ApplyTestWindowFromSettingsStrings() {
-            var today = DateTime.UtcNow.Date;
+            static DateTime TodayDateOnly() {
+                var t = DateTime.Today;
+                return new DateTime(t.Year, t.Month, t.Day, 0, 0, 0, DateTimeKind.Unspecified);
+            }
 
             if (!string.IsNullOrWhiteSpace(Settings.TestObservationStartUtcIso) &&
-                    TryParseUtcIso(Settings.TestObservationStartUtcIso, out var s)) {
-                _testStartDateUtc = new DateTime(s.Year, s.Month, s.Day, 0, 0, 0, DateTimeKind.Utc);
-                _testStartHourUtc = s.Hour;
-                _testStartMinuteUtc = s.Minute;
+                    TryParseUtcIso(Settings.TestObservationStartUtcIso, out var startUtc)) {
+                var local = startUtc.ToLocalTime();
+                _testStartDate = new DateTime(local.Year, local.Month, local.Day, 0, 0, 0, DateTimeKind.Unspecified);
+                _testStartHour = local.Hour;
+                _testStartMinute = local.Minute;
             } else {
-                _testStartDateUtc = today;
-                _testStartHourUtc = 0;
-                _testStartMinuteUtc = 0;
+                _testStartDate = TodayDateOnly();
+                _testStartHour = 0;
+                _testStartMinute = 0;
             }
 
             if (!string.IsNullOrWhiteSpace(Settings.TestObservationEndUtcIso) &&
-                    TryParseUtcIso(Settings.TestObservationEndUtcIso, out var e)) {
-                _testEndDateUtc = new DateTime(e.Year, e.Month, e.Day, 0, 0, 0, DateTimeKind.Utc);
-                _testEndHourUtc = e.Hour;
-                _testEndMinuteUtc = e.Minute;
+                    TryParseUtcIso(Settings.TestObservationEndUtcIso, out var endUtc)) {
+                var local = endUtc.ToLocalTime();
+                _testEndDate = new DateTime(local.Year, local.Month, local.Day, 0, 0, 0, DateTimeKind.Unspecified);
+                _testEndHour = local.Hour;
+                _testEndMinute = local.Minute;
             } else {
-                _testEndDateUtc = today;
-                _testEndHourUtc = 23;
-                _testEndMinuteUtc = 59;
+                _testEndDate = TodayDateOnly();
+                _testEndHour = 23;
+                _testEndMinute = 59;
             }
 
-            RaisePropertyChanged(nameof(TestObservationStartDateUtc));
-            RaisePropertyChanged(nameof(TestObservationStartHourUtc));
-            RaisePropertyChanged(nameof(TestObservationStartMinuteUtc));
-            RaisePropertyChanged(nameof(TestObservationEndDateUtc));
-            RaisePropertyChanged(nameof(TestObservationEndHourUtc));
-            RaisePropertyChanged(nameof(TestObservationEndMinuteUtc));
+            RaisePropertyChanged(nameof(TestObservationStartDate));
+            RaisePropertyChanged(nameof(TestObservationStartHour));
+            RaisePropertyChanged(nameof(TestObservationStartMinute));
+            RaisePropertyChanged(nameof(TestObservationEndDate));
+            RaisePropertyChanged(nameof(TestObservationEndHour));
+            RaisePropertyChanged(nameof(TestObservationEndMinute));
         }
 
         private async Task RunTestReportFireAsync() {
             await Application.Current!.Dispatcher.InvokeAsync(BeginTestReportUi);
             try {
-                var startUtc = CombineUtc(_testStartDateUtc, _testStartHourUtc, _testStartMinuteUtc);
-                var endUtc = CombineUtc(_testEndDateUtc, _testEndHourUtc, _testEndMinuteUtc);
+                var startUtc = LocalWallClockToUtc(_testStartDate, _testStartHour, _testStartMinute);
+                var endUtc = LocalWallClockToUtc(_testEndDate, _testEndHour, _testEndMinute);
                 var progress = new Progress<ApplicationStatus>(OnTestReportApplicationStatus);
                 await DriftTracker.RunTestReportAsync(startUtc, endUtc, progress, CancellationToken.None)
                     .ConfigureAwait(false);
@@ -267,8 +273,13 @@ namespace NINA.Plugin.SeeDrift {
                 app.Dispatcher.Invoke(Apply);
         }
 
-        private static DateTime CombineUtc(DateTime dateUtc, int hour, int minute) =>
-            new DateTime(dateUtc.Year, dateUtc.Month, dateUtc.Day, hour, minute, 0, DateTimeKind.Utc);
+        /// <summary>Interprets date + time as this PC’s local zone and returns UTC (for FITS window filtering).</summary>
+        private static DateTime LocalWallClockToUtc(DateTime dateOnlyUnspecified, int hour, int minute) {
+            var local = new DateTime(
+                dateOnlyUnspecified.Year, dateOnlyUnspecified.Month, dateOnlyUnspecified.Day,
+                hour, minute, 0, DateTimeKind.Local);
+            return local.ToUniversalTime();
+        }
 
         private static bool TryParseUtcIso(string? text, out DateTime utc) {
             utc = default;
@@ -282,9 +293,10 @@ namespace NINA.Plugin.SeeDrift {
             return false;
         }
 
-        private static string FormatUtcIso(DateTime dateUtc, int hour, int minute) {
-            var dt = CombineUtc(dateUtc, hour, minute);
-            return dt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+        /// <summary>Persists the chosen local instant as UTC ISO Z (settings remain compatible with earlier builds).</summary>
+        private static string FormatUtcIso(DateTime dateOnlyUnspecified, int hour, int minute) {
+            var utc = LocalWallClockToUtc(dateOnlyUnspecified, hour, minute);
+            return utc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
         }
 
         public override Task Teardown() {
@@ -298,8 +310,8 @@ namespace NINA.Plugin.SeeDrift {
             try {
                 Settings.HtmlExportFolder = _htmlExportFolder;
                 Settings.TempWorkingFolder = _tempWorkingFolder;
-                Settings.TestObservationStartUtcIso = FormatUtcIso(_testStartDateUtc, _testStartHourUtc, _testStartMinuteUtc);
-                Settings.TestObservationEndUtcIso = FormatUtcIso(_testEndDateUtc, _testEndHourUtc, _testEndMinuteUtc);
+                Settings.TestObservationStartUtcIso = FormatUtcIso(_testStartDate, _testStartHour, _testStartMinute);
+                Settings.TestObservationEndUtcIso = FormatUtcIso(_testEndDate, _testEndHour, _testEndMinute);
                 Settings.Save();
             } finally {
                 _isSyncing = false;

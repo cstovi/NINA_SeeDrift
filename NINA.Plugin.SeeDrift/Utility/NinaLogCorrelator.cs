@@ -105,8 +105,9 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     s.EdgeSequencerMarkers = null;
                 }
 
-                var sessionDate = samples[0].ExposureStartUtc.Date;
-                Logger.Debug($"SeeDrift: log correlator — sessionDate={sessionDate:yyyy-MM-dd}, first sample UTC={samples[0].ExposureStartUtc:o}");
+                // Log filenames (and typical NINA timestamps without "Z") follow local calendar days — use local date, not UTC midnight date.
+                var sessionDate = samples[0].ExposureStartUtc.ToLocalTime().Date;
+                Logger.Debug($"SeeDrift: log correlator — sessionDate(local)={sessionDate:yyyy-MM-dd}, first sample UTC={samples[0].ExposureStartUtc:o}");
 
                 var triggers = new List<TimedTrigger>();
                 var pulses = new List<DitherPulse>();

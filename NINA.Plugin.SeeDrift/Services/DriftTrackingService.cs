@@ -140,7 +140,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             progress?.Report(new ApplicationStatus {
                 Source = "SeeDrift",
-                Status = "Scanning image folder for LIGHT files in your UTC window…",
+                Status = "Scanning image folder for LIGHT files in your observation window…",
                 Progress = 0,
                 MaxProgress = 0
             });
