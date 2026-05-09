@@ -19,6 +19,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.17] — 2026-05-09
+
+### Changed
+
+- **Pipeline order:** After FAST reads identify LIGHT frames per FITS target, SeeDrift **skips plate solving** when **no target has enough LIGHT frames** to ever reach **Minimum exposures per target** (same OBJECT/header grouping as the report). After solving, if **no target reached** the threshold in **solved** frames, SeeDrift **skips NINA sequencer log correlation** (still writes the night HTML amber section).
+- **Status / Test report panel:** Final **`Complete —`** line includes the same guidance as the HTML amber box (threshold, Plugins → SeeDrift, best-target counts when relevant).
+
 ## [0.7.16] — 2026-05-09
 
 ### Changed

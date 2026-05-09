@@ -27,6 +27,12 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             /// <summary>NINA log file path(s) read for this batch (Stop = folder listing; Test = chosen file).</summary>
             public IReadOnlyList<string> SourceLogPaths { get; init; } = Array.Empty<string>();
+
+            /// <summary>
+            /// When plate solving was skipped because FITS OBJECT counts could not reach minimum exposures, the largest
+            /// LIGHT frame count seen on any single target (from headers before solve).
+            /// </summary>
+            public int? PresolveMaxLightsPerBestTarget { get; init; }
         }
 
         private sealed class TraceState {
@@ -214,6 +220,48 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return false;
             }
 
+            var minExpTarget = Math.Max(1, Math.Min(500, _plugin.MinExposuresPerTarget));
+            var maxLightsAnyTarget = MaxLightFramesPerBestTarget(windowed);
+            if (maxLightsAnyTarget < minExpTarget) {
+                SeeDriftLog.Info(
+                    $"SeeDrift: skipping plate solve — no FITS OBJECT has ≥{minExpTarget} LIGHT frames (best target={maxLightsAnyTarget}).");
+                Report(
+                    $"Skipping plate solve — no target has {minExpTarget}+ LIGHT frames in this log (best target has {maxLightsAnyTarget}). " +
+                    "Lower Minimum exposures per target or capture more frames.");
+
+                string? presolveNightPath = null;
+                string? presolveNightErr = null;
+                await Application.Current!.Dispatcher.InvokeAsync(() => {
+                    CompletedTargets.Add(new CompletedTarget {
+                        Name = "",
+                        Samples = Array.Empty<DriftSample>(),
+                        SourceLogPaths = logFilesToRead,
+                        PresolveMaxLightsPerBestTarget = maxLightsAnyTarget
+                    });
+                    if (!TryWriteNightReport(out presolveNightPath, out presolveNightErr)) {
+                        if (CompletedTargets.Count > 0)
+                            CompletedTargets.RemoveAt(CompletedTargets.Count - 1);
+                    }
+                });
+
+                if (presolveNightErr != null) {
+                    Report(
+                        $"Stopped — could not save night HTML: {presolveNightErr}. " +
+                        "Check Plugins → SeeDrift → Night report folder (empty = Documents\\SeeDrift). See %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log.");
+                    SeeDriftLog.Error($"SeeDrift: night HTML save failed (pre-solve skip path) — {presolveNightErr}");
+                    return false;
+                }
+
+                var completeDetail =
+                    $"Complete — night report saved. No target in this run had at least {minExpTarget} LIGHT frame(s) for any FITS target " +
+                    $"(best target: {maxLightsAnyTarget}); plate solving was skipped. " +
+                    "Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
+                    $"{presolveNightPath}";
+                Report(completeDetail, 1, 1);
+                SeeDriftLog.Info($"SeeDrift: run finished without plate solve — HTML → {presolveNightPath}");
+                return true;
+            }
+
             Report("Initializing plate solver…");
 
             progress?.Report(new ApplicationStatus {
@@ -224,7 +272,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             });
 
             var parallelismCfg = Math.Clamp(
-                _plugin.Settings.PlateSolveParallelism,
+                _plugin.PlateSolveParallelism,
                 1,
                 CpuTopology.MaxPlateSolveParallelism);
             var poolSize = Math.Min(parallelismCfg, windowed.Count);
@@ -294,9 +342,27 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return false;
             }
 
-            Report("Correlating sequencer lines and writing HTML…", built.Count, Math.Max(built.Count, 1));
-
-            ApplyJumpAndLogAnnotation(built, logFilesToRead);
+            var maxSolvedPerTarget = MaxSolvedSamplesPerBestTarget(built);
+            var skipLogCorrelation = maxSolvedPerTarget < minExpTarget;
+            if (skipLogCorrelation) {
+                SeeDriftLog.Info(
+                    $"SeeDrift: skipping NINA log correlation — no target has ≥{minExpTarget} solved frames (best target={maxSolvedPerTarget}).");
+                Report(
+                    $"Skipping sequencer log correlation — best target has only {maxSolvedPerTarget} solved frame(s) (need ≥{minExpTarget}). Writing HTML…",
+                    built.Count,
+                    Math.Max(built.Count, 1));
+                JumpDetector.AnnotateJumps(built);
+                JumpCount = JumpDetector.CountJumps(built);
+                LogCorrelatedCount = 0;
+                LogWasFound = false;
+                LogTriggerCount = 0;
+                LogSequencerEdgeCount = 0;
+                LogTraceDitherTriggerCount = 0;
+                LogTraceCenterTriggerCount = 0;
+            } else {
+                Report("Correlating sequencer lines and writing HTML…", built.Count, Math.Max(built.Count, 1));
+                ApplyJumpAndLogAnnotation(built, logFilesToRead);
+            }
 
             var targetName = HtmlReportExporter.SummarizeTargetsForBatch(built);
 
@@ -326,10 +392,19 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return false;
             }
 
-            Report(
-                $"Complete — night report saved ({built.Count} frames): {nightSavedPath}",
-                built.Count,
-                built.Count);
+            if (skipLogCorrelation) {
+                Report(
+                    $"Complete — night report saved. No target in this run had at least {minExpTarget} solved exposure(s) for any FITS target " +
+                    $"(best target: {maxSolvedPerTarget}). Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
+                    $"{nightSavedPath}",
+                    built.Count,
+                    built.Count);
+            } else {
+                Report(
+                    $"Complete — night report saved ({built.Count} frames): {nightSavedPath}",
+                    built.Count,
+                    built.Count);
+            }
 
             SeeDriftLog.Info($"SeeDrift: batch complete — {built.Count} solved frames → {nightSavedPath}");
             return true;
@@ -386,6 +461,28 @@ namespace NINA.Plugin.SeeDrift.Services {
                 SeeDriftLog.Error($"SeeDrift: failed to write night report: {ex.Message}");
                 return false;
             }
+        }
+
+        /// <summary>Largest number of plate-solved samples on a single FITS OBJECT in this run.</summary>
+        private static int MaxSolvedSamplesPerBestTarget(IReadOnlyList<DriftSample> built) {
+            if (built == null || built.Count == 0)
+                return 0;
+            return built
+                .GroupBy(
+                    s => string.IsNullOrWhiteSpace(s.TargetName) ? "Unknown" : s.TargetName.Trim(),
+                    StringComparer.OrdinalIgnoreCase)
+                .Max(g => g.Count());
+        }
+
+        /// <summary>Largest number of LIGHT frames on a single FITS OBJECT (from headers) in this run.</summary>
+        private static int MaxLightFramesPerBestTarget(IReadOnlyList<FitsReplayEntry> entries) {
+            if (entries == null || entries.Count == 0)
+                return 0;
+            return entries
+                .GroupBy(
+                    e => string.IsNullOrWhiteSpace(e.TargetLabel) ? "Unknown" : e.TargetLabel.Trim(),
+                    StringComparer.OrdinalIgnoreCase)
+                .Max(g => g.Count());
         }
 
         private static bool TryResolveHeaderCards(FitsReplayEntry entry, out Dictionary<string, string> cards) {

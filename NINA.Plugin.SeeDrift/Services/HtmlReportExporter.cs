@@ -97,7 +97,14 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 if (filteredGroups.Count == 0) {
                     sb.AppendLine("  <div class=\"mt-6 rounded-lg border border-amber-900/40 bg-slate-900/60 p-4\">");
-                    sb.AppendLine($"    <p class=\"text-sm text-slate-300\">No target in this run had at least <span class=\"text-amber-300\">{min}</span> solved exposure{(min == 1 ? "" : "s")}. Lower <span class=\"text-sky-300\">Minimum exposures per target</span> in Plugins → SeeDrift, or capture more frames per target.</p>");
+                    if (samples.Count == 0 && batch.PresolveMaxLightsPerBestTarget is int cap) {
+                        sb.AppendLine(
+                            $"    <p class=\"text-sm text-slate-300\">No target in this run had at least <span class=\"text-amber-300\">{min}</span> LIGHT frame(s) for any FITS target (best target: <span class=\"text-amber-300\">{cap}</span>); plate solving was skipped. Lower <span class=\"text-sky-300\">Minimum exposures per target</span> in Plugins → SeeDrift, or capture more frames per target.</p>");
+                    } else {
+                        sb.AppendLine(
+                            $"    <p class=\"text-sm text-slate-300\">No target in this run had at least <span class=\"text-amber-300\">{min}</span> solved exposure{(min == 1 ? "" : "s")}. Lower <span class=\"text-sky-300\">Minimum exposures per target</span> in Plugins → SeeDrift, or capture more frames per target.</p>");
+                    }
+
                     sb.AppendLine("  </div>");
                     sb.AppendLine("</section>");
                     continue;
