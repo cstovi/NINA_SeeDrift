@@ -32,7 +32,7 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 ### Offline-style test (same disk folder)
 
 1. Set **Observation start** and **Observation end** using the calendar and time lists (interpreted as **UTC**, not your PC’s local timezone).
-2. Click **Run test report**.
+2. Click **Run test report**. A **progress bar** and status text appear on this options page during the scan and solve (indeterminate while scanning the folder; determinate while solving frames).
 
 ### Rolling HTML file
 

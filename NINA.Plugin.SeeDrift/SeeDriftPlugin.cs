@@ -7,7 +7,9 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Input;
+using Application = System.Windows.Application;
 using NINA.Core.Model;
 using NINA.Core.Utility;
 using static NINA.Core.Utility.Logger;
@@ -180,15 +182,89 @@ namespace NINA.Plugin.SeeDrift {
         }
 
         private async Task RunTestReportFireAsync() {
+            await Application.Current!.Dispatcher.InvokeAsync(BeginTestReportUi);
             try {
                 var startUtc = CombineUtc(_testStartDateUtc, _testStartHourUtc, _testStartMinuteUtc);
                 var endUtc = CombineUtc(_testEndDateUtc, _testEndHourUtc, _testEndMinuteUtc);
-                await DriftTracker.RunTestReportAsync(startUtc, endUtc,
-                        (IProgress<ApplicationStatus>?)null, CancellationToken.None)
+                var progress = new Progress<ApplicationStatus>(OnTestReportApplicationStatus);
+                await DriftTracker.RunTestReportAsync(startUtc, endUtc, progress, CancellationToken.None)
                     .ConfigureAwait(false);
             } catch (Exception ex) {
                 Logger.Error($"SeeDrift: Test report failed — {ex.Message}");
+            } finally {
+                await Application.Current!.Dispatcher.InvokeAsync(EndTestReportUi);
             }
+        }
+
+        private bool _testReportBusy;
+        private string _testReportStatusText = "";
+        private double _testReportProgressValue;
+        private int _testReportProgressMaximum = 1;
+        private bool _testReportIndeterminate;
+
+        /// <summary>False while a test report run is in progress (disables Run).</summary>
+        public bool TestReportNotBusy => !_testReportBusy;
+
+        public string TestReportStatusText => _testReportStatusText;
+
+        public double TestReportProgressValue => _testReportProgressValue;
+
+        public int TestReportProgressMaximum => _testReportProgressMaximum;
+
+        public bool TestReportIndeterminate => _testReportIndeterminate;
+
+        /// <summary>Shows the progress row while a test report is running.</summary>
+        public Visibility TestReportChromeVisibility =>
+            _testReportBusy ? Visibility.Visible : Visibility.Collapsed;
+
+        private void BeginTestReportUi() {
+            _testReportBusy = true;
+            _testReportStatusText = "Starting…";
+            _testReportProgressValue = 0;
+            _testReportProgressMaximum = 1;
+            _testReportIndeterminate = true;
+            RaisePropertyChanged(nameof(TestReportNotBusy));
+            RaisePropertyChanged(nameof(TestReportStatusText));
+            RaisePropertyChanged(nameof(TestReportProgressValue));
+            RaisePropertyChanged(nameof(TestReportProgressMaximum));
+            RaisePropertyChanged(nameof(TestReportIndeterminate));
+            RaisePropertyChanged(nameof(TestReportChromeVisibility));
+        }
+
+        private void EndTestReportUi() {
+            _testReportBusy = false;
+            _testReportStatusText = "";
+            _testReportIndeterminate = false;
+            RaisePropertyChanged(nameof(TestReportNotBusy));
+            RaisePropertyChanged(nameof(TestReportStatusText));
+            RaisePropertyChanged(nameof(TestReportProgressValue));
+            RaisePropertyChanged(nameof(TestReportProgressMaximum));
+            RaisePropertyChanged(nameof(TestReportIndeterminate));
+            RaisePropertyChanged(nameof(TestReportChromeVisibility));
+        }
+
+        private void OnTestReportApplicationStatus(ApplicationStatus status) {
+            void Apply() {
+                _testReportStatusText = status.Status ?? "";
+                var max = status.MaxProgress;
+                _testReportProgressMaximum = max > 0 ? max : 1;
+                _testReportProgressValue = status.Progress;
+                _testReportIndeterminate = _testReportBusy && max <= 0;
+                RaisePropertyChanged(nameof(TestReportStatusText));
+                RaisePropertyChanged(nameof(TestReportProgressValue));
+                RaisePropertyChanged(nameof(TestReportProgressMaximum));
+                RaisePropertyChanged(nameof(TestReportIndeterminate));
+            }
+
+            var app = Application.Current;
+            if (app == null) {
+                Apply();
+                return;
+            }
+            if (app.Dispatcher.CheckAccess())
+                Apply();
+            else
+                app.Dispatcher.Invoke(Apply);
         }
 
         private static DateTime CombineUtc(DateTime dateUtc, int hour, int minute) =>

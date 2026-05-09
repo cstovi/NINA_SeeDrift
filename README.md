@@ -36,7 +36,7 @@ Set **Options → Imaging → image file path** in NINA to the folder where ligh
 
 ### Test report (options panel)
 
-Under **Plugins → SeeDrift**, choose **observation start/end** with the **date picker** and **hour/minute** dropdowns (**UTC**). Click **Run test report**. Uses the same pipeline as Stop but with your persisted window instead of Arm timestamps. The folder scan shows status in NINA’s progress line; if the year in your window does not match the files on disk (for example 2025 vs 2026), SeeDrift skips opening those FITS headers and finishes quickly.
+Under **Plugins → SeeDrift**, choose **observation start/end** with the **date picker** and **hour/minute** dropdowns (**UTC**). Click **Run test report**. Uses the same pipeline as Stop but with your persisted window instead of Arm timestamps. A **progress bar** on the plugin options page shows scan/solve status (indeterminate during folder scan, then per-frame solving). If the year in your window does not match the files on disk (for example 2025 vs 2026), SeeDrift skips opening those FITS headers and finishes quickly.
 
 ### Session bookkeeping
 

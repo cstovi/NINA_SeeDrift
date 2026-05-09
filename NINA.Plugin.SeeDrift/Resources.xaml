@@ -86,8 +86,18 @@
                 </ComboBox>
             </StackPanel>
 
+            <StackPanel Margin="0,0,0,12" Visibility="{Binding TestReportChromeVisibility}">
+                <TextBlock Text="{Binding TestReportStatusText}" Foreground="#AAC8FF" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <ProgressBar Height="10"
+                             Minimum="0"
+                             Maximum="{Binding TestReportProgressMaximum}"
+                             Value="{Binding TestReportProgressValue}"
+                             IsIndeterminate="{Binding TestReportIndeterminate}"/>
+            </StackPanel>
+
             <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                <Button Content="Run test report" Command="{Binding RunTestReportCommand}" Padding="12,6" Margin="0,0,12,0"/>
+                <Button Content="Run test report" Command="{Binding RunTestReportCommand}" Padding="12,6" Margin="0,0,12,0"
+                        IsEnabled="{Binding TestReportNotBusy}"/>
                 <Button Content="Clear completed targets (session)" Command="{Binding ResetSessionCommand}" Padding="12,6"/>
             </StackPanel>
 

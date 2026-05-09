@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-05-09
+
+### Added
+
+- **Test report:** Progress bar and status line on the plugin options page while **Run test report** scans and plate-solves (same `ApplicationStatus` pipeline as sequencer Stop; Run disabled until finished).
+
 ## [0.5.2] — 2026-05-09
 
 ### Changed
