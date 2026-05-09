@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace NINA.Plugin.SeeDrift.Models {
 
@@ -37,27 +38,16 @@ namespace NINA.Plugin.SeeDrift.Models {
         /// <summary>Human-readable reason for the jump from step detection (not from NINA log trigger names).</summary>
         public string? JumpReason { get; set; }
 
-        /// <summary>
-        /// Unused; center/dither sequencer labels appear only on between-frame midpoint tooltips (<see cref="EdgeSequencerHover"/>).
-        /// </summary>
+        /// <summary>Unused; between-frame sequencer tooltips use <see cref="EdgeSequencerMarkers"/>.</summary>
         public string? SequencerLogHint { get; set; }
 
         // --- Inter-frame edge (FrameIndex-1 → FrameIndex), from NINA log correlation ---
 
-        /// <summary>Log shows <c>DitherAfterExposures</c> strictly between previous and this exposure start.</summary>
-        public bool EdgeHadDitherTrigger { get; set; }
-
-        /// <summary>Log shows <c>CenterAfterDrift</c> strictly between previous and this exposure start.</summary>
-        public bool EdgeHadCenterTrigger { get; set; }
-
-        /// <summary>Guider-space Δx from <c>SelectDitherPulse</c> (NINA units), when parsed.</summary>
-        public double? EdgeDitherClaimedDx { get; set; }
-
-        /// <summary>Guider-space Δy from <c>SelectDitherPulse</c> (NINA units), when parsed.</summary>
-        public double? EdgeDitherClaimedDy { get; set; }
-
-        /// <summary>Multi-line hover for midpoint markers (dither/center between frames).</summary>
-        public string? EdgeSequencerHover { get; set; }
+        /// <summary>
+        /// NINA log triggers in the strict interval before this frame, in chronological order.
+        /// Each entry is drawn along the segment from the previous plotted point to this one (evenly spaced around the midpoint when there are several).
+        /// </summary>
+        public List<SequencerEdgeMarker>? EdgeSequencerMarkers { get; set; }
     }
 }
 

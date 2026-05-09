@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.16] — 2026-05-09
+
+### Changed
+
+- **NINA log — between-frame plot:** Every **DitherAfterExposures** and **CenterAfterDrift** trigger in a strict inter-frame interval gets its own marker on the **segment** between the two frame points (not only the first of each type). Several events in the same gap are **evenly spaced along that line, centered on the midpoint**. Each hover carries log detail for that trigger plus the shared measured frame-to-frame lines; multiple dithers claim distinct `SelectDitherPulse` lines in order when the log provides them.
+
+### Documentation
+
+- **README / MANUAL:** Describe multi-marker between-frame behavior.
+
 ## [0.4.15] — 2026-05-09
 
 ### Fixed

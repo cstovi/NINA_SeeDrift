@@ -338,7 +338,10 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             RaisePropertyChanged(nameof(LastSummary));
         }
 
-        /// <summary>Midpoint markers between consecutive frames when NINA log shows dither or center in that interval.</summary>
+        /// <summary>
+        /// Markers on the segment between consecutive frames when the NINA log shows one or more dither/center triggers in that interval.
+        /// Several events in the same gap are drawn evenly along the chord, centered on the midpoint.
+        /// </summary>
         private static void AddSequencerMidpoints(
                 PlotModel model,
                 IReadOnlyList<DriftSample> ordered,
@@ -368,21 +371,43 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             for (var i = 1; i < ordered.Count; i++) {
                 var prev = ordered[i - 1];
                 var cur = ordered[i];
-                if (string.IsNullOrEmpty(cur.EdgeSequencerHover))
+                var markers = cur.EdgeSequencerMarkers;
+                if (markers == null || markers.Count == 0)
                     continue;
-                var mx = (getX(prev) + getX(cur)) / 2;
-                var my = (getY(prev) + getY(cur)) / 2;
-                var tag = cur.EdgeSequencerHover;
-                if (cur.EdgeHadDitherTrigger)
-                    ditherSeries.Points.Add(new ScatterPoint(mx, my, tag: tag));
-                else if (cur.EdgeHadCenterTrigger)
-                    centerSeries.Points.Add(new ScatterPoint(mx, my, tag: tag));
+                var px = getX(prev);
+                var py = getY(prev);
+                var cx = getX(cur);
+                var cy = getY(cur);
+                var n = markers.Count;
+                for (var j = 0; j < n; j++) {
+                    var u = InterFrameMarkerFraction(j, n);
+                    var mx = px + u * (cx - px);
+                    var my = py + u * (cy - py);
+                    var m = markers[j];
+                    if (m.IsDither)
+                        ditherSeries.Points.Add(new ScatterPoint(mx, my, tag: m.Tooltip));
+                    else
+                        centerSeries.Points.Add(new ScatterPoint(mx, my, tag: m.Tooltip));
+                }
             }
 
             if (ditherSeries.Points.Count > 0)
                 model.Series.Add(ditherSeries);
             if (centerSeries.Points.Count > 0)
                 model.Series.Add(centerSeries);
+        }
+
+        /// <summary>Fraction along prev→cur (0 = at prev, 1 = at cur); multiple markers cluster around 0.5.</summary>
+        private static double InterFrameMarkerFraction(int index, int count) {
+            if (count <= 1)
+                return 0.5;
+            var span = Math.Min(0.35, 0.2 * (count - 1));
+            var step = span / (count - 1);
+            var start = 0.5 - span / 2;
+            var u = start + index * step;
+            if (u < 0.06) return 0.06;
+            if (u > 0.94) return 0.94;
+            return u;
         }
 
         private static void ApplyPointingAxes(PlotModel model,

@@ -101,11 +101,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
             try {
                 foreach (var s in samples) {
                     s.SequencerLogHint = null;
-                    s.EdgeHadDitherTrigger = false;
-                    s.EdgeHadCenterTrigger = false;
-                    s.EdgeDitherClaimedDx = null;
-                    s.EdgeDitherClaimedDy = null;
-                    s.EdgeSequencerHover = null;
+                    s.EdgeSequencerMarkers = null;
                 }
 
                 var sessionDate = samples[0].ExposureStartUtc.Date;
@@ -154,14 +150,14 @@ namespace NINA.Plugin.SeeDrift.Utility {
             var n = 0;
             foreach (var sample in samples.Where(s => s.IsJump)) {
                 var next = samples.FirstOrDefault(x => x.FrameIndex == sample.FrameIndex + 1);
-                if (next != null && (next.EdgeHadDitherTrigger || next.EdgeHadCenterTrigger))
+                if (next != null && next.EdgeSequencerMarkers is { Count: > 0 })
                     n++;
             }
             return n;
         }
 
         private static int CountSequencerEdges(List<DriftSample> samples) =>
-            samples.Count(s => s.EdgeHadDitherTrigger || s.EdgeHadCenterTrigger);
+            samples.Count(s => s.EdgeSequencerMarkers is { Count: > 0 });
 
         /// <summary>
         /// Earliest SaveToDisk UTC per FITS basename (ignores plate-solver temps).
@@ -227,95 +223,89 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
                 var t1Log = t1 + InterFrameLogUpperSlop;
 
-                DateTime? ditherTriggerUtc = null;
-                DateTime? centerTriggerUtc = null;
-                foreach (var tr in triggers.Where(t => t.UtcTime > t0 && t.UtcTime < t1Log).OrderBy(t => t.UtcTime)) {
+                var inGap = triggers
+                    .Where(t => t.UtcTime > t0 && t.UtcTime < t1Log)
+                    .OrderBy(t => t.UtcTime)
+                    .ToList();
+                if (inGap.Count == 0)
+                    continue;
+
+                var measuredTail = BuildMeasuredFrameToFrameLines(prev, cur);
+                var usedPulses = new HashSet<DitherPulse>();
+                var markers = new List<SequencerEdgeMarker>();
+
+                foreach (var tr in inGap) {
+                    var eventLines = new List<string> { BetweenFramesHoverLine(prev, cur) };
                     if (tr.Kind == TriggerKind.Dither) {
-                        cur.EdgeHadDitherTrigger = true;
-                        ditherTriggerUtc ??= tr.UtcTime;
-                    }
-                    if (tr.Kind == TriggerKind.Center) {
-                        cur.EdgeHadCenterTrigger = true;
-                        centerTriggerUtc ??= tr.UtcTime;
-                    }
-                }
-
-                DitherPulse? pulse = null;
-                if (cur.EdgeHadDitherTrigger && ditherTriggerUtc.HasValue) {
-                    pulse = pulses
-                        .Where(p => p.UtcTime >= ditherTriggerUtc.Value && p.UtcTime < t1Log)
-                        .OrderBy(p => p.UtcTime)
-                        .FirstOrDefault();
-                }
-                if (pulse == null && cur.EdgeHadDitherTrigger) {
-                    pulse = pulses
-                        .Where(p => p.UtcTime > t0 && p.UtcTime < t1Log)
-                        .OrderBy(p => p.UtcTime)
-                        .FirstOrDefault();
-                }
-                if (pulse != null) {
-                    cur.EdgeDitherClaimedDx = pulse.Dx;
-                    cur.EdgeDitherClaimedDy = pulse.Dy;
-                }
-
-                CenterDriftLogLine? centerDrift = null;
-                if (cur.EdgeHadCenterTrigger) {
-                    var w0 = centerTriggerUtc ?? t0;
-                    centerDrift = centerDriftLines
-                        .Where(d => d.UtcTime >= w0 && d.UtcTime < t1Log)
-                        .OrderBy(d => d.UtcTime)
-                        .LastOrDefault();
-                    if (centerDrift == null) {
-                        centerDrift = centerDriftLines
-                            .Where(d => d.UtcTime > t0 && d.UtcTime < t1Log)
+                        eventLines.Add($"DitherAfterExposures @ {tr.UtcTime.ToLocalTime():HH:mm:ss}");
+                        var pulse = pulses
+                            .Where(p => p.UtcTime >= tr.UtcTime && p.UtcTime < t1Log && !usedPulses.Contains(p))
+                            .OrderBy(p => p.UtcTime)
+                            .FirstOrDefault();
+                        if (pulse == null) {
+                            pulse = pulses
+                                .Where(p => p.UtcTime > t0 && p.UtcTime < t1Log && !usedPulses.Contains(p))
+                                .OrderBy(p => p.UtcTime)
+                                .FirstOrDefault();
+                        }
+                        if (pulse != null) {
+                            usedPulses.Add(pulse);
+                            eventLines.Add(
+                                $"NINA dither target (guider): ({pulse.FromX:F2}, {pulse.FromY:F2}) → ({pulse.ToX:F2}, {pulse.ToY:F2}); move Δx {pulse.Dx:F2}, Δy {pulse.Dy:F2}");
+                            if (pulse.GuideDurationFirstSec.HasValue && pulse.GuideDurationSecondSec.HasValue) {
+                                eventLines.Add(
+                                    $"NINA dither guide durations (log): {pulse.GuideDurationFirstSec.Value:F2} s, {pulse.GuideDurationSecondSec.Value:F2} s");
+                            }
+                        }
+                        eventLines.AddRange(measuredTail);
+                        markers.Add(new SequencerEdgeMarker {
+                            IsDither = true,
+                            Tooltip = string.Join(Environment.NewLine, eventLines)
+                        });
+                    } else {
+                        eventLines.Add($"CenterAfterDrift @ {tr.UtcTime.ToLocalTime():HH:mm:ss}");
+                        var centerDrift = centerDriftLines
+                            .Where(d => d.UtcTime >= tr.UtcTime && d.UtcTime < t1Log)
                             .OrderBy(d => d.UtcTime)
                             .LastOrDefault();
+                        if (centerDrift == null) {
+                            centerDrift = centerDriftLines
+                                .Where(d => d.UtcTime > t0 && d.UtcTime < t1Log)
+                                .OrderBy(d => d.UtcTime)
+                                .LastOrDefault();
+                        }
+                        if (centerDrift != null) {
+                            eventLines.Add(
+                                $"NINA center drift (log): {centerDrift.DriftArcMinutes:F3}′ vs {centerDrift.ThresholdArcMinutes:F3}′ threshold");
+                        }
+                        eventLines.AddRange(measuredTail);
+                        markers.Add(new SequencerEdgeMarker {
+                            IsDither = false,
+                            Tooltip = string.Join(Environment.NewLine, eventLines)
+                        });
                     }
                 }
 
-                var lines = new List<string> {
-                    BetweenFramesHoverLine(prev, cur)
-                };
-                if (cur.EdgeHadDitherTrigger)
-                    lines.Add(ditherTriggerUtc.HasValue
-                        ? $"DitherAfterExposures @ {ditherTriggerUtc.Value.ToLocalTime():HH:mm:ss}"
-                        : "DitherAfterExposures");
-                if (cur.EdgeHadCenterTrigger)
-                    lines.Add(centerTriggerUtc.HasValue
-                        ? $"CenterAfterDrift @ {centerTriggerUtc.Value.ToLocalTime():HH:mm:ss}"
-                        : "CenterAfterDrift");
-                if (pulse != null) {
-                    lines.Add(
-                        $"NINA dither target (guider): ({pulse.FromX:F2}, {pulse.FromY:F2}) → ({pulse.ToX:F2}, {pulse.ToY:F2}); move Δx {pulse.Dx:F2}, Δy {pulse.Dy:F2}");
-                    if (pulse.GuideDurationFirstSec.HasValue && pulse.GuideDurationSecondSec.HasValue) {
-                        lines.Add(
-                            $"NINA dither guide durations (log): {pulse.GuideDurationFirstSec.Value:F2} s, {pulse.GuideDurationSecondSec.Value:F2} s");
-                    }
-                } else if (cur.EdgeDitherClaimedDx.HasValue && cur.EdgeDitherClaimedDy.HasValue) {
-                    lines.Add(
-                        $"NINA guider move (log): Δx {cur.EdgeDitherClaimedDx.Value:F1}, Δy {cur.EdgeDitherClaimedDy.Value:F1} [guider units]");
-                }
-                if (centerDrift != null) {
-                    lines.Add(
-                        $"NINA center drift (log): {centerDrift.DriftArcMinutes:F3}′ vs {centerDrift.ThresholdArcMinutes:F3}′ threshold");
-                }
-                var dHdrRa = cur.DeltaRaArcSec - prev.DeltaRaArcSec;
-                var dHdrDec = cur.DeltaDecArcSec - prev.DeltaDecArcSec;
-                lines.Add($"Measured header Δ: ΔRA {dHdrRa:F2}″, ΔDec {dHdrDec:F2}″ (frame-to-frame)");
-                if (cur.HasPixelDerivedRaDec && prev.HasPixelDerivedRaDec) {
-                    var dRa = cur.PixelDerivedRaArcSec!.Value - prev.PixelDerivedRaArcSec!.Value;
-                    var dDec = cur.PixelDerivedDecArcSec!.Value - prev.PixelDerivedDecArcSec!.Value;
-                    lines.Add($"Measured derived Δ: ΔRA {dRa:F2}″, ΔDec {dDec:F2}″ (frame-to-frame)");
-                }
-                if (cur.IsPixelPath && prev.CumulativePixelX.HasValue && cur.CumulativePixelX.HasValue) {
-                    var dpx = cur.CumulativePixelX.Value - prev.CumulativePixelX.Value;
-                    var dpy = cur.CumulativePixelY!.Value - prev.CumulativePixelY!.Value;
-                    lines.Add($"Measured cumulative-pixel step: Δx {dpx:F2} px, Δy {dpy:F2} px");
-                }
-
-                if (cur.EdgeHadDitherTrigger || cur.EdgeHadCenterTrigger)
-                    cur.EdgeSequencerHover = string.Join(Environment.NewLine, lines);
+                cur.EdgeSequencerMarkers = markers;
             }
+        }
+
+        private static List<string> BuildMeasuredFrameToFrameLines(DriftSample prev, DriftSample cur) {
+            var lines = new List<string>();
+            var dHdrRa = cur.DeltaRaArcSec - prev.DeltaRaArcSec;
+            var dHdrDec = cur.DeltaDecArcSec - prev.DeltaDecArcSec;
+            lines.Add($"Measured header Δ: ΔRA {dHdrRa:F2}″, ΔDec {dHdrDec:F2}″ (frame-to-frame)");
+            if (cur.HasPixelDerivedRaDec && prev.HasPixelDerivedRaDec) {
+                var dRa = cur.PixelDerivedRaArcSec!.Value - prev.PixelDerivedRaArcSec!.Value;
+                var dDec = cur.PixelDerivedDecArcSec!.Value - prev.PixelDerivedDecArcSec!.Value;
+                lines.Add($"Measured derived Δ: ΔRA {dRa:F2}″, ΔDec {dDec:F2}″ (frame-to-frame)");
+            }
+            if (cur.IsPixelPath && prev.CumulativePixelX.HasValue && cur.CumulativePixelX.HasValue) {
+                var dpx = cur.CumulativePixelX.Value - prev.CumulativePixelX.Value;
+                var dpy = cur.CumulativePixelY!.Value - prev.CumulativePixelY!.Value;
+                lines.Add($"Measured cumulative-pixel step: Δx {dpx:F2} px, Δy {dpy:F2} px");
+            }
+            return lines;
         }
 
         private static bool TryGetLogSaveUtc(DriftSample s, Dictionary<string, DateTime> saveByFileName, out DateTime utc) {
