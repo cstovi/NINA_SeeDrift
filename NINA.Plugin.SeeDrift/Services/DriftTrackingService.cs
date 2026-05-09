@@ -23,7 +23,6 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         public sealed class CompletedTarget {
             public string Name { get; init; } = "";
-            public DateTime StoppedUtc { get; init; }
             public IReadOnlyList<DriftSample> Samples { get; init; } = Array.Empty<DriftSample>();
         }
 
@@ -301,7 +300,6 @@ namespace NINA.Plugin.SeeDrift.Services {
             await Application.Current!.Dispatcher.InvokeAsync(() => {
                 CompletedTargets.Add(new CompletedTarget {
                     Name = targetName,
-                    StoppedUtc = DateTime.UtcNow,
                     Samples = built
                 });
                 if (!TryWriteNightReport(out nightSavedPath, out nightSaveError)) {

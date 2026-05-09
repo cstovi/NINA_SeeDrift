@@ -76,7 +76,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 sb.AppendLine($"<section class=\"{sectionClass}\">");
                 sb.AppendLine($"  <h2 class=\"text-lg font-semibold text-sky-300\">{Escape(batchTitle)}</h2>");
-                sb.AppendLine($"  <p class=\"mt-1 text-sm text-slate-400\">{samples.Count} frames · stopped {batch.StoppedUtc.ToLocalTime():HH:mm}</p>");
+                sb.AppendLine($"  <p class=\"mt-1 text-sm text-slate-400\">{samples.Count} frame{(samples.Count == 1 ? "" : "s")}</p>");
 
                 if (filteredGroups.Count == 0) {
                     sb.AppendLine("  <div class=\"mt-6 rounded-lg border border-amber-900/40 bg-slate-900/60 p-4\">");
