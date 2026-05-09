@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -226,9 +228,9 @@ namespace NINA.Plugin.SeeDrift {
             set { _htmlExportFolder = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
         }
 
-        private int _plateSolveParallelism = 4;
+        private int _plateSolveParallelism = Math.Clamp(Environment.ProcessorCount, 1, 16);
 
-        /// <summary>Concurrent plate solves during Stop/Test (1–16). Default 4.</summary>
+        /// <summary>Concurrent plate solves during Stop/Test (1–16). Fresh defaults match logical CPU count (clamped).</summary>
         public int PlateSolveParallelism {
             get => _plateSolveParallelism;
             set {
@@ -241,7 +243,7 @@ namespace NINA.Plugin.SeeDrift {
         }
 
         private static int NormalizePlateSolveParallelism(int value) {
-            if (value < 1) return 4;
+            if (value < 1) return Math.Clamp(Environment.ProcessorCount, 1, 16);
             if (value > 16) return 16;
             return value;
         }

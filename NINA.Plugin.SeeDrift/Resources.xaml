@@ -30,7 +30,7 @@
                 <Grid.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="420" TextWrapping="Wrap"
-                                   Text="How many frames to plate-solve at once (1–16). Default 4. Each slot uses a separate solver instance; higher values use more RAM and CPU. Downsampling still comes only from your NINA Plate Solve profile."/>
+                                   Text="How many frames to plate-solve at once (pick 1–16). On a new install the default matches your logical CPU count (capped at 16). Each slot uses a separate solver instance; higher values use more RAM and CPU. Downsampling still comes only from your NINA Plate Solve profile."/>
                     </ToolTip>
                 </Grid.ToolTip>
                 <Grid.ColumnDefinitions>
@@ -38,7 +38,11 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Concurrency:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="1" Text="{Binding PlateSolveParallelism, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding PlateSolveParallelismOptions}"
+                          SelectedItem="{Binding PlateSolveParallelism}"
+                          VerticalAlignment="Center"
+                          MinWidth="72"/>
             </Grid>
 
             <Grid Margin="0,0,0,16" ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="400">

@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.9] — 2026-05-09
+
+### Changed
+
+- **Concurrency** is a **dropdown** (1–16). **Default** for new settings matches **`Environment.ProcessorCount`**, clamped to **1–16** (not a fixed “4”). Existing `settings.json` values are unchanged.
+
 ## [0.7.8] — 2026-05-09
 
 ### Changed

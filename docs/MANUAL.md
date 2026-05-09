@@ -12,12 +12,12 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 
 ## Options (Plugins → SeeDrift)
 
-For **Night report folder**, **Concurrency**, and **Minimum exposures**, hover anywhere on the row (label or text box) to see the full hint in a tooltip.
+For **Night report folder**, **Concurrency**, and **Minimum exposures**, hover anywhere on the row (label or field) to see the full hint in a tooltip.
 
 | Setting | Meaning |
 |--------|---------|
 | **Night report folder** | Directory for the rolling **night HTML** file (`SeeDrift_night_YYYYMMDD.html`). Created if missing. If you leave this blank, SeeDrift uses **`Documents\SeeDrift`** (your **Documents** folder, not Desktop). When a run finishes successfully, **NINA’s status bar** shows the **full path** to the file that was written. |
-| **Concurrency** | How many frames SeeDrift plate-solves **at once** (1–16, default **4**). Each concurrent slot gets its **own** solver instance; higher values use more RAM and CPU. Use **1** to mimic older sequential behavior. Image **downsampling** for solves comes only from **NINA Options → Plate Solve** (same profile as the Plate Solve tool)—SeeDrift does not add a separate downsample step. |
+| **Concurrency** | Choose **1–16** concurrent plate solves (dropdown). On a **new** install with no saved value, the default matches **logical processor count** (capped at **16**). Each concurrent slot gets its **own** solver instance; higher values use more RAM and CPU. Use **1** to mimic older sequential behavior. Image **downsampling** for solves comes only from **NINA Options → Plate Solve** (same profile as the Plate Solve tool)—SeeDrift does not add a separate downsample step. |
 | **Minimum exposures per target** | Each **Stop** or **Test report** batch can mix several FITS **OBJECT** names. SeeDrift lists **only** targets that have at least this many **solved** frames in that batch (1–500, default **50**). Targets below the threshold are omitted from the batch **heading**, drift charts, and sequencer blocks for that run. If **no** target meets the threshold, the batch section explains that instead of drawing empty charts. |
 | **NINA log file** | Used only by **Run test report**: path to a saved `.log` file (Browse opens `%LocalAppData%\NINA\Logs`). Persisted in settings. |
 
