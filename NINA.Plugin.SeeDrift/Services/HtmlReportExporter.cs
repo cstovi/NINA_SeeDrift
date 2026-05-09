@@ -188,7 +188,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("            }");
                     sb.AppendLine("          }");
                     sb.AppendLine("        },");
-                    sb.AppendLine("        legend: { labels: { color: '#e2e8f0' } },");
+                    sb.AppendLine("        legend: { labels: { color: '#e2e8f0', filter: function(item) { return item.datasetIndex === 0; } } },");
                     sb.AppendLine("        zoom: {");
                     sb.AppendLine("          pan: { enabled: true, mode: 'xy' },");
                     sb.AppendLine("          zoom: {");
