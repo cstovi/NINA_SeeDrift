@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.13] — 2026-05-09
+
+### Added
+
+- **Plot hovers:** Blue **Frames** and yellow **Jumps** tooltips append the FITS **basename** on the last line (after time/coordinates) for quick cross-check with disk files.
+
+### Documentation
+
+- **MANUAL:** Note filename line on frame/jump hovers.
+
 ## [0.4.12] — 2026-05-09
 
 ### Fixed

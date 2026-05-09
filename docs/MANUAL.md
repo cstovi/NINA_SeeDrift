@@ -27,13 +27,13 @@ Session discipline (**one scope / one target run**, separate folders for replay)
 1. Open the **SeeDrift** dockable on the Imaging tab.
 2. Arm recording with the SeeDrift **Start** sequence instruction (and **Stop** when finished), or use your usual workflow so frames are recorded while armed.
 3. Click **Reset trace** before or during a run if you want a fresh reference frame.
-4. Accumulate lights; the plot updates per saved frame. Jump detection and **strict** NINA log correlation for **between-frame** markers run on the same trace as for folder import. **Hover tooltips** disappear when you move the pointer off the marker (you do not need to click away or leave the chart).
+4. Accumulate lights; the plot updates per saved frame. Jump detection and **strict** NINA log correlation for **between-frame** markers run on the same trace as for folder import. **Hover tooltips** disappear when you move the pointer off the marker (you do not need to click away or leave the chart). Frame and jump hovers end with the FITS **file name** (basename) when known.
 5. Use **Export HTML…** to save an offline copy (needs network once for Chart.js CDN unless you host scripts locally).
 
 ### Offline replay
 
 1. Optional: in **Plugins → SeeDrift**, enable **Plot cumulative pixel shifts** and set **Registration crop** if you want the detector-space path (slower).
-2. Click **Import FITS folder…** and select a directory that contains your lights (not subfolders). The current trace is cleared and replaced by replayed frames — **every** readable light is plotted in order.
+2. Click **Import FITS folder…** and select a directory that contains your lights (not subfolders). The current trace is cleared and replaced by replayed frames — **every** readable light is plotted in order. Frame and jump hovers include the FITS basename on the last line.
 3. Files are sorted primarily by the numeric suffix after the last underscore in the file name when present (NINA-style `_0019`, `_0020`), then by observation time (**DATE-OBS** first, then **DATE** / **EXPSTART** / **OBSTIME**) when present, otherwise file creation time — so replay order follows the sequencer even if **DATE-OBS** is occasionally out of order between consecutive subs. **Header mode:** many subs can share the same header coordinates, so markers **stack**. **Pixel mode:** path reflects motion in **pixel space**; subs with identical shift still add vertices (line segments may have zero length).
 4. Files with **IMAGETYP** / **OBSTYPE** set to something other than light-style imaging are skipped when those keywords are present.
 

@@ -85,13 +85,45 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             ? "pixel reg"
             : "header coords";
 
-        /// <summary>Text for blue frame dots. Sequencer trigger names appear only on between-frame markers.</summary>
-        private static string BuildFrameScatterTag(DriftSample s) {
+        /// <summary>First line for blue frame-dot tooltips (time; jump note when the frame is also a jump).</summary>
+        private static string BuildFrameScatterHead(DriftSample s) {
             var t = $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}";
             if (s.IsJump)
                 return $"{t} · Jump: {s.JumpReason ?? "large shift"}";
             return t;
         }
+
+        /// <summary>Appends FITS file name (basename) at the end of tracker hover text when present.</summary>
+        private static string AppendHoverFileTail(DriftSample s, string body) {
+            var fn = s.FileName?.Trim();
+            if (string.IsNullOrEmpty(fn))
+                return body;
+            return body + "\n" + fn;
+        }
+
+        private static string BuildFrameTooltipHeaderArcSec(DriftSample s) =>
+            AppendHoverFileTail(s,
+                $"Frame {BuildFrameScatterHead(s)}\nΔRA (arcsec): {s.DeltaRaArcSec:0.###}\nΔDec (arcsec): {s.DeltaDecArcSec:0.###}");
+
+        private static string BuildFrameTooltipPixelDerived(DriftSample s, double dRa, double dDec) =>
+            AppendHoverFileTail(s,
+                $"Frame {BuildFrameScatterHead(s)}\nΔRA: {dRa:0.##}\"\nΔDec: {dDec:0.##}\"");
+
+        private static string BuildFrameTooltipPixelRaw(DriftSample s, double x, double y) =>
+            AppendHoverFileTail(s,
+                $"Frame {BuildFrameScatterHead(s)}\nCumulative X (px): {x:0.##}\nCumulative Y (px, ↓ = sensor down): {y:0.##}");
+
+        private static string BuildJumpTooltipHeaderArcSec(DriftSample s) =>
+            AppendHoverFileTail(s,
+                $"Jump · frame {s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}\nΔRA (arcsec): {s.DeltaRaArcSec:0.##}\nΔDec (arcsec): {s.DeltaDecArcSec:0.##}");
+
+        private static string BuildJumpTooltipPixelDerived(DriftSample s, double dRa, double dDec) =>
+            AppendHoverFileTail(s,
+                $"Jump · frame {s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}\nΔRA: {dRa:0.##}\"\nΔDec: {dDec:0.##}\"");
+
+        private static string BuildJumpTooltipPixelRaw(DriftSample s, double x, double y) =>
+            AppendHoverFileTail(s,
+                $"Jump · frame {s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}\nCumulative X (px): {x:0.##}\nCumulative Y (px, ↓ = sensor down): {y:0.##}");
 
         private PlotModel _plotModel = null!;
         public PlotModel PlotModel {
@@ -132,12 +164,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 var pathFmt  = useRaDec
                     ? "Path\nΔRA: {2:0.##}\"\nΔDec: {4:0.##}\""
                     : "Path\n{1}: {2:0.##} px\n{3}: {4:0.##} px";
-                var frameFmt = useRaDec
-                    ? "Frame {Tag}\nΔRA: {2:0.##}\"\nΔDec: {4:0.##}\""
-                    : "Frame {Tag}\n{1}: {2:0.##} px\n{3}: {4:0.##} px";
-                var jumpFmt  = useRaDec
-                    ? "Jump · frame {Tag}\nΔRA: {2:0.##}\"\nΔDec: {4:0.##}\""
-                    : "Jump · frame {Tag}\n{1}: {2:0.##} px\n{3}: {4:0.##} px";
+                const string frameJumpTrackerFmt = "{Tag}";
 
                 var pathLine = new LineSeries {
                     Title                        = useRaDec ? "ΔRA / ΔDec path" : "Pixel drift path",
@@ -185,10 +212,14 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     MarkerSize          = dotSize,
                     MarkerFill          = dotColor,
                     MarkerStroke        = OxyColors.Transparent,
-                    TrackerFormatString = frameFmt
+                    TrackerFormatString = frameJumpTrackerFmt
                 };
-                foreach (var s in ordered)
-                    scatter.Points.Add(new ScatterPoint(GetX(s), GetY(s), tag: BuildFrameScatterTag(s)));
+                foreach (var s in ordered) {
+                    var tag = useRaDec
+                        ? BuildFrameTooltipPixelDerived(s, GetX(s), GetY(s))
+                        : BuildFrameTooltipPixelRaw(s, GetX(s), GetY(s));
+                    scatter.Points.Add(new ScatterPoint(GetX(s), GetY(s), tag: tag));
+                }
                 model.Series.Add(scatter);
 
                 var jumpSamples = ordered.Where(s => s.IsJump).ToList();
@@ -200,10 +231,12 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
                         MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
                         MarkerStrokeThickness = 1.0,
-                        TrackerFormatString   = jumpFmt
+                        TrackerFormatString   = frameJumpTrackerFmt
                     };
                     foreach (var s in jumpSamples) {
-                        var tag = $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}";
+                        var tag = useRaDec
+                            ? BuildJumpTooltipPixelDerived(s, GetX(s), GetY(s))
+                            : BuildJumpTooltipPixelRaw(s, GetX(s), GetY(s));
                         jumpSeries.Points.Add(new ScatterPoint(GetX(s), GetY(s), tag: tag));
                     }
                     model.Series.Add(jumpSeries);
@@ -261,12 +294,12 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     MarkerSize          = dotSize2,
                     MarkerFill          = dotColor2,
                     MarkerStroke        = OxyColors.Transparent,
-                    TrackerFormatString = "Frame {Tag}\n{1}: {2:0.###}\"\n{3}: {4:0.###}\""
+                    TrackerFormatString = "{Tag}"
                 };
                 foreach (var s in ordered)
                     scatter2.Points.Add(new ScatterPoint(
                         s.DeltaRaArcSec, s.DeltaDecArcSec,
-                        tag: BuildFrameScatterTag(s)));
+                        tag: BuildFrameTooltipHeaderArcSec(s)));
                 model.Series.Add(scatter2);
 
                 var jumpSamples2 = ordered.Where(s => s.IsJump).ToList();
@@ -278,12 +311,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         MarkerFill            = OxyColor.FromAColor(210, OxyColor.FromRgb(255, 215, 0)),
                         MarkerStroke          = OxyColor.FromRgb(180, 140, 0),
                         MarkerStrokeThickness = 1.0,
-                        TrackerFormatString   = "Jump · frame {Tag}\n{1}: {2:0.##}\"\n{3}: {4:0.##}\""
+                        TrackerFormatString   = "{Tag}"
                     };
-                    foreach (var s in jumpSamples2) {
-                        var tag = $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}";
-                        jumpSeries2.Points.Add(new ScatterPoint(s.DeltaRaArcSec, s.DeltaDecArcSec, tag: tag));
-                    }
+                    foreach (var s in jumpSamples2)
+                        jumpSeries2.Points.Add(new ScatterPoint(s.DeltaRaArcSec, s.DeltaDecArcSec,
+                            tag: BuildJumpTooltipHeaderArcSec(s)));
                     model.Series.Add(jumpSeries2);
                 }
 
