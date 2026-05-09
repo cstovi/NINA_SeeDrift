@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.15] — 2026-05-09
+
+### Fixed
+
+- **NINA log correlation:** Parse **fractional seconds** in log timestamps (e.g. `T00:09:33.6229`) instead of truncating to whole seconds.
+- **Between-frame markers:** Extend the inter-frame **upper bound** by **1.5 s** when matching triggers, `SelectDitherPulse`, and center-drift lines so dithers are not dropped when they fall just after a second-rounded FITS `DATE-OBS` cap (same-second boundary issue).
+
+### Documentation
+
+- **MANUAL:** Note fractional log times and slop for strict windows.
+
 ## [0.4.14] — 2026-05-09
 
 ### Fixed

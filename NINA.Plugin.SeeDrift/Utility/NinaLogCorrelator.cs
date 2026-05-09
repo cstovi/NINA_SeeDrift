@@ -42,12 +42,19 @@ namespace NINA.Plugin.SeeDrift.Utility {
             @"BaseImageData\.cs\|SaveToDisk\|.*\|Saved image to\s+(.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        // NINA 3.x log line timestamp — prefix before first | or INFO field.
+        // NINA 3.x log line timestamp — prefix before first | or INFO field (include fractional seconds).
         private static readonly Regex[] _tsPatterns = {
-            new Regex(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", RegexOptions.Compiled),
-            new Regex(@"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", RegexOptions.Compiled),
-            new Regex(@"^\[?(\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2})\]?", RegexOptions.Compiled),
+            new Regex(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)", RegexOptions.Compiled),
+            new Regex(@"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)", RegexOptions.Compiled),
+            new Regex(@"^\[?(\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\]?", RegexOptions.Compiled),
         };
+
+        /// <summary>
+        /// Log trigger/pulse lines can fall in the same second as FITS <c>DATE-OBS</c> (second resolution)
+        /// while NINA logs sub-second times; extend the strict inter-frame upper bound slightly so those
+        /// dithers are not dropped.
+        /// </summary>
+        private static readonly TimeSpan InterFrameLogUpperSlop = TimeSpan.FromSeconds(1.5);
 
         private enum TriggerKind {
             Center,
@@ -218,9 +225,11 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (t1 <= t0)
                     continue;
 
+                var t1Log = t1 + InterFrameLogUpperSlop;
+
                 DateTime? ditherTriggerUtc = null;
                 DateTime? centerTriggerUtc = null;
-                foreach (var tr in triggers.Where(t => t.UtcTime > t0 && t.UtcTime < t1).OrderBy(t => t.UtcTime)) {
+                foreach (var tr in triggers.Where(t => t.UtcTime > t0 && t.UtcTime < t1Log).OrderBy(t => t.UtcTime)) {
                     if (tr.Kind == TriggerKind.Dither) {
                         cur.EdgeHadDitherTrigger = true;
                         ditherTriggerUtc ??= tr.UtcTime;
@@ -234,13 +243,13 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 DitherPulse? pulse = null;
                 if (cur.EdgeHadDitherTrigger && ditherTriggerUtc.HasValue) {
                     pulse = pulses
-                        .Where(p => p.UtcTime >= ditherTriggerUtc.Value && p.UtcTime < t1)
+                        .Where(p => p.UtcTime >= ditherTriggerUtc.Value && p.UtcTime < t1Log)
                         .OrderBy(p => p.UtcTime)
                         .FirstOrDefault();
                 }
                 if (pulse == null && cur.EdgeHadDitherTrigger) {
                     pulse = pulses
-                        .Where(p => p.UtcTime > t0 && p.UtcTime < t1)
+                        .Where(p => p.UtcTime > t0 && p.UtcTime < t1Log)
                         .OrderBy(p => p.UtcTime)
                         .FirstOrDefault();
                 }
@@ -253,12 +262,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (cur.EdgeHadCenterTrigger) {
                     var w0 = centerTriggerUtc ?? t0;
                     centerDrift = centerDriftLines
-                        .Where(d => d.UtcTime >= w0 && d.UtcTime < t1)
+                        .Where(d => d.UtcTime >= w0 && d.UtcTime < t1Log)
                         .OrderBy(d => d.UtcTime)
                         .LastOrDefault();
                     if (centerDrift == null) {
                         centerDrift = centerDriftLines
-                            .Where(d => d.UtcTime > t0 && d.UtcTime < t1)
+                            .Where(d => d.UtcTime > t0 && d.UtcTime < t1Log)
                             .OrderBy(d => d.UtcTime)
                             .LastOrDefault();
                     }
@@ -445,7 +454,8 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 var m = rx.Match(line);
                 if (!m.Success) continue;
 
-                if (DateTime.TryParse(m.Groups[1].Value,
+                var raw = m.Groups[1].Value;
+                if (DateTime.TryParse(raw,
                         CultureInfo.InvariantCulture,
                         DateTimeStyles.RoundtripKind,
                         out var dtRoundtrip) && dtRoundtrip.Kind == DateTimeKind.Utc) {
@@ -453,7 +463,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     return true;
                 }
 
-                if (DateTime.TryParse(m.Groups[1].Value,
+                if (DateTime.TryParse(raw,
                         CultureInfo.InvariantCulture,
                         DateTimeStyles.AssumeLocal | DateTimeStyles.AdjustToUniversal,
                         out utc))
