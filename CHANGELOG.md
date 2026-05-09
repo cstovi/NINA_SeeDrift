@@ -19,6 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.18] — 2026-05-09
+
+### Changed
+
+- **Night HTML header:** Uses the same **featured image** as the NINA plugin listing (**`FeaturedImageURL`** assembly metadata in `AssemblyInfo.cs`). If that metadata is absent, falls back to the **`SeeDrift_Icon`** SVG in `Resources.xaml`. The hosted PNG loads when online (first open).
+
 ## [0.7.17] — 2026-05-09
 
 ### Changed

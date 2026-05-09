@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using NINA.Plugin.SeeDrift.Models;
@@ -18,11 +19,32 @@ namespace NINA.Plugin.SeeDrift.Services {
         private const string CdnChartZoom = "https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js";
         private const string CdnTailwind = "https://cdn.tailwindcss.com";
 
-        /// <summary>Same path as <c>SeeDrift_Icon</c> in <c>Resources.xaml</c> (24×24), for parity with the plugin/sequencer icon size.</summary>
-        private const string SeeDriftLogoSvg =
+        /// <summary>Fallback: same vector as <c>SeeDrift_Icon</c> in <c>Resources.xaml</c> (sequencer / small chrome).</summary>
+        private const string SeeDriftIconSvgFallback =
             "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" class=\"shrink-0\" aria-hidden=\"true\" focusable=\"false\">" +
             "<path d=\"M3 12h18M12 3v18M6 6l12 12M18 6L6 18\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2\" stroke-linecap=\"round\"/>" +
             "</svg>";
+
+        /// <summary>Same asset NINA shows for the plugin listing: <c>[assembly: AssemblyMetadata("FeaturedImageURL", …)]</c>.</summary>
+        private static string BuildHeaderBrandMarkup() {
+            var url = TryGetAssemblyMetadataValue("FeaturedImageURL");
+            if (!string.IsNullOrWhiteSpace(url)) {
+                var safe = Escape(url.Trim());
+                return
+                    $"<img src=\"{safe}\" alt=\"SeeDrift\" class=\"max-h-20 w-auto max-w-[min(100vw,18rem)] object-contain object-left rounded border border-slate-700/50 bg-slate-900/40\" loading=\"lazy\" decoding=\"async\" />";
+            }
+
+            return SeeDriftIconSvgFallback;
+        }
+
+        private static string? TryGetAssemblyMetadataValue(string key) {
+            foreach (var attr in typeof(HtmlReportExporter).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()) {
+                if (string.Equals(attr.Key, key, StringComparison.Ordinal))
+                    return attr.Value;
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// Writes a single rolling nightly HTML with one subsection per target within each batch (each Stop/Test run).
@@ -56,8 +78,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("<main class=\"mx-auto max-w-5xl px-4 py-8 sm:px-6\">");
             sb.AppendLine("<header class=\"mb-10 border-b border-slate-800 pb-6\">");
             sb.AppendLine("  <div class=\"flex flex-row items-start gap-4\">");
-            sb.AppendLine("    <div class=\"flex-shrink-0 pt-0.5\" role=\"img\" aria-label=\"SeeDrift\">");
-            sb.AppendLine("      " + SeeDriftLogoSvg);
+            sb.AppendLine("    <div class=\"flex-shrink-0 pt-0.5\">");
+            sb.AppendLine("      " + BuildHeaderBrandMarkup());
             sb.AppendLine("    </div>");
             sb.AppendLine("    <div class=\"min-w-0 flex-1\">");
             sb.AppendLine($"      <h1 class=\"text-xl font-semibold tracking-tight text-white\">SeeDrift — night {Escape(DateTime.Now.ToString("yyyy-MM-dd"))}</h1>");
