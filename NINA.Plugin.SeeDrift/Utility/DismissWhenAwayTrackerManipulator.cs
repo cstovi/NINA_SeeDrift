@@ -1,5 +1,4 @@
 using OxyPlot;
-using OxyPlot.Series;
 
 namespace NINA.Plugin.SeeDrift.Utility {
 
