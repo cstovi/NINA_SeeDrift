@@ -498,10 +498,6 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 var decRange = maxDec - minDec;
                 var spreadStr = $"ΔRA {minRa:+0.0;-0.0}″…{maxRa:+0.0;-0.0}″ ({raRange:F1}″ pp) · ΔDec {minDec:+0.0;-0.0}″…{maxDec:+0.0;-0.0}″ ({decRange:F1}″ pp)";
 
-                string mountWarn = !string.IsNullOrEmpty(_tracker.MountModeWarning)
-                    ? $"\n⚠ {_tracker.MountModeWarning}"
-                    : "";
-
                 if (samples[0].IsPixelPath) {
                     // Prefer derived RA/Dec spread when conversion succeeded.
                     string pixSpreadStr;
@@ -524,10 +520,10 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                         }
                         pixSpreadStr = $"max drift {maxDist:F1}px{psExtra}";
                     }
-                    return $"{n} frames · {pixSpreadStr}{jumpStr} · {last.TargetName}{mountWarn}";
+                    return $"{n} frames · {pixSpreadStr}{jumpStr} · {last.TargetName}";
                 }
 
-                return $"{n} frames · {spreadStr}{jumpStr} · {last.TargetName}{mountWarn}";
+                return $"{n} frames · {spreadStr}{jumpStr} · {last.TargetName}";
             }
         }
 

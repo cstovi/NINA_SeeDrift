@@ -64,12 +64,6 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <summary>True when a NINA log file was found for the session date.</summary>
         public bool LogWasFound { get; private set; }
 
-        /// <summary>
-        /// Non-null when the mount mode self-check detects a likely mismatch between pixel-derived
-        /// RA/Dec jump magnitudes and header-coordinate jump magnitudes.
-        /// </summary>
-        public string? MountModeWarning { get; private set; }
-
         public DriftTrackingService(SeeDriftPlugin plugin, IImageSaveMediator imageSaveMediator) {
             _plugin = plugin;
             _imageSaveMediator = imageSaveMediator;
@@ -308,7 +302,6 @@ namespace NINA.Plugin.SeeDrift.Services {
             JumpDetector.AnnotateJumps(built);
             var (logMatched2, logFound2) = NinaLogCorrelator.AnnotateWithLogEvents(built);
             var jumps = JumpDetector.CountJumps(built);
-            var mountWarning = CheckMountModeConsistency(built);
 
             Application.Current?.Dispatcher.Invoke(() => {
                 CopyTrace(importTrace, _trace);
@@ -316,7 +309,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                 JumpCount = jumps;
                 LogCorrelatedCount = logMatched2;
                 LogWasFound = logFound2;
-                MountModeWarning = mountWarning;
                 Samples.ReplaceAll(built);
             });
 
@@ -326,27 +318,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                 $"image {skippedImage}, jumps {jumps} logFound={logFound2} logMatched={logMatched2})");
         }
 
-        /// <summary>
-        /// Compares pixel-derived jump magnitudes against header-coordinate jump magnitudes.
-        /// Returns a warning string if median disagreement exceeds 20%, otherwise null.
-        /// </summary>
-        private static string? CheckMountModeConsistency(List<DriftSample> samples) {
-            var ratios = new List<double>();
-            foreach (var s in samples) {
-                if (!s.IsJump || !s.HasPixelDerivedRaDec) continue;
-                var headerMag = Math.Sqrt(s.DeltaRaArcSec * s.DeltaRaArcSec + s.DeltaDecArcSec * s.DeltaDecArcSec);
-                if (headerMag < 0.5) continue; // skip near-zero header jumps (same coords every frame)
-                var pixelMag  = Math.Sqrt(s.PixelDerivedRaArcSec!.Value * s.PixelDerivedRaArcSec.Value
-                                        + s.PixelDerivedDecArcSec!.Value * s.PixelDerivedDecArcSec.Value);
-                ratios.Add(Math.Abs(pixelMag - headerMag) / headerMag);
-            }
-            if (ratios.Count < 2) return null;
-            ratios.Sort();
-            var median = ratios[ratios.Count / 2];
-            if (median > 0.20)
-                return $"Mount mode may be wrong — pixel jumps disagree with header coords by {median:P0} (check EQ vs Alt/Az setting)";
-            return null;
-        }
 
         private static void CopyTrace(TraceState from, TraceState to) {
             to.RefRaHours = from.RefRaHours;
