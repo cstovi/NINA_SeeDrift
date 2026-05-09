@@ -1,10 +1,9 @@
 using System;
-using System.Globalization;
-using System.Management;
+using System.Runtime.InteropServices;
 namespace NINA.Plugin.SeeDrift.Utility {
 
     /// <summary>
-    /// Reports physical CPU cores on Windows (sum of <c>Win32_Processor.NumberOfCores</c> across sockets).
+    /// Reports physical CPU cores on Windows via <c>kernel32!GetLogicalProcessorInformation</c> (counts <c>RelationProcessorCore</c> entries).
     /// </summary>
     internal static class CpuTopology {
 
@@ -16,7 +15,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static readonly Lazy<int> PhysicalCoreCountLazy = new(ComputePhysicalCoreCount);
 
         /// <summary>
-        /// Physical CPU cores. Uses WMI; falls back to <see cref="Environment.ProcessorCount"/> if WMI fails.
+        /// Physical CPU cores from kernel topology. Falls back to <see cref="Environment.ProcessorCount"/> if the API fails.
         /// </summary>
         public static int PhysicalCoreCount => PhysicalCoreCountLazy.Value;
 
@@ -28,20 +27,52 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
         private static int ComputePhysicalCoreCount() {
             try {
-                using var searcher = new ManagementObjectSearcher("SELECT NumberOfCores FROM Win32_Processor");
-                var total = 0;
-                foreach (ManagementBaseObject mo in searcher.Get()) {
-                    using (mo)
-                        total += Convert.ToInt32(mo["NumberOfCores"], CultureInfo.InvariantCulture);
+                uint bufferBytes = 0;
+                if (!NativeMethods.GetLogicalProcessorInformation(IntPtr.Zero, ref bufferBytes)) {
+                    if (Marshal.GetLastWin32Error() != NativeMethods.ErrorInsufficientBuffer || bufferBytes == 0)
+                        return FallbackPhysicalCoreCount();
                 }
 
-                if (total > 0)
-                    return total;
+                IntPtr buffer = Marshal.AllocHGlobal((int)bufferBytes);
+                try {
+                    if (!NativeMethods.GetLogicalProcessorInformation(buffer, ref bufferBytes))
+                        return FallbackPhysicalCoreCount();
+
+                    // SYSTEM_LOGICAL_PROCESSOR_INFORMATION stride differs between 32- and 64-bit processes (winnt.h).
+                    var stride = IntPtr.Size == 8 ? 32 : 24;
+                    var relationshipOffset = IntPtr.Size == 8 ? 8 : 4;
+                    var cores = 0;
+                    for (var offset = 0; offset + stride <= (int)bufferBytes; offset += stride) {
+                        var relationship = unchecked((uint)Marshal.ReadInt32(IntPtr.Add(buffer, offset + relationshipOffset)));
+                        if (relationship == (uint)LogicalProcessorRelationship.RelationProcessorCore)
+                            cores++;
+                    }
+
+                    if (cores > 0)
+                        return cores;
+                } finally {
+                    Marshal.FreeHGlobal(buffer);
+                }
             } catch {
-                // WMI unavailable or access denied
+                // Unexpected native/layout failure — use fallback.
             }
 
-            return Math.Max(1, Environment.ProcessorCount);
+            return FallbackPhysicalCoreCount();
+        }
+
+        private static int FallbackPhysicalCoreCount() =>
+            Math.Max(1, Environment.ProcessorCount);
+
+        private enum LogicalProcessorRelationship : uint {
+            RelationProcessorCore = 0,
+        }
+
+        private static class NativeMethods {
+
+            internal const int ErrorInsufficientBuffer = 122;
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            internal static extern bool GetLogicalProcessorInformation(IntPtr buffer, ref uint returnLength);
         }
     }
 }

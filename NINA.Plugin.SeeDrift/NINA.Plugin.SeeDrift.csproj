@@ -25,20 +25,10 @@
     <PackageReference Include="NINA.PlateSolving" Version="3.2.0.9001" />
     <PackageReference Include="NINA.Plugin" Version="3.2.0.9001" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="System.Management" Version="8.0.0" GeneratePathProperty="true" />
   </ItemGroup>
-
-  <!-- Class libraries do not copy this dependency by default; NINA loads the plugin from its folder. -->
-  <Target Name="CopySystemManagementNextToPlugin" AfterTargets="CopyFilesToOutputDirectory">
-    <Copy SourceFiles="$(PkgSystem_Management)\runtimes\win\lib\net8.0\System.Management.dll"
-          DestinationFolder="$(OutputPath)"
-          SkipUnchangedFiles="true"
-          Condition="Exists('$(PkgSystem_Management)\runtimes\win\lib\net8.0\System.Management.dll')" />
-  </Target>
 
   <Target Name="CopyToNina" AfterTargets="Build">
     <Copy SourceFiles="$(OutputPath)NINA.Plugin.SeeDrift.dll" DestinationFolder="$(LOCALAPPDATA)\NINA\Plugins\3.0.0\SeeDrift" SkipUnchangedFiles="true" ContinueOnError="true" />
-    <Copy SourceFiles="$(OutputPath)System.Management.dll" DestinationFolder="$(LOCALAPPDATA)\NINA\Plugins\3.0.0\SeeDrift" SkipUnchangedFiles="true" ContinueOnError="true" Condition="Exists('$(OutputPath)System.Management.dll')" />
   </Target>
 
 </Project>

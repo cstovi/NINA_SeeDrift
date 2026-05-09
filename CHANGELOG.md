@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Documentation layout:** Shared See\* docs (**`gitship.mdc`**, **`NINA_IMAGE_PATH_ENUMERATION.md`**, **`NINA_plugin_guide.md`** including session-scoped exports) now live only in the workspace sibling folder **`../NINA_shared/`** (same parent as this repo). The nested **`NINA_SeeDrift/NINA_shared/`** copy was removed; `.cursor/rules/gitship.mdc` points agents at **`../NINA_shared/`**.
 
+## [0.7.28] — 2026-05-10
+
+### Changed
+
+- **CPU topology:** Physical core count for concurrency limits uses **`kernel32!GetLogicalProcessorInformation`** (no **`System.Management`** / WMI). Fallback remains **`Environment.ProcessorCount`**. Install only **`NINA.Plugin.SeeDrift.dll`** (no extra **`System.Management.dll`**).
+
 ## [0.7.27] — 2026-05-09
 
 ### Changed

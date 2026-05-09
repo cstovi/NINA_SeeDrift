@@ -31,7 +31,7 @@
                 <Grid.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="420" TextWrapping="Wrap"
-                                   Text="How many frames to plate-solve at once. Choices run from 1 up to 80% of physical cores (from WMI Win32_Processor.NumberOfCores), rounded down (minimum 1). On a new install the default matches physical cores but never exceeds that ceiling. If WMI is unavailable, core count falls back to logical processors. Each slot uses a separate solver instance; higher values use more RAM and CPU. Downsampling still comes only from your NINA Plate Solve profile."/>
+                                   Text="How many frames to plate-solve at once. Choices run from 1 up to 80% of physical cores (from GetLogicalProcessorInformation), rounded down (minimum 1). On a new install the default matches physical cores but never exceeds that ceiling. If that fails, core count falls back to logical processors (Environment.ProcessorCount). Each slot uses a separate solver instance; higher values use more RAM and CPU. Downsampling still comes only from your NINA Plate Solve profile."/>
                     </ToolTip>
                 </Grid.ToolTip>
                 <Grid.ColumnDefinitions>
