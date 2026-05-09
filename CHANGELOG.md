@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.23] — 2026-05-09
+
+### Fixed
+
+- **Sequencer:** If NINA composes the plugin before `Application.Current` exists, icon registration **retries on the UI idle queue** (capped) so the **palette row** and **dragged-in step blocks** still pick up **SeeDrift_Icon**—the same two surfaces SeeDew-style instructions use.
+
 ## [0.7.22] — 2026-05-09
 
 ### Fixed
