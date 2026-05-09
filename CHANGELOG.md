@@ -6,9 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.5] — 2026-05-09
+
+### Added
+
+- **NINA log tooltips:** Between-frame hovers show **dither target** as logged (`from` → `to`, Δx/Δy in guider units, optional pulse **durations**) and **center-after-drift** **Drift / threshold** in **arc minutes** when those lines appear in the session logs.
+
 ### Changed
 
 - **Between-frame hover:** Measured lines are ordered **header Δ → derived Δ → cumulative-pixel step** so arcsec comparisons sit together.
+- **Dither log parse:** `SelectDitherPulse` lines allow spaces after commas in coordinates (e.g. `(0, 0)`).
 
 ## [0.4.4] — 2026-05-09
 

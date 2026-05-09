@@ -33,9 +33,14 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static readonly Regex RxTriggerDither = new Regex(
             @"Starting\s+Trigger:.*DitherAfterExposures", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        /// <summary>NINA guider commanded dither step (guider coordinate units).</summary>
+        /// <summary>NINA guider commanded dither: full line includes from→to and optional guide durations (seconds).</summary>
         private static readonly Regex RxDitherPulse = new Regex(
-            @"DirectGuider\.cs\|SelectDitherPulse\|.*\|Dither target from \(([-0-9.eE]+),([-0-9.eE]+)\) to \(([-0-9.eE]+),([-0-9.eE]+)\)",
+            @"DirectGuider\.cs\|SelectDitherPulse\|.*\|Dither target from \(([-0-9.eE]+)\s*,\s*([-0-9.eE]+)\) to \(([-0-9.eE]+)\s*,\s*([-0-9.eE]+)\)(?: using guide durations of ([-0-9.eE]+) and ([-0-9.eE]+) seconds)?",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>Center-after-drift plate-solve follower: reported drift vs threshold (arc minutes).</summary>
+        private static readonly Regex RxCenterDriftArcMin = new Regex(
+            @"CenterAfterDriftTrigger\.cs\|PlatesolvingImageFollower_PropertyChanged\|\d+\|Drift:\s*([-0-9.eE]+)\s*/\s*([-0-9.eE]+)\s*arc\s*minutes?",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // NINA 3.x log line timestamp — prefix before first | or INFO field.
@@ -58,8 +63,20 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
         private sealed class DitherPulse {
             public DateTime UtcTime { get; set; }
+            public double FromX { get; set; }
+            public double FromY { get; set; }
+            public double ToX { get; set; }
+            public double ToY { get; set; }
             public double Dx { get; set; }
             public double Dy { get; set; }
+            public double? GuideDurationFirstSec { get; set; }
+            public double? GuideDurationSecondSec { get; set; }
+        }
+
+        private sealed class CenterDriftLogLine {
+            public DateTime UtcTime { get; set; }
+            public double DriftArcMinutes { get; set; }
+            public double ThresholdArcMinutes { get; set; }
         }
 
         /// <summary>
@@ -84,14 +101,17 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
                 var triggers = new List<TimedTrigger>();
                 var pulses = new List<DitherPulse>();
-                if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses))
+                var centerDriftLines = new List<CenterDriftLogLine>();
+                if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses, centerDriftLines))
                     return (0, false, 0, 0);
 
                 triggers.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
                 pulses.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
+                centerDriftLines.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
 
-                Logger.Debug($"SeeDrift: log correlator — triggers={triggers.Count}, dither pulses={pulses.Count}");
-                AssignInterFrameEdges(samples, triggers, pulses);
+                Logger.Debug(
+                    $"SeeDrift: log correlator — triggers={triggers.Count}, dither pulses={pulses.Count}, center drift lines={centerDriftLines.Count}");
+                AssignInterFrameEdges(samples, triggers, pulses, centerDriftLines);
 
                 var logEventsForHints = triggers.Select(t => new LogEventLite { UtcTime = t.UtcTime, Label = t.Label }).ToList();
                 if (triggers.Count == 0) {
@@ -165,7 +185,8 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static void AssignInterFrameEdges(
                 List<DriftSample> samples,
                 List<TimedTrigger> triggers,
-                List<DitherPulse> pulses) {
+                List<DitherPulse> pulses,
+                List<CenterDriftLogLine> centerDriftLines) {
 
             var ordered = samples.OrderBy(s => s.FrameIndex).ToList();
             for (var i = 1; i < ordered.Count; i++) {
@@ -207,6 +228,21 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     cur.EdgeDitherClaimedDy = pulse.Dy;
                 }
 
+                CenterDriftLogLine? centerDrift = null;
+                if (cur.EdgeHadCenterTrigger) {
+                    var w0 = centerTriggerUtc ?? t0;
+                    centerDrift = centerDriftLines
+                        .Where(d => d.UtcTime >= w0 && d.UtcTime < t1)
+                        .OrderBy(d => d.UtcTime)
+                        .LastOrDefault();
+                    if (centerDrift == null) {
+                        centerDrift = centerDriftLines
+                            .Where(d => d.UtcTime > t0 && d.UtcTime < t1)
+                            .OrderBy(d => d.UtcTime)
+                            .LastOrDefault();
+                    }
+                }
+
                 var lines = new List<string> {
                     $"Between frames {prev.FrameIndex + 1} → {cur.FrameIndex + 1}"
                 };
@@ -218,9 +254,20 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     lines.Add(centerTriggerUtc.HasValue
                         ? $"CenterAfterDrift @ {centerTriggerUtc.Value.ToLocalTime():HH:mm:ss}"
                         : "CenterAfterDrift");
-                if (cur.EdgeDitherClaimedDx.HasValue && cur.EdgeDitherClaimedDy.HasValue) {
+                if (pulse != null) {
                     lines.Add(
-                        $"NINA guider Δ: ({cur.EdgeDitherClaimedDx.Value:F1}, {cur.EdgeDitherClaimedDy.Value:F1}) [guider units]");
+                        $"NINA dither target (guider): ({pulse.FromX:F2}, {pulse.FromY:F2}) → ({pulse.ToX:F2}, {pulse.ToY:F2}); move Δx {pulse.Dx:F2}, Δy {pulse.Dy:F2}");
+                    if (pulse.GuideDurationFirstSec.HasValue && pulse.GuideDurationSecondSec.HasValue) {
+                        lines.Add(
+                            $"NINA dither guide durations (log): {pulse.GuideDurationFirstSec.Value:F2} s, {pulse.GuideDurationSecondSec.Value:F2} s");
+                    }
+                } else if (cur.EdgeDitherClaimedDx.HasValue && cur.EdgeDitherClaimedDy.HasValue) {
+                    lines.Add(
+                        $"NINA guider move (log): Δx {cur.EdgeDitherClaimedDx.Value:F1}, Δy {cur.EdgeDitherClaimedDy.Value:F1} [guider units]");
+                }
+                if (centerDrift != null) {
+                    lines.Add(
+                        $"NINA center drift (log): {centerDrift.DriftArcMinutes:F3}′ vs {centerDrift.ThresholdArcMinutes:F3}′ threshold");
                 }
                 var dHdrRa = cur.DeltaRaArcSec - prev.DeltaRaArcSec;
                 var dHdrDec = cur.DeltaDecArcSec - prev.DeltaDecArcSec;
@@ -259,7 +306,11 @@ namespace NINA.Plugin.SeeDrift.Utility {
             return best;
         }
 
-        private static bool LoadAndParseSessionLogs(DateTime sessionDate, List<TimedTrigger> triggers, List<DitherPulse> pulses) {
+        private static bool LoadAndParseSessionLogs(
+                DateTime sessionDate,
+                List<TimedTrigger> triggers,
+                List<DitherPulse> pulses,
+                List<CenterDriftLogLine> centerDriftLines) {
             if (!Directory.Exists(LogFolder))
                 return false;
 
@@ -270,7 +321,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 foreach (var path in FindAllLogFilesForDate(sessionDate.AddDays(offset))) {
                     if (!seen.Add(path)) continue;
                     logFound = true;
-                    ParseLogLines(path, triggers, pulses);
+                    ParseLogLines(path, triggers, pulses, centerDriftLines);
                 }
             }
 
@@ -295,7 +346,11 @@ namespace NINA.Plugin.SeeDrift.Utility {
             }
         }
 
-        private static void ParseLogLines(string path, List<TimedTrigger> triggers, List<DitherPulse> pulses) {
+        private static void ParseLogLines(
+                string path,
+                List<TimedTrigger> triggers,
+                List<DitherPulse> pulses,
+                List<CenterDriftLogLine> centerDriftLines) {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var sr = new StreamReader(fs);
             string? line;
@@ -326,10 +381,36 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     && double.TryParse(mPulse.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var y0)
                     && double.TryParse(mPulse.Groups[3].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var x1)
                     && double.TryParse(mPulse.Groups[4].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var y1)) {
+                    double? d0 = null;
+                    double? d1 = null;
+                    if (mPulse.Groups[5].Success && mPulse.Groups[6].Success
+                        && double.TryParse(mPulse.Groups[5].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var gd0)
+                        && double.TryParse(mPulse.Groups[6].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var gd1)) {
+                        d0 = gd0;
+                        d1 = gd1;
+                    }
                     pulses.Add(new DitherPulse {
                         UtcTime = ts,
+                        FromX = x0,
+                        FromY = y0,
+                        ToX = x1,
+                        ToY = y1,
                         Dx = x1 - x0,
-                        Dy = y1 - y0
+                        Dy = y1 - y0,
+                        GuideDurationFirstSec = d0,
+                        GuideDurationSecondSec = d1
+                    });
+                    continue;
+                }
+
+                var mCenterDrift = RxCenterDriftArcMin.Match(line);
+                if (mCenterDrift.Success
+                    && double.TryParse(mCenterDrift.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var driftAm)
+                    && double.TryParse(mCenterDrift.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var threshAm)) {
+                    centerDriftLines.Add(new CenterDriftLogLine {
+                        UtcTime = ts,
+                        DriftArcMinutes = driftAm,
+                        ThresholdArcMinutes = threshAm
                     });
                 }
             }
