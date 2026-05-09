@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.10] — 2026-05-09
+
+### Changed
+
+- **Concurrency default** uses **physical CPU cores** via WMI (`Win32_Processor.NumberOfCores`), clamped **1–16**, with fallback to **`Environment.ProcessorCount`** if WMI fails.
+- Ship **`System.Management.dll`** next to the plugin (install docs updated).
+
 ## [0.7.9] — 2026-05-09
 
 ### Changed

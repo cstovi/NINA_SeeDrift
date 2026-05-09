@@ -30,7 +30,7 @@
                 <Grid.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="420" TextWrapping="Wrap"
-                                   Text="How many frames to plate-solve at once (pick 1–16). On a new install the default matches your logical CPU count (capped at 16). Each slot uses a separate solver instance; higher values use more RAM and CPU. Downsampling still comes only from your NINA Plate Solve profile."/>
+                                   Text="How many frames to plate-solve at once (pick 1–16). On a new install the default matches physical CPU cores from WMI (Win32_Processor.NumberOfCores), capped at 16; if WMI is unavailable it falls back to logical processor count. Each slot uses a separate solver instance; higher values use more RAM and CPU. Downsampling still comes only from your NINA Plate Solve profile."/>
                     </ToolTip>
                 </Grid.ToolTip>
                 <Grid.ColumnDefinitions>

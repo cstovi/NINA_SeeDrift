@@ -13,11 +13,11 @@ There is **no live dockable chart** and **no pixel / header-only drift path** in
 ## Install
 
 1. Build `NINA.Plugin.SeeDrift.csproj`: `dotnet build -c Release`.
-2. Copy **`NINA.Plugin.SeeDrift.dll`** from `bin\Release\net8.0-windows\` to:
+2. Copy **`NINA.Plugin.SeeDrift.dll`** and **`System.Management.dll`** from `bin\Release\net8.0-windows\` to:
 
    `%LOCALAPPDATA%\NINA\Plugins\3.0.0\SeeDrift\`
 
-   If NINA reports a missing dependency, copy the other assemblies from the **same** output folder as well (for example **Newtonsoft.Json**.dll, **FreeImage** / imaging-related DLLs pulled in transitively). This project does **not** use Math.NET.
+   If NINA reports another missing dependency, copy it from the **same** output folder as well (for example **Newtonsoft.Json**.dll, **FreeImage** / imaging-related DLLs pulled in transitively). This project does **not** use Math.NET.
 
 3. Restart NINA.
 
@@ -38,7 +38,7 @@ Set **Options → Imaging → image file path** in NINA so saved lights land whe
 
 Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste its path), then **Run test report**. The entire log file is used. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving).
 
-**Concurrency** is a **dropdown** (1–16); on a fresh install it defaults to **logical CPU count** (max 16). **Minimum exposures per target** hides targets with fewer solved frames in each batch’s night HTML section (default **50**). Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
+**Concurrency** is a **dropdown** (1–16); on a fresh install it defaults to **physical core count** from WMI (max **16**), falling back to logical processor count if WMI fails. **Minimum exposures per target** hides targets with fewer solved frames in each batch’s night HTML section (default **50**). Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
 
 SeeDrift also writes **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** (plugin messages, in addition to NINA’s own log).
 

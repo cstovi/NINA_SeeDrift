@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Newtonsoft.Json;
+using NINA.Plugin.SeeDrift.Utility;
 
 namespace NINA.Plugin.SeeDrift {
 
@@ -12,8 +13,8 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Historic Test report: path to a NINA .log file (Saved image to … lines).</summary>
         public string TestReportLogFilePath { get; set; } = "";
 
-        /// <summary>Max concurrent plate solves (1–16). Default on fresh settings matches logical CPU count (clamped).</summary>
-        public int PlateSolveParallelism { get; set; } = Math.Clamp(Environment.ProcessorCount, 1, 16);
+        /// <summary>Max concurrent plate solves (1–16). Default on fresh settings matches physical CPU cores (clamped).</summary>
+        public int PlateSolveParallelism { get; set; } = Math.Clamp(CpuTopology.PhysicalCoreCount, 1, 16);
 
         /// <summary>
         /// Night HTML lists only targets with at least this many solved frames in the batch (default 50).
