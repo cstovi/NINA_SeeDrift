@@ -183,10 +183,18 @@ namespace NINA.Plugin.SeeDrift.Services {
                     windowStartUtc,
                     windowEndUtc,
                     out var orderedSaves,
-                    out _) || orderedSaves.Count < 2) {
+                    out var filesOpenedOk)) {
+                SeeDriftLog.Warning("SeeDrift: could not open any of the listed log file(s).");
+                Report("Stopped — could not read the log file (path wrong, missing, or blocked).");
+                return false;
+            }
+
+            if (orderedSaves.Count < 2) {
                 SeeDriftLog.Warning(
-                    $"SeeDrift: fewer than 2 saved-light lines in log(s) — no report ({orderedSaves.Count} candidates).");
-                Report($"Stopped — only {orderedSaves.Count} usable saved-light path(s) in the log (need ≥2). Expect BaseImageData SaveToDisk lines.");
+                    $"SeeDrift: fewer than 2 saved-light lines in log(s) — no report ({orderedSaves.Count} candidates, filesOpened={filesOpenedOk.Count}).");
+                Report(
+                    $"Stopped — found {orderedSaves.Count} saved-light path line(s) SeeDrift could parse (need ≥2). " +
+                    "Typical causes: log level hides SaveToDisk lines, timestamps SeeDrift does not recognize, or no “Saved image to …” lines in this file.");
                 return false;
             }
 

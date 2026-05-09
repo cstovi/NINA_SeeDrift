@@ -116,7 +116,13 @@ namespace NINA.Plugin.SeeDrift {
 
             if (!ok) {
                 MessageBox.Show(
-                    "Test report did not add a batch to the night HTML. Typical causes: fewer than two saved-light paths in the log (look for BaseImageData SaveToDisk lines), files missing on disk, frames skipped as calibration, or plate solve failures. Check the NINA application log for messages starting with SeeDrift.",
+                    "Test report did not add a batch to the night HTML.\n\n" +
+                    "Common causes:\n" +
+                    "• Fewer than two usable lights — NINA often saves .xisf (now accepted); logs must contain “Saved image to …” lines.\n" +
+                    "• Files moved/deleted since the session.\n" +
+                    "• Frames classified as calibration in FITS headers.\n" +
+                    "• Plate solve failures.\n\n" +
+                    "See %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log and NINA’s application log for lines starting with SeeDrift.",
                     "SeeDrift — Test report",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);

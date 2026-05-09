@@ -23,7 +23,8 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
     internal static class FitsFolderImport {
 
-        private static readonly string[] Extensions = { ".fits", ".fit", ".fts" };
+        /// <summary>FITS-like extensions NINA may save for lights (XISF is common for camera saves).</summary>
+        private static readonly string[] Extensions = { ".fits", ".fit", ".fts", ".xisf" };
 
         /// <summary>
         /// Recursive scan under <paramref name="rootFolderPath"/> following the active profile’s LIGHT

@@ -47,10 +47,20 @@ namespace NINA.Plugin.SeeDrift.Utility {
             @"CenterAfterDriftTrigger\.cs\|PlatesolvingImageFollower_PropertyChanged\|\d+\|Drift:\s*([-0-9.eE]+)\s*/\s*([-0-9.eE]+)\s*arc\s*minutes?",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        /// <summary><c>BaseImageData.SaveToDisk</c> — timestamp + path share the same basis as other log lines.</summary>
-        private static readonly Regex RxSavedImageTo = new Regex(
-            @"BaseImageData\.cs\|SaveToDisk\|.*\|Saved image to\s+(.+)$",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        /// <summary>
+        /// Ordered strict→loose: NINA builds vary (<c>BaseImageData</c> vs generic SaveToDisk, spacing, optional colon).
+        /// </summary>
+        private static readonly Regex[] RxSavedImagePatterns = {
+            new Regex(@"BaseImageData\.cs\|SaveToDisk\|.*\|Saved image to:?\s+(.+)$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex(@"\|SaveToDisk\|[^\|]*\|[^\|]*\|.*Saved image to:?\s+(.+)$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex(@"SaveToDisk.*Saved image to:?\s+(.+)$", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex(@"(?i)Saved image to:?\s+(.+)$", RegexOptions.Compiled),
+        };
+
+        /// <summary>Find an ISO-like timestamp anywhere on the line (handles prefixes before the clock).</summary>
+        private static readonly Regex RxTimestampEmbedded = new Regex(
+            @"(?<!\d)(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?(?:Z|[+-]\d{2}(?::?\d{2})?)?)",
+            RegexOptions.Compiled);
 
         // NINA 3.x log line timestamp — prefix before first | or INFO field (include fractional seconds).
         private static readonly Regex[] _tsPatterns = {
@@ -145,18 +155,15 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
                     string? line;
                     while ((line = sr.ReadLine()) != null) {
-                        if (!TryParseTimestamp(line, out var ts))
+                        if (!TryParseLogLineUtc(line, out var ts))
                             continue;
 
                         if (windowed && (ts < w0!.Value || ts > w1!.Value))
                             continue;
 
-                        var mSave = RxSavedImageTo.Match(line);
-                        if (!mSave.Success)
-                            continue;
-
-                        var rawPath = mSave.Groups[1].Value.Trim().Trim('\'', '"');
-                        if (string.IsNullOrEmpty(rawPath) || ShouldIgnoreSavePath(rawPath))
+                        if (!TryExtractSavedImagePath(line, out var rawPath)
+                            || string.IsNullOrEmpty(rawPath)
+                            || ShouldIgnoreSavePath(rawPath))
                             continue;
 
                         rawEvents.Add((ts, rawPath));
@@ -498,15 +505,13 @@ namespace NINA.Plugin.SeeDrift.Utility {
             using var sr = new StreamReader(fs);
             string? line;
             while ((line = sr.ReadLine()) != null) {
-                if (!TryParseTimestamp(line, out var ts))
+                if (!TryParseLogLineUtc(line, out var ts))
                     continue;
 
-                var mSave = RxSavedImageTo.Match(line);
-                if (mSave.Success) {
-                    var rawPath = mSave.Groups[1].Value.Trim().Trim('\'', '"');
-                    if (!string.IsNullOrEmpty(rawPath) && !ShouldIgnoreSavePath(rawPath)) {
-                        imageSaves.Add(new ImageSaveEvent { UtcTime = ts, FilePath = rawPath });
-                    }
+                if (TryExtractSavedImagePath(line, out var rawPath)
+                    && !string.IsNullOrEmpty(rawPath)
+                    && !ShouldIgnoreSavePath(rawPath)) {
+                    imageSaves.Add(new ImageSaveEvent { UtcTime = ts, FilePath = rawPath });
                     continue;
                 }
 
@@ -590,6 +595,50 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         out utc))
                     return true;
             }
+            return false;
+        }
+
+        /// <summary>Line start patterns first; then first ISO-like timestamp anywhere (newer NINA layouts).</summary>
+        private static bool TryParseLogLineUtc(string line, out DateTime utc) {
+            if (TryParseTimestamp(line, out utc))
+                return true;
+            utc = default;
+            var m = RxTimestampEmbedded.Match(line);
+            if (!m.Success)
+                return false;
+            var raw = m.Value;
+            if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto)) {
+                utc = dto.UtcDateTime;
+                return true;
+            }
+            if (DateTime.TryParse(raw,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind,
+                    out var dtRoundtrip) && dtRoundtrip.Kind == DateTimeKind.Utc) {
+                utc = dtRoundtrip;
+                return true;
+            }
+            return DateTime.TryParse(raw,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeLocal | DateTimeStyles.AdjustToUniversal,
+                out utc);
+        }
+
+        private static bool TryExtractSavedImagePath(string line, out string rawPath) {
+            rawPath = "";
+            var trimmed = line.TrimEnd();
+            foreach (var rx in RxSavedImagePatterns) {
+                var m = rx.Match(trimmed);
+                if (!m.Success)
+                    continue;
+                rawPath = m.Groups[1].Value.Trim().Trim('\'', '"');
+                var pipeIdx = rawPath.IndexOf('|');
+                if (pipeIdx > 0)
+                    rawPath = rawPath.Substring(0, pipeIdx).TrimEnd();
+                if (!string.IsNullOrEmpty(rawPath))
+                    return true;
+            }
+            rawPath = "";
             return false;
         }
     }
