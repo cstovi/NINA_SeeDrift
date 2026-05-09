@@ -180,6 +180,16 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 || p.IndexOf(@"\AppData\Local\Temp\", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        /// <summary>
+        /// Uses NINA exposure index from file names when both parse; otherwise trace position (<c>FrameIndex + 1</c>).
+        /// </summary>
+        private static string BetweenFramesHoverLine(DriftSample prev, DriftSample cur) {
+            if (FitsFolderImport.TryExposureSequenceFromFileName(prev.FileName, out var a)
+                && FitsFolderImport.TryExposureSequenceFromFileName(cur.FileName, out var b))
+                return $"Between frames {a} → {b} ({prev.FileName} → {cur.FileName})";
+            return $"Between frames {prev.FrameIndex + 1} → {cur.FrameIndex + 1} ({prev.FileName} → {cur.FileName})";
+        }
+
         private static void AssignInterFrameEdges(
                 List<DriftSample> samples,
                 List<TimedTrigger> triggers,
@@ -255,7 +265,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 }
 
                 var lines = new List<string> {
-                    $"Between frames {prev.FrameIndex + 1} → {cur.FrameIndex + 1} ({prev.FileName} → {cur.FileName})"
+                    BetweenFramesHoverLine(prev, cur)
                 };
                 if (cur.EdgeHadDitherTrigger)
                     lines.Add(ditherTriggerUtc.HasValue

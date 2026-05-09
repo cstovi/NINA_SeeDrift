@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.14] — 2026-05-09
+
+### Fixed
+
+- **Plot hovers:** Frame and jump tooltips, and **between-frame** log tooltips, show the **NINA exposure number** from the FITS basename (`…_0019.fits` → 19) when it parses, instead of **trace position** (`FrameIndex + 1`), so labels match file names and logs.
+
+### Documentation
+
+- **MANUAL:** Clarify exposure index vs trace order for hover frame numbers.
+
 ## [0.4.13] — 2026-05-09
 
 ### Added

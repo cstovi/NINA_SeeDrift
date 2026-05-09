@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows.Input;
@@ -85,9 +86,17 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             ? "pixel reg"
             : "header coords";
 
+        /// <summary>
+        /// Frame number for hovers: NINA exposure index from file name when parseable, else trace order (1-based).
+        /// </summary>
+        private static string FrameOrdinalForUi(DriftSample s) =>
+            FitsFolderImport.TryExposureSequenceFromFileName(s.FileName, out var n)
+                ? n.ToString(CultureInfo.InvariantCulture)
+                : (s.FrameIndex + 1).ToString(CultureInfo.InvariantCulture);
+
         /// <summary>First line for blue frame-dot tooltips (time; jump note when the frame is also a jump).</summary>
         private static string BuildFrameScatterHead(DriftSample s) {
-            var t = $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}";
+            var t = $"{FrameOrdinalForUi(s)} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}";
             if (s.IsJump)
                 return $"{t} · Jump: {s.JumpReason ?? "large shift"}";
             return t;
@@ -115,15 +124,15 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
 
         private static string BuildJumpTooltipHeaderArcSec(DriftSample s) =>
             AppendHoverFileTail(s,
-                $"Jump · frame {s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}\nΔRA (arcsec): {s.DeltaRaArcSec:0.##}\nΔDec (arcsec): {s.DeltaDecArcSec:0.##}");
+                $"Jump · frame {FrameOrdinalForUi(s)} — {s.JumpReason ?? "large shift"}\nΔRA (arcsec): {s.DeltaRaArcSec:0.##}\nΔDec (arcsec): {s.DeltaDecArcSec:0.##}");
 
         private static string BuildJumpTooltipPixelDerived(DriftSample s, double dRa, double dDec) =>
             AppendHoverFileTail(s,
-                $"Jump · frame {s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}\nΔRA: {dRa:0.##}\"\nΔDec: {dDec:0.##}\"");
+                $"Jump · frame {FrameOrdinalForUi(s)} — {s.JumpReason ?? "large shift"}\nΔRA: {dRa:0.##}\"\nΔDec: {dDec:0.##}\"");
 
         private static string BuildJumpTooltipPixelRaw(DriftSample s, double x, double y) =>
             AppendHoverFileTail(s,
-                $"Jump · frame {s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}\nCumulative X (px): {x:0.##}\nCumulative Y (px, ↓ = sensor down): {y:0.##}");
+                $"Jump · frame {FrameOrdinalForUi(s)} — {s.JumpReason ?? "large shift"}\nCumulative X (px): {x:0.##}\nCumulative Y (px, ↓ = sensor down): {y:0.##}");
 
         private PlotModel _plotModel = null!;
         public PlotModel PlotModel {

@@ -27,7 +27,7 @@ Session discipline (**one scope / one target run**, separate folders for replay)
 1. Open the **SeeDrift** dockable on the Imaging tab.
 2. Arm recording with the SeeDrift **Start** sequence instruction (and **Stop** when finished), or use your usual workflow so frames are recorded while armed.
 3. Click **Reset trace** before or during a run if you want a fresh reference frame.
-4. Accumulate lights; the plot updates per saved frame. Jump detection and **strict** NINA log correlation for **between-frame** markers run on the same trace as for folder import. **Hover tooltips** disappear when you move the pointer off the marker (you do not need to click away or leave the chart). Frame and jump hovers end with the FITS **file name** (basename) when known.
+4. Accumulate lights; the plot updates per saved frame. Jump detection and **strict** NINA log correlation for **between-frame** markers run on the same trace as for folder import. **Hover tooltips** disappear when you move the pointer off the marker (you do not need to click away or leave the chart). Frame and jump hovers end with the FITS **file name** (basename) when known. **Frame numbers** in those hovers use the NINA **exposure index** parsed from the basename (e.g. `_0019.fits` → 19) when possible, not the 1-based position in the current trace (which can differ if the run did not start at sub 1 or filenames omit the pattern).
 5. Use **Export HTML…** to save an offline copy (needs network once for Chart.js CDN unless you host scripts locally).
 
 ### Offline replay

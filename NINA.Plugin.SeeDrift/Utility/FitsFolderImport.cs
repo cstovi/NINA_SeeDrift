@@ -68,20 +68,34 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 .ToList();
         }
 
-        /// <summary>Trailing <c>_NNN</c> before extension (e.g. <c>…_20.00s_0019.fits</c> → 19); else <see cref="int.MaxValue"/>.</summary>
-        private static int ExposureSequenceTieBreak(string fullPath) {
-            var fn = Path.GetFileName(fullPath);
+        /// <summary>
+        /// Trailing digits after the last underscore before extension in the **basename**
+        /// (e.g. <c>…_20.00s_0019.fits</c> → 19). Used for sort keys and UI labels aligned with NINA
+        /// <c>$$EXPOSURENUMBER$$</c>.
+        /// </summary>
+        internal static bool TryExposureSequenceFromFileName(string? fileName, out int sequence) {
+            sequence = 0;
+            if (string.IsNullOrWhiteSpace(fileName))
+                return false;
+            var fn = Path.GetFileName(fileName.Trim());
             var dot = fn.LastIndexOf('.');
             if (dot <= 0)
-                return int.MaxValue;
+                return false;
             var stem = fn.AsSpan(0, dot);
             var us = stem.LastIndexOf('_');
             if (us < 0 || us >= stem.Length - 1)
-                return int.MaxValue;
+                return false;
             var tail = stem[(us + 1)..];
-            return int.TryParse(tail, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n)
-                ? n
-                : int.MaxValue;
+            if (!int.TryParse(tail, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n))
+                return false;
+            sequence = n;
+            return true;
+        }
+
+        /// <summary>Sort key: exposure sequence, or <see cref="int.MaxValue"/> if not parseable.</summary>
+        private static int ExposureSequenceTieBreak(string fullPath) {
+            var fn = Path.GetFileName(fullPath);
+            return TryExposureSequenceFromFileName(fn, out var n) ? n : int.MaxValue;
         }
     }
 }
