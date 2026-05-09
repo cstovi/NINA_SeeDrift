@@ -97,6 +97,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"    <div class=\"seedrift-chart-box mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-2\">");
                     sb.AppendLine($"      <canvas id=\"{canvasId}\"></canvas>");
                     sb.AppendLine("    </div>");
+                    sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{Escape(FormatMovementTotalsLine(grp))}</p>");
                     sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center — placed along the segment between frames. Hover path for file name; hover △/□ for log detail.</p>");
 
                     var ptsJson = FormatScatterPointsJsonAnchored(grp);
@@ -265,6 +266,33 @@ namespace NINA.Plugin.SeeDrift.Services {
                 out var dRa, out var dDec);
             x = Math.Round(dRa, 4);
             y = Math.Round(dDec, 4);
+        }
+
+        /// <summary>
+        /// Sums absolute ΔRA and ΔDec step sizes between consecutive plotted points (same geometry as the chart).
+        /// </summary>
+        private static void SumAbsoluteSegmentMovementAlongTrace(IReadOnlyList<DriftSample> group, out double sumAbsRa, out double sumAbsDec) {
+            sumAbsRa = 0;
+            sumAbsDec = 0;
+            if (group.Count < 2)
+                return;
+
+            GetAnchoredPlotPoint(group, 0, out var prevX, out var prevY);
+            for (var i = 1; i < group.Count; i++) {
+                GetAnchoredPlotPoint(group, i, out var x, out var y);
+                sumAbsRa += Math.Abs(x - prevX);
+                sumAbsDec += Math.Abs(y - prevY);
+                prevX = x;
+                prevY = y;
+            }
+        }
+
+        private static string FormatMovementTotalsLine(IReadOnlyList<DriftSample> group) {
+            if (group.Count < 2)
+                return "Single frame — no frame-to-frame movement to sum.";
+            SumAbsoluteSegmentMovementAlongTrace(group, out var sumRa, out var sumDec);
+            return FormattableString.Invariant(
+                $"Total movement along trace (Σ |Δstep| between consecutive frames): ΔRA {sumRa:0.###}″ · ΔDec {sumDec:0.###}″");
         }
 
         private static string FormatScatterPointsJsonAnchored(IReadOnlyList<DriftSample> group) {
