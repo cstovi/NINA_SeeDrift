@@ -27,7 +27,7 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 
 1. Insert **SeeDrift Start** so the plugin records **arm UTC**.
 2. Capture lights into the configured NINA image folder (subfolders allowed).
-3. Insert **SeeDrift Stop** — the plugin records **disarm UTC**, scans **recursively**, filters by observation UTC ∈ **[arm, disarm]** inclusive, solves, correlates logs, and updates the **night HTML**.
+3. Insert **SeeDrift Stop** — the plugin records **disarm UTC**, scans **recursively** (but skips folders named for stacked/rejected/calibrated-style outputs — see Technical notes), filters by observation UTC ∈ **[arm, disarm]** inclusive, solves, correlates logs, and updates the **night HTML**.
 
 ### Offline-style test (same disk folder)
 
@@ -44,6 +44,7 @@ When **`%LocalAppData%\NINA\Logs`** contains matching session lines, **between-f
 
 ## Technical notes
 
+- **Folder scan:** The UTC-window batch walks your NINA image directory tree but **does not recurse** into subfolders whose **last path segment** matches common processing outputs (`_rejected`, `calibrated`, `calibration`, `master`, `masters`, `processed`, `processing`, `drizzle`, `registered`, `integration`). Raw capture folders (for example date folders with `Light`, target names, or filters) are still scanned.
 - **Sort order:** Numeric suffix after the last `_` in the file name when present (NINA-style `_0019`), then **DATE-OBS** / fallbacks — see `FitsFolderImport`.
 - **Wrong UTC window / empty window:** While scanning, SeeDrift applies a **file-year quick check** before opening each FITS: if both the file’s creation and last-write **years** lie entirely outside the calendar years spanned by your window, the header is not read. That makes a mistaken year (for example 2025 vs 2026 data) return almost immediately instead of reading every header on disk. NINA’s status line shows periodic **Scanning folder…** progress. Rare copies with FITS **DATE-OBS** inside the window but filesystem timestamps from another year could be skipped — widen the window if that applies.
 - **Observation filter:** FITS time keywords converted to UTC; bounds are **inclusive**.

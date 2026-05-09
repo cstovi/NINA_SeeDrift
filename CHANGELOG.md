@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-05-09
+
+### Changed
+
+- **Folder scan:** Recursive UTC-window discovery skips subdirectory names used for calibration stacks, rejects, and similar outputs (for example `_rejected`, `calibrated`) instead of walking the entire tree under the NINA image path.
+
 ## [0.5.4] — 2026-05-09
 
 ### Added

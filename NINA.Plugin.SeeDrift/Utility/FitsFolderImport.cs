@@ -25,9 +25,29 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static readonly string[] Extensions = { ".fits", ".fit", ".fts" };
 
         /// <summary>
-        /// Recursive scan under <paramref name="rootFolderPath"/> (all subfolders), keeping only LIGHT
+        /// Subdirectory names (last path segment) we never recurse into — calibration stacks, rejection
+        /// buckets, masters, etc. NINA-style capture folders (for example date folders with a
+        /// <c>Light</c> child) remain scanned.
+        /// </summary>
+        private static readonly HashSet<string> SkipSubfolderNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            "_rejected",
+            "calibrated",
+            "calibration",
+            "master",
+            "masters",
+            "processed",
+            "processing",
+            "drizzle",
+            "registered",
+            "integration",
+        };
+
+        /// <summary>
+        /// Recursive scan under <paramref name="rootFolderPath"/> (subfolders except known processing paths), keeping only LIGHT
         /// frames whose observation UTC lies in <paramref name="windowStartUtc"/>…<paramref name="windowEndUtc"/>
-        /// (inclusive). Applies a fast path that skips reading FITS headers when both file creation and last-write
+        /// (inclusive). Descends only through folders that could contain NINA-saved lights; skips known
+        /// processing / sidecar directories (for example <c>_rejected</c>, <c>calibrated</c>) at any depth.
+        /// Applies a fast path that skips reading FITS headers when both file creation and last-write
         /// **years** fall strictly outside the window’s calendar-year span (catches wrong-year windows quickly).
         /// Rare edge case: a file whose DATE-OBS is inside the window but both timestamps are from another year
         /// (e.g. bulk copy) could be skipped — widen the UTC window slightly if needed.
@@ -59,7 +79,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
             var headersRead = 0;
             const int progressEvery = 200;
 
-            foreach (var path in Directory.EnumerateFiles(rootFolderPath, "*", SearchOption.AllDirectories)) {
+            foreach (var path in EnumerateFitsFilesUnderNinaImageTree(rootFolderPath, token)) {
                 token.ThrowIfCancellationRequested();
 
                 var ext = Path.GetExtension(path);
@@ -119,6 +139,39 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 .ThenBy(x => x.path, StringComparer.OrdinalIgnoreCase)
                 .Select(x => new FitsReplayEntry(x.path, x.sortUtc, x.exposureUtc, x.target))
                 .ToList();
+        }
+
+        /// <summary>
+        /// Walks the image root without entering excluded subdirectory names (processing outputs, rejects, etc.).
+        /// </summary>
+        private static IEnumerable<string> EnumerateFitsFilesUnderNinaImageTree(string rootFolderPath, CancellationToken token) {
+            var stack = new Stack<string>();
+            stack.Push(rootFolderPath);
+            while (stack.Count > 0) {
+                token.ThrowIfCancellationRequested();
+                var dir = stack.Pop();
+                string[] files;
+                try {
+                    files = Directory.GetFiles(dir);
+                } catch {
+                    continue;
+                }
+                foreach (var f in files)
+                    yield return f;
+
+                string[] subdirs;
+                try {
+                    subdirs = Directory.GetDirectories(dir);
+                } catch {
+                    continue;
+                }
+                foreach (var sd in subdirs) {
+                    var name = Path.GetFileName(sd);
+                    if (string.IsNullOrEmpty(name) || SkipSubfolderNames.Contains(name))
+                        continue;
+                    stack.Push(sd);
+                }
+            }
         }
 
         /// <summary>
