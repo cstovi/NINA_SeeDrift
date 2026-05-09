@@ -225,15 +225,15 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 var dHdrRa = cur.DeltaRaArcSec - prev.DeltaRaArcSec;
                 var dHdrDec = cur.DeltaDecArcSec - prev.DeltaDecArcSec;
                 lines.Add($"Measured header Δ: ΔRA {dHdrRa:F2}″, ΔDec {dHdrDec:F2}″ (frame-to-frame)");
-                if (cur.IsPixelPath && prev.CumulativePixelX.HasValue && cur.CumulativePixelX.HasValue) {
-                    var dpx = cur.CumulativePixelX.Value - prev.CumulativePixelX.Value;
-                    var dpy = cur.CumulativePixelY!.Value - prev.CumulativePixelY!.Value;
-                    lines.Add($"Measured cumulative-pixel step: Δx {dpx:F2} px, Δy {dpy:F2} px");
-                }
                 if (cur.HasPixelDerivedRaDec && prev.HasPixelDerivedRaDec) {
                     var dRa = cur.PixelDerivedRaArcSec!.Value - prev.PixelDerivedRaArcSec!.Value;
                     var dDec = cur.PixelDerivedDecArcSec!.Value - prev.PixelDerivedDecArcSec!.Value;
                     lines.Add($"Measured derived Δ: ΔRA {dRa:F2}″, ΔDec {dDec:F2}″ (frame-to-frame)");
+                }
+                if (cur.IsPixelPath && prev.CumulativePixelX.HasValue && cur.CumulativePixelX.HasValue) {
+                    var dpx = cur.CumulativePixelX.Value - prev.CumulativePixelX.Value;
+                    var dpy = cur.CumulativePixelY!.Value - prev.CumulativePixelY!.Value;
+                    lines.Add($"Measured cumulative-pixel step: Δx {dpx:F2} px, Δy {dpy:F2} px");
                 }
 
                 if (cur.EdgeHadDitherTrigger || cur.EdgeHadCenterTrigger)
