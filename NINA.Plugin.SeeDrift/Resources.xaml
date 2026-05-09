@@ -62,7 +62,9 @@
     <DataTemplate x:Key="SeeDrift_Options" DataType="{x:Type local:SeeDriftPlugin}">
         <StackPanel Margin="8" MaxWidth="560">
 
-            <TextBlock Text="Drift source" FontWeight="Bold" Margin="0,0,0,6"/>
+            <TextBlock Text="Drift source" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBlock Text="Folder import and live capture while Recording (locked when your sequence runs the SeeDrift Start instruction)."
+                       Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
             <StackPanel Margin="0,0,0,4">
                 <RadioButton Content="FITS header coordinates (fast, uses RA/Dec from headers)"
                              GroupName="DriftSourceMode"

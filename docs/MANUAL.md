@@ -2,20 +2,20 @@
 
 ## Overview
 
-SeeDrift listens for **saved LIGHT** images and plots pointing in frame order: **FITS RA / Dec** (degrees) by default, or **cumulative pixel shifts** from phase correlation when you enable that mode for **folder import**. After **Reset trace**, live capture still uses the first accepted frame as reference for internal offsets and HTML export options.
+SeeDrift listens for **saved LIGHT** images and plots pointing in frame order: **FITS RA / Dec** from headers by default, or **cumulative pixel shifts** from central-crop **template registration** when **Plot cumulative pixel shifts** is enabled (used for **folder import** and for **live** frames while **armed** — the mode is fixed when the SeeDrift **Start** instruction runs). After **Reset trace**, the next accepted frame becomes the reference for offsets and HTML export.
 
 Use it to visualize tracking drift and to see whether **dither** produces visible steps in RA and/or Dec (sharp jumps vs slow drift).
 
 ## Installation
 
-See [README.md](../README.md). Copy the plugin **and** **MathNet.Numerics.dll** into NINA’s plugin folder; other dependencies come from NINA.
+See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** into NINA’s plugin folder; if load fails, copy companion assemblies from the same build output (see README). **Math.NET is not used.**
 
 ## Options (Plugins → SeeDrift)
 
 | Setting | Meaning |
 |--------|---------|
-| **Plot cumulative pixel shifts** | **Folder import only:** when enabled, measures frame-to-frame shifts on a central square crop (phase correlation) and plots **cumulative pixel X/Y** (detector coordinates). When off, folder import uses **FITS header** RA/Dec (fast). Live capture always uses header coordinates. |
-| **Registration crop (px)** | Edge length of the central crop for phase correlation (64–4096, default 800). |
+| **Plot cumulative pixel shifts** | When enabled, measures frame-to-frame shifts on a central square crop (**SSD template** registration — see Technical notes) and plots **cumulative pixel X/Y** (detector coordinates). Applies to **folder import** and to **live** lights while **armed** (mode is captured at **Start**). When off, both use **FITS header** RA/Dec for the plotted trace (faster). |
+| **Registration crop (px)** | Edge length of the central crop for registration (64–4096, default 800). |
 | **Default folder** | Starting folder for **Export HTML…** |
 
 Session discipline (**one scope / one target run**, separate folders for replay) is up to you. Use **Reset trace** when you want a new reference frame or before a new session.
@@ -40,7 +40,7 @@ Session discipline (**one scope / one target run**, separate folders for replay)
 ## Technical notes
 
 - **Header RA/Dec:** primary HDU FITS keywords (`CRVAL1/2`, `OBJCTRA`/`OBJCTDEC`, or `RA`/`DEC`). If these do not update each sub, the header plot looks flat or stacked.
-- **Pixel registration:** uncompressed primary image data only; central crop; normalized phase correlation (integer pixel shifts). Not identical to external tools’ sub-pixel tuning but matches the intent of a cumulative **detector** trail.
+- **Pixel registration:** uncompressed primary image data only; central crop; **sum-of-squared-differences** template search (coarse-to-fine on downsampled data, then fine search and **parabolic sub-pixel** refinement). **No FFT and no Math.NET** — not frequency-domain phase correlation despite similar goals. Produces a cumulative **detector** trail comparable in intent to cross-correlation stacks in other tools.
 - **RA wrap:** handled when computing deltas in arcseconds (small-angle approximation with cos(Dec)).
 - **NINA log correlation:** When **armed** (live capture) and on **folder import**, SeeDrift scans `%LocalAppData%\NINA\Logs` (±1 calendar day from the first frame’s date). It reads **all** `.log` files whose names match that window (not only one file per day), parses **`Starting Trigger:`** lines (center-after-drift, dither-after-exposures) and **`DirectGuider` / `SelectDitherPulse`** dither commands.
   - **Where “Center after drift” / “Dither (after exposures)” appear:** Only on **between-frame midpoint** tooltips — when that `Starting Trigger:` timestamp falls **strictly between** the previous frame’s exposure start and this frame’s exposure start. **Blue frame dots** and **jump** diamonds do **not** attach loose “nearest log line” names; **JumpReason** is from step detection only.

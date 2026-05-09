@@ -1,6 +1,6 @@
 # SeeDrift — NINA plugin
 
-Plots **RA/Dec drift** from **saved LIGHT** frames (any camera): offsets in arcseconds relative to the first frame in the current trace. Optional **folder import** can show **cumulative pixel motion** via phase correlation on crops (detector path). Includes a **live dockable** chart (OxyPlot), **offline FITS folder replay**, and **HTML export** (Chart.js).
+Plots **RA/Dec drift** from **saved LIGHT** frames (any camera): offsets in arcseconds relative to the first frame in the current trace. Optional **pixel registration** (central-crop template matching) can drive the trace for **folder import** and for **live** capture while **armed**, depending on the plugin option. Includes a **live dockable** chart (OxyPlot), **offline FITS folder replay**, and **HTML export** (Chart.js).
 
 ## Requirements
 
@@ -10,9 +10,11 @@ Plots **RA/Dec drift** from **saved LIGHT** frames (any camera): offsets in arcs
 ## Install
 
 1. Build `NINA.Plugin.SeeDrift.csproj` (`dotnet build -c Release`).
-2. Copy **`NINA.Plugin.SeeDrift.dll`** and **`MathNet.Numerics.dll`** (from the build output next to the plugin) to:
+2. Copy **`NINA.Plugin.SeeDrift.dll`** from `bin\Release\net8.0-windows\` (or your build output folder) to:
 
    `%LOCALAPPDATA%\NINA\Plugins\3.0.0\SeeDrift\`
+
+   If NINA reports a missing dependency, copy the other assemblies from the **same** output folder as well (e.g. **OxyPlot**.dll / **OxyPlot.Wpf**.dll, **Newtonsoft.Json**.dll). The project does **not** use Math.NET.
 
 3. Restart NINA.
 

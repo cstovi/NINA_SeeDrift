@@ -3,8 +3,8 @@ using System;
 namespace NINA.Plugin.SeeDrift.Utility {
 
     /// <summary>
-    /// Translation estimate via a coarse-to-fine Sum of Squared Differences search
-    /// with parabolic sub-pixel refinement at the final stage.
+    /// Translation estimate via coarse-to-fine sum-of-squared-differences template search
+    /// with parabolic sub-pixel refinement — not FFT phase correlation (despite the type name).
     /// Returns float shifts so cumulative sums remain distinct even when
     /// per-frame motion is sub-pixel.
     /// Positive shiftY = moving image shifted DOWN; positive shiftX = shifted RIGHT.

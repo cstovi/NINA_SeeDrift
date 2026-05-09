@@ -10,10 +10,10 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Folder for HTML exports (Save dialog default).</summary>
         public string HtmlExportFolder { get; set; } = "";
 
-        /// <summary>How offline folder import builds the trace.</summary>
+        /// <summary>Header vs pixel registration for folder import and for live capture while armed (snapshotted at Arm).</summary>
         public FolderPlotMode FolderImportPlotMode { get; set; } = FolderPlotMode.FitsHeaderCoordinates;
 
-        /// <summary>Central crop edge length for phase correlation (pixels).</summary>
+        /// <summary>Central crop edge length for pixel registration (pixels).</summary>
         public int RegistrationCropSize { get; set; } = 800;
 
         /// <summary>Mount type — determines how pixel shifts are converted to RA/Dec arcseconds.</summary>

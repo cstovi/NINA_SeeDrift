@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.9] — 2026-05-09
+
+### Documentation
+
+- **README / MANUAL:** Removed obsolete **Math.NET** install step; noted real dependencies (**OxyPlot**, **Newtonsoft.Json**, etc.) if the host needs them.
+- **MANUAL:** Pixel path described accurately (**SSD template** registration, sub-pixel refinement; **not** FFT). **Live vs import:** while **armed**, live uses the same header vs pixel mode as the option (locked at **Start**), not “headers only.”
+- **CHANGELOG (0.4.4 note):** The pixel path has never used Math.NET FFT; that line in the log was wrong (retroactive clarification in this release).
+
+### Changed
+
+- **`FolderPlotMode`:** XML docs now match live + import behavior.
+- **Options UI:** Drift source section notes that the choice applies to **folder import** and **live while Recording**.
+
 ## [0.4.8] — 2026-05-09
 
 ### Changed
@@ -41,7 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **NINA log — between-frame markers:** Orange **triangles** (dither) and cyan **squares** (center-only) at segment **midpoints** when a sequencer trigger falls between consecutive exposure starts; tooltips show **guider Δ** from `SelectDitherPulse` and **measured** Δ (header / pixels / derived arcsec). Jump diamonds include the next-frame interval blurb when relevant.
 - **NINA log — merge all matching log files** for the session date ±1 day (not only the first filename match per pattern).
 - **Live — NINA log correlation:** While **armed**, each new saved LIGHT is annotated with the same **jump detection** and **`Starting Trigger:`** log matching (45-minute window) as **folder import**, so tooltips and the plot subtitle can show sequencer hints and log-correlated jumps during capture.
-- **Folder import — pixel path:** optional **phase correlation** on central image crops (like a Python `phase_cross_correlation` stack). Plots **cumulative Δx/Δy in detector pixels** starting at (0,0). Slower; shows dither/drift when FITS **RA/Dec** headers do not. Uses **Math.NET** FFT. Uncompressed primary HDU only.
+- **Folder import — pixel path:** optional **central-crop registration** (SSD template match, coarse-to-fine + parabolic sub-pixel refinement — not FFT / Math.NET). Plots **cumulative Δx/Δy in detector pixels** starting at (0,0). Slower; shows dither/drift when FITS **RA/Dec** headers do not. Uncompressed primary HDU only.
 - **Dither log overlay:** extension point only (`DitherLogOverlay` placeholder) for a future iteration.
 
 ### Removed
