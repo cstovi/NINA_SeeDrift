@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.10] — 2026-05-09
+
+### Fixed
+
+- **NINA log — between-frame intervals:** When logs include **`SaveToDisk`** lines for both frames in a pair, the strict `t0`/`t1` window uses those **log save timestamps** (matched by FITS **file name**) instead of **exposure start** times, so dither/center markers are not dropped when FITS observation time and NINA log time use mismatched bases. **PlateSolver** and **`AppData\Local\Temp`** save paths are ignored for pairing.
+
+### Documentation
+
+- **MANUAL:** Described **SaveToDisk**-based interval bounds and timezone note.
+
 ## [0.4.9] — 2026-05-09
 
 ### Documentation

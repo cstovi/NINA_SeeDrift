@@ -37,6 +37,11 @@ namespace NINA.Plugin.SeeDrift.Utility {
             @"CenterAfterDriftTrigger\.cs\|PlatesolvingImageFollower_PropertyChanged\|\d+\|Drift:\s*([-0-9.eE]+)\s*/\s*([-0-9.eE]+)\s*arc\s*minutes?",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary><c>BaseImageData.SaveToDisk</c> — timestamp + path share the same basis as other log lines.</summary>
+        private static readonly Regex RxSavedImageTo = new Regex(
+            @"BaseImageData\.cs\|SaveToDisk\|.*\|Saved image to\s+(.+)$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         // NINA 3.x log line timestamp — prefix before first | or INFO field.
         private static readonly Regex[] _tsPatterns = {
             new Regex(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", RegexOptions.Compiled),
@@ -73,6 +78,11 @@ namespace NINA.Plugin.SeeDrift.Utility {
             public double ThresholdArcMinutes { get; set; }
         }
 
+        private sealed class ImageSaveEvent {
+            public DateTime UtcTime { get; set; }
+            public string FilePath { get; set; } = "";
+        }
+
         /// <summary>
         /// Loads sequencer triggers and dither pulses; sets hints and inter-frame edge fields.
         /// Returns matched jump count (jumps whose next frame has a strict between-exposure dither/center interval),
@@ -97,16 +107,18 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 var triggers = new List<TimedTrigger>();
                 var pulses = new List<DitherPulse>();
                 var centerDriftLines = new List<CenterDriftLogLine>();
-                if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses, centerDriftLines))
+                var imageSaves = new List<ImageSaveEvent>();
+                if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses, centerDriftLines, imageSaves))
                     return (0, false, 0, 0);
 
                 triggers.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
                 pulses.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
                 centerDriftLines.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
+                imageSaves.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
 
                 Logger.Debug(
-                    $"SeeDrift: log correlator — triggers={triggers.Count}, dither pulses={pulses.Count}, center drift lines={centerDriftLines.Count}");
-                AssignInterFrameEdges(samples, triggers, pulses, centerDriftLines);
+                    $"SeeDrift: log correlator — triggers={triggers.Count}, dither pulses={pulses.Count}, center drift lines={centerDriftLines.Count}, image saves={imageSaves.Count}");
+                AssignInterFrameEdges(samples, triggers, pulses, centerDriftLines, imageSaves);
 
                 if (triggers.Count == 0) {
                     Logger.Debug("SeeDrift: log correlator — no Starting Trigger lines in date window");
@@ -144,18 +156,47 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static int CountSequencerEdges(List<DriftSample> samples) =>
             samples.Count(s => s.EdgeHadDitherTrigger || s.EdgeHadCenterTrigger);
 
+        /// <summary>Latest SaveToDisk UTC per FITS basename (ignores plate-solver temps).</summary>
+        private static Dictionary<string, DateTime> BuildSaveUtcByFileName(IReadOnlyList<ImageSaveEvent> saves) {
+            var map = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+            foreach (var ev in saves) {
+                if (string.IsNullOrWhiteSpace(ev.FilePath) || ShouldIgnoreSavePath(ev.FilePath))
+                    continue;
+                var name = Path.GetFileName(ev.FilePath.Trim());
+                if (string.IsNullOrEmpty(name))
+                    continue;
+                if (!map.TryGetValue(name, out var prevT) || ev.UtcTime >= prevT)
+                    map[name] = ev.UtcTime;
+            }
+            return map;
+        }
+
+        private static bool ShouldIgnoreSavePath(string fullPath) {
+            var p = fullPath.Replace('/', '\\');
+            return p.IndexOf("PlateSolver", StringComparison.OrdinalIgnoreCase) >= 0
+                || p.IndexOf(@"\AppData\Local\Temp\", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private static void AssignInterFrameEdges(
                 List<DriftSample> samples,
                 List<TimedTrigger> triggers,
                 List<DitherPulse> pulses,
-                List<CenterDriftLogLine> centerDriftLines) {
+                List<CenterDriftLogLine> centerDriftLines,
+                List<ImageSaveEvent> imageSaves) {
 
+            var saveByFileName = BuildSaveUtcByFileName(imageSaves);
             var ordered = samples.OrderBy(s => s.FrameIndex).ToList();
             for (var i = 1; i < ordered.Count; i++) {
                 var prev = ordered[i - 1];
                 var cur = ordered[i];
                 var t0 = prev.ExposureStartUtc;
                 var t1 = cur.ExposureStartUtc;
+                if (TryGetLogSaveUtc(prev, saveByFileName, out var save0)
+                    && TryGetLogSaveUtc(cur, saveByFileName, out var save1)
+                    && save1 > save0) {
+                    t0 = save0;
+                    t1 = save1;
+                }
                 if (t1 <= t0)
                     continue;
 
@@ -250,11 +291,20 @@ namespace NINA.Plugin.SeeDrift.Utility {
             }
         }
 
+        private static bool TryGetLogSaveUtc(DriftSample s, Dictionary<string, DateTime> saveByFileName, out DateTime utc) {
+            utc = default;
+            var name = s.FileName?.Trim();
+            if (string.IsNullOrEmpty(name))
+                return false;
+            return saveByFileName.TryGetValue(name, out utc);
+        }
+
         private static bool LoadAndParseSessionLogs(
                 DateTime sessionDate,
                 List<TimedTrigger> triggers,
                 List<DitherPulse> pulses,
-                List<CenterDriftLogLine> centerDriftLines) {
+                List<CenterDriftLogLine> centerDriftLines,
+                List<ImageSaveEvent> imageSaves) {
             if (!Directory.Exists(LogFolder))
                 return false;
 
@@ -265,7 +315,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 foreach (var path in FindAllLogFilesForDate(sessionDate.AddDays(offset))) {
                     if (!seen.Add(path)) continue;
                     logFound = true;
-                    ParseLogLines(path, triggers, pulses, centerDriftLines);
+                    ParseLogLines(path, triggers, pulses, centerDriftLines, imageSaves);
                 }
             }
 
@@ -294,13 +344,23 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 string path,
                 List<TimedTrigger> triggers,
                 List<DitherPulse> pulses,
-                List<CenterDriftLogLine> centerDriftLines) {
+                List<CenterDriftLogLine> centerDriftLines,
+                List<ImageSaveEvent> imageSaves) {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var sr = new StreamReader(fs);
             string? line;
             while ((line = sr.ReadLine()) != null) {
                 if (!TryParseTimestamp(line, out var ts))
                     continue;
+
+                var mSave = RxSavedImageTo.Match(line);
+                if (mSave.Success) {
+                    var rawPath = mSave.Groups[1].Value.Trim().Trim('\'', '"');
+                    if (!string.IsNullOrEmpty(rawPath) && !ShouldIgnoreSavePath(rawPath)) {
+                        imageSaves.Add(new ImageSaveEvent { UtcTime = ts, FilePath = rawPath });
+                    }
+                    continue;
+                }
 
                 if (RxTriggerCenter.IsMatch(line)) {
                     triggers.Add(new TimedTrigger {
