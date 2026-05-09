@@ -5,7 +5,7 @@ alwaysApply: true
 
 # GitShip — commit, push, version, docs
 
-**Rollback depends on commits.** Canonical/shared GitShip rules (including documentation scaffold guidance) live in **`NINA_shared/gitship.mdc`** — update that file when improving GitShip for all See\* plugins.
+**Rollback depends on commits.** Canonical/shared GitShip notes and **NINA image path enumeration** guidance live under **`NINA_shared/`** (`gitship.mdc` summary + **`NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md`**) — update those files when improving GitShip or shared disk-scan behavior for all See\* plugins.
 
 This repo uses a Cursor **`stop`** hook (`.cursor/hooks/gitship-commit.ps1`): after an agent run finishes, it **auto-commits** pending changes as `cursor(gitship): sync workspace edits …` if nothing was committed yet, then **`git push`** when **`origin`** exists.
 
@@ -15,7 +15,7 @@ This repo uses a Cursor **`stop`** hook (`.cursor/hooks/gitship-commit.ps1`): af
 
 2. **Before ending a turn** that modified project files: run `git status`. **Commit and push** when meaningful changes exist unless the user asked to hold commits.
 
-3. **Documentation parity** — same rules as **SeeDark** / **NINA_shared/gitship.mdc**: when behavior, install, options, or version changes, **update or create** `README.md`, `CHANGELOG.md`, `docs/MANUAL.md` (and `CLAUDE.md` / `docs/*.md` as applicable) **in the same session**. If a file is missing but users need it, **scaffold** with real sections—not empty files.
+3. **Documentation parity** — same rules as **SeeDark** / **`NINA_shared/`**: when behavior, install, options, or version changes, **update or create** `README.md`, `CHANGELOG.md`, `docs/MANUAL.md` (and `CLAUDE.md` / `docs/*.md` as applicable) **in the same session**. If a file is missing but users need it, **scaffold** with real sections—not empty files. For scanning **`IImageFileSettings.FilePath`**, follow **`NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md`** (use **`GetFilePattern(imageType)`** so LIGHT vs DARK vs FLAT vs BIAS layouts match NINA).
 
 4. Respect `.gitignore`. Do **not** commit secrets.
 
