@@ -25,16 +25,40 @@ namespace NINA.Plugin.SeeDrift.Services {
             "<path d=\"M3 12h18M12 3v18M6 6l12 12M18 6L6 18\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2\" stroke-linecap=\"round\"/>" +
             "</svg>";
 
-        /// <summary>Same asset NINA shows for the plugin listing: <c>[assembly: AssemblyMetadata("FeaturedImageURL", …)]</c>.</summary>
+        /// <summary>Embedded PNG logical name — must match <c>EmbeddedResource</c> <c>LogicalName</c> in the csproj.</summary>
+        private const string EmbeddedFeaturedImageManifestName = "SeeDriftFeatured.png";
+
+        private const string FeaturedImgClass =
+            "max-h-20 w-auto max-w-[min(100vw,18rem)] object-contain object-left rounded border border-slate-700/50 bg-slate-900/40";
+
+        /// <summary>Prefers embedded PNG (offline); then assembly FeaturedImageURL; then <see cref="SeeDriftIconSvgFallback"/>.</summary>
         private static string BuildHeaderBrandMarkup() {
+            if (TryReadEmbeddedFeaturedImageAsDataUri(out var dataUri)) {
+                return $"<img src=\"{dataUri}\" alt=\"SeeDrift\" class=\"{FeaturedImgClass}\" decoding=\"async\" />";
+            }
+
             var url = TryGetAssemblyMetadataValue("FeaturedImageURL");
             if (!string.IsNullOrWhiteSpace(url)) {
                 var safe = Escape(url.Trim());
-                return
-                    $"<img src=\"{safe}\" alt=\"SeeDrift\" class=\"max-h-20 w-auto max-w-[min(100vw,18rem)] object-contain object-left rounded border border-slate-700/50 bg-slate-900/40\" loading=\"lazy\" decoding=\"async\" />";
+                return $"<img src=\"{safe}\" alt=\"SeeDrift\" class=\"{FeaturedImgClass}\" loading=\"lazy\" decoding=\"async\" />";
             }
 
             return SeeDriftIconSvgFallback;
+        }
+
+        private static bool TryReadEmbeddedFeaturedImageAsDataUri(out string dataUri) {
+            dataUri = "";
+            try {
+                using var stream = typeof(HtmlReportExporter).Assembly.GetManifestResourceStream(EmbeddedFeaturedImageManifestName);
+                if (stream == null)
+                    return false;
+                using var ms = new MemoryStream();
+                stream.CopyTo(ms);
+                dataUri = "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
+                return true;
+            } catch {
+                return false;
+            }
         }
 
         private static string? TryGetAssemblyMetadataValue(string key) {

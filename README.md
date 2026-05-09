@@ -13,7 +13,7 @@ There is **no live dockable chart** and **no pixel / header-only drift path** in
 ## Install
 
 1. Build `NINA.Plugin.SeeDrift.csproj`: `dotnet build -c Release`.
-2. Copy **`NINA.Plugin.SeeDrift.dll`** and **`System.Management.dll`** from `bin\Release\net8.0-windows\` to:
+2. Copy **`NINA.Plugin.SeeDrift.dll`** (includes embedded **`Assets/SeeDrift_featured.png`** for the offline night-report header image; rebuild after replacing that file if you change artwork) and **`System.Management.dll`** from `bin\Release\net8.0-windows\` to:
 
    `%LOCALAPPDATA%\NINA\Plugins\3.0.0\SeeDrift\`
 
