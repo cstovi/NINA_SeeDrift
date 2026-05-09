@@ -2,7 +2,7 @@
 
 ## Overview
 
-SeeDrift measures **on-sky drift** by **plate solving** each **LIGHT** frame in a batch. **Frames are chosen from your NINA session log**: lines like **Saved image to …** under `BaseImageData.SaveToDisk` give exact paths on disk (no recursive imaging-folder scan). The trace is **ΔRA / ΔDec in arcseconds** relative to the **first solved frame** in that batch.
+SeeDrift measures **on-sky drift** by **plate solving** each **LIGHT** frame in a batch. **Frames are chosen from your NINA session log**: lines like **Saved image to …** under `BaseImageData.SaveToDisk` give exact paths on disk (no recursive imaging-folder scan). The trace is **ΔRA / ΔDec in arcseconds** relative to the **first solved frame for that FITS target** (each `OBJECT` gets its own chart when a batch mixes targets).
 
 It does **not** subscribe to live saves for plotting; work happens when **SeeDrift Stop** finishes (or when you run **Test report** from plugin options).
 
@@ -40,7 +40,7 @@ SeeDrift also appends its own messages to **`%LocalAppData%\NINA\SeeDrift\SeeDri
 
 ### Rolling HTML file
 
-Each **SeeDrift Stop** or **Test report** completion adds or refreshes content in the night report under **Night report folder**. The subtitle counts **batches** (runs), not astronomical targets. A single batch can include frames from **several** FITS **OBJECT** names; the heading lists distinct names; **Sequencer events** rows show actual file names.
+Each **SeeDrift Stop** or **Test report** completion adds or refreshes content in the night report under **Night report folder**. The subtitle counts **batches** (runs). When a batch spans **several** FITS **OBJECT** names, the HTML shows **one drift chart and one Sequencer events block per target**; drift is zeroed at each target’s first solved frame, and sequencer rows only list intervals between **two consecutive frames of that target**. File names in rows remain the actual saved paths.
 
 The report page loads **Tailwind CSS**, **Chart.js**, **Hammer.js**, and **chartjs-plugin-zoom** from CDNs (needs network the first time you open the file). The drift chart supports **wheel zoom**, **drag pan**, and **double‑click to reset zoom**.
 

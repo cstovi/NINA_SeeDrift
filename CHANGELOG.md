@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.6.4] — 2026-05-09
+
+### Changed
+
+- **Night HTML:** Within each batch, **one drift chart + sequencer block per FITS target** (`OBJECT`). Drift is re-zeroed at each target’s first frame (no mixed-target trace). Sequencer table rows only include edges where **both** frames share that target.
+
 ## [0.6.3] — 2026-05-09
 
 ### Fixed
