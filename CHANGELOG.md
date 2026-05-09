@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.8] — 2026-05-09
+
+### Changed
+
+- **NINA log UI:** “Center after drift” / “Dither (after exposures)” names and detailed log hover text appear **only** on **between-frame** markers (strict inter-exposure window). Removed **45‑minute nearest-trigger** hints from **frame** dots; **jump** diamonds no longer append the next-frame interval blurb or log trigger names — **JumpReason** stays step-detection only.
+- **Subtitle:** Jump/log line counts **next-frame strict intervals** only (wording updated).
+
+### Documentation
+
+- **MANUAL:** Technical notes aligned with strict-interval-only sequencer labeling.
+
 ## [0.4.6] — 2026-05-09
 
 ### Fixed

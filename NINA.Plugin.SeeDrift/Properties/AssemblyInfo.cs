@@ -15,8 +15,8 @@ Coordinates are read from each FITS primary header (OBJCTRA/OBJCTDEC, RA/DEC, or
 Export HTML from the dockable panel to archive or share the same trace offline. Import an existing folder of FITS lights (offline replay) for testing without imaging.")]
 [assembly: AssemblyCompany("Carl Stovell")]
 [assembly: AssemblyProduct("NINA.Plugin.SeeDrift")]
-[assembly: AssemblyVersion("0.4.6.0")]
-[assembly: AssemblyFileVersion("0.4.6.0")]
+[assembly: AssemblyVersion("0.4.8.0")]
+[assembly: AssemblyFileVersion("0.4.8.0")]
 [assembly: AssemblyMetadata("id", "E8D4C2F1-6B7A-4E9D-8C3F-1A2B5D7E9F0C")]
 [assembly: Guid("E8D4C2F1-6B7A-4E9D-8C3F-1A2B5D7E9F0C")]
 [assembly: ThemeInfo(

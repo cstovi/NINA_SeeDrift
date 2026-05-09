@@ -15,12 +15,6 @@ namespace NINA.Plugin.SeeDrift.Utility {
     /// </summary>
     internal static class NinaLogCorrelator {
 
-        /// <summary>
-        /// Max |Δt| between a FITS exposure start and a log event. Large enough for long subs +
-        /// delay before NINA logs the trigger after the last exposure of a group.
-        /// </summary>
-        private static readonly TimeSpan TriggerMatchWindow = TimeSpan.FromMinutes(45);
-
         private static readonly string LogFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "Logs");
@@ -81,7 +75,8 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
         /// <summary>
         /// Loads sequencer triggers and dither pulses; sets hints and inter-frame edge fields.
-        /// Returns matched jump count (including interval match to next frame), log found, trigger count, edge marker count.
+        /// Returns matched jump count (jumps whose next frame has a strict between-exposure dither/center interval),
+        /// log found, trigger count, edge marker count.
         /// </summary>
         public static (int MatchedJumps, bool LogFound, int TriggersLoaded, int SequencerEdges) AnnotateWithLogEvents(
                 List<DriftSample> samples) {
@@ -113,9 +108,9 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     $"SeeDrift: log correlator — triggers={triggers.Count}, dither pulses={pulses.Count}, center drift lines={centerDriftLines.Count}");
                 AssignInterFrameEdges(samples, triggers, pulses, centerDriftLines);
 
-                var logEventsForHints = triggers.Select(t => new LogEventLite { UtcTime = t.UtcTime, Label = t.Label }).ToList();
                 if (triggers.Count == 0) {
-                    return (0, true, 0, CountSequencerEdges(samples));
+                    Logger.Debug("SeeDrift: log correlator — no Starting Trigger lines in date window");
+                    return (CountJumpsWithNextFrameLogInterval(samples), true, 0, CountSequencerEdges(samples));
                 }
 
                 var firstJump = samples.OrderBy(s => s.FrameIndex).FirstOrDefault(s => s.IsJump);
@@ -123,50 +118,11 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     var nearest = triggers.OrderBy(e => (e.UtcTime - firstJump!.ExposureStartUtc).Duration()).First();
                     var gap = (nearest.UtcTime - firstJump.ExposureStartUtc).Duration();
                     Logger.Debug(
-                        $"SeeDrift: log correlator — first jump UTC={firstJump.ExposureStartUtc:o}, nearest trigger '{nearest.Label}' UTC={nearest.UtcTime:o}, gap={gap.TotalSeconds:F0}s (window={TriggerMatchWindow.TotalMinutes:F0} min)");
+                        $"SeeDrift: log correlator — first jump UTC={firstJump.ExposureStartUtc:o}, nearest trigger '{nearest.Label}' UTC={nearest.UtcTime:o}, gap={gap.TotalSeconds:F0}s (not used for UI — only strict between-frame intervals)");
                 }
 
-                foreach (var sample in samples.OrderBy(s => s.FrameIndex)) {
-                    var n = FindNearestWithinWindow(logEventsForHints, sample.ExposureStartUtc, TriggerMatchWindow);
-                    sample.SequencerLogHint = n == null
-                        ? null
-                        : $"{n.Label} @ {n.UtcTime.ToLocalTime():HH:mm:ss}";
-                }
-
-                var matchedJumps = 0;
-                foreach (var sample in samples.OrderBy(s => s.FrameIndex)) {
-                    if (!sample.IsJump)
-                        continue;
-
-                    var matched = false;
-                    var n = FindNearestWithinWindow(logEventsForHints, sample.ExposureStartUtc, TriggerMatchWindow);
-                    if (n != null) {
-                        var note = $"→ {n.Label} @ {n.UtcTime.ToLocalTime():HH:mm:ss}";
-                        sample.JumpReason = string.IsNullOrEmpty(sample.JumpReason)
-                            ? note
-                            : $"{sample.JumpReason} {note}";
-                        matched = true;
-                    }
-
-                    var next = samples.FirstOrDefault(x => x.FrameIndex == sample.FrameIndex + 1);
-                    if (next != null && (next.EdgeHadDitherTrigger || next.EdgeHadCenterTrigger)) {
-                        if (!matched) {
-                            var bits = new List<string>();
-                            if (next.EdgeHadDitherTrigger) bits.Add("dither interval");
-                            if (next.EdgeHadCenterTrigger) bits.Add("center interval");
-                            var note = $"→ log: {string.Join(", ", bits)} (frames {sample.FrameIndex + 1}→{next.FrameIndex + 1})";
-                            sample.JumpReason = string.IsNullOrEmpty(sample.JumpReason)
-                                ? note
-                                : $"{sample.JumpReason} {note}";
-                        }
-                        matched = true;
-                    }
-
-                    if (matched)
-                        matchedJumps++;
-                }
-
-                Logger.Debug($"SeeDrift: log correlator — matched jumps={matchedJumps}");
+                var matchedJumps = CountJumpsWithNextFrameLogInterval(samples);
+                Logger.Debug($"SeeDrift: log correlator — jumps with next-frame log interval={matchedJumps}");
                 return (matchedJumps, true, triggers.Count, CountSequencerEdges(samples));
             } catch (Exception ex) {
                 Logger.Debug($"SeeDrift: log correlation skipped: {ex.Message}");
@@ -174,9 +130,15 @@ namespace NINA.Plugin.SeeDrift.Utility {
             }
         }
 
-        private sealed class LogEventLite {
-            public DateTime UtcTime { get; set; }
-            public string Label { get; set; } = "";
+        /// <summary>Jumps where the <em>following</em> frame boundary has a logged dither/center between exposures.</summary>
+        private static int CountJumpsWithNextFrameLogInterval(List<DriftSample> samples) {
+            var n = 0;
+            foreach (var sample in samples.Where(s => s.IsJump)) {
+                var next = samples.FirstOrDefault(x => x.FrameIndex == sample.FrameIndex + 1);
+                if (next != null && (next.EdgeHadDitherTrigger || next.EdgeHadCenterTrigger))
+                    n++;
+            }
+            return n;
         }
 
         private static int CountSequencerEdges(List<DriftSample> samples) =>
@@ -286,24 +248,6 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (cur.EdgeHadDitherTrigger || cur.EdgeHadCenterTrigger)
                     cur.EdgeSequencerHover = string.Join(Environment.NewLine, lines);
             }
-        }
-
-        private static LogEventLite? FindNearestWithinWindow(
-                IReadOnlyList<LogEventLite> events,
-                DateTime sampleUtc,
-                TimeSpan maxGap) {
-            LogEventLite? best = null;
-            var bestGap = TimeSpan.MaxValue;
-            foreach (var ev in events) {
-                var gap = (ev.UtcTime - sampleUtc).Duration();
-                if (gap > maxGap)
-                    continue;
-                if (gap < bestGap) {
-                    bestGap = gap;
-                    best = ev;
-                }
-            }
-            return best;
         }
 
         private static bool LoadAndParseSessionLogs(

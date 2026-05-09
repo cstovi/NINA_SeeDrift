@@ -34,12 +34,11 @@ namespace NINA.Plugin.SeeDrift.Models {
         /// <summary>True when the step from the previous frame exceeds the jump threshold.</summary>
         public bool IsJump { get; set; }
 
-        /// <summary>Human-readable reason for the jump (pixel step, correlated log event, etc.).</summary>
+        /// <summary>Human-readable reason for the jump from step detection (not from NINA log trigger names).</summary>
         public string? JumpReason { get; set; }
 
         /// <summary>
-        /// Nearest NINA <c>Starting Trigger:</c> line (center-after-drift / dither-after-exposures) for this exposure time, if any.
-        /// Used for frame hover tooltips; not the same as <see cref="JumpReason"/>.
+        /// Unused; center/dither sequencer labels appear only on between-frame midpoint tooltips (<see cref="EdgeSequencerHover"/>).
         /// </summary>
         public string? SequencerLogHint { get; set; }
 

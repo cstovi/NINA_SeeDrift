@@ -85,13 +85,11 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             ? "pixel reg"
             : "header coords";
 
-        /// <summary>Text for blue frame dots — avoids duplicating sequencer text on jumps (already in JumpReason).</summary>
+        /// <summary>Text for blue frame dots. Sequencer trigger names appear only on between-frame markers.</summary>
         private static string BuildFrameScatterTag(DriftSample s) {
             var t = $"{s.FrameIndex + 1} · {s.ExposureStartUtc.ToLocalTime():HH:mm:ss}";
             if (s.IsJump)
                 return $"{t} · Jump: {s.JumpReason ?? "large shift"}";
-            if (!string.IsNullOrEmpty(s.SequencerLogHint))
-                return $"{t} · {s.SequencerLogHint}";
             return t;
         }
 
@@ -206,9 +204,6 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     };
                     foreach (var s in jumpSamples) {
                         var tag = $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}";
-                        var next = ordered.FirstOrDefault(x => x.FrameIndex == s.FrameIndex + 1);
-                        if (!string.IsNullOrEmpty(next?.EdgeSequencerHover))
-                            tag += "\n──\n" + next!.EdgeSequencerHover;
                         jumpSeries.Points.Add(new ScatterPoint(GetX(s), GetY(s), tag: tag));
                     }
                     model.Series.Add(jumpSeries);
@@ -287,9 +282,6 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     };
                     foreach (var s in jumpSamples2) {
                         var tag = $"{s.FrameIndex + 1} — {s.JumpReason ?? "large shift"}";
-                        var next = ordered.FirstOrDefault(x => x.FrameIndex == s.FrameIndex + 1);
-                        if (!string.IsNullOrEmpty(next?.EdgeSequencerHover))
-                            tag += "\n──\n" + next!.EdgeSequencerHover;
                         jumpSeries2.Points.Add(new ScatterPoint(s.DeltaRaArcSec, s.DeltaDecArcSec, tag: tag));
                     }
                     model.Series.Add(jumpSeries2);
@@ -546,9 +538,9 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 } else if (!_tracker.LogWasFound) {
                     jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")} (no NINA log found)";
                 } else if (_tracker.LogCorrelatedCount == 0) {
-                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")} (0 jump-time matches; see orange/cyan interval markers if present)";
+                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")} (0 with next-frame log interval; see orange/cyan markers)";
                 } else {
-                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")}, {_tracker.LogCorrelatedCount} matched to log (time or interval)";
+                    jumpStr = $" · {jumps} jump{(jumps == 1 ? "" : "s")}, {_tracker.LogCorrelatedCount} with next-frame dither/center interval in log";
                 }
 
                 string logStr;

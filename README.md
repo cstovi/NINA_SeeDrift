@@ -34,6 +34,8 @@ The csproj includes a post-build copy to that folder when NINA is not locking th
 
 Coordinates are read from each FITS primary header (`CRVAL` / `OBJCTRA`+`OBJCTDEC` / `RA`+`DEC`). If headers do not move frame-to-frame, the plot stays flat until metadata or optional plate solving is added.
 
+With **NINA logs** available, **dither** / **center-after-drift** labels and guider detail appear **only** on **between-exposure** midpoint markers (orange/cyan), not on every frame or jump — see the manual.
+
 See **[docs/MANUAL.md](docs/MANUAL.md)** for options and troubleshooting.
 
 ## Changelog
