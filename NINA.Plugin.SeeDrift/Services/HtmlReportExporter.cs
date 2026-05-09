@@ -47,7 +47,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine($"<header class=\"mb-10 border-b border-slate-800 pb-6\">");
             sb.AppendLine($"  <h1 class=\"text-xl font-semibold tracking-tight text-white\">SeeDrift — night {Escape(DateTime.Now.ToString("yyyy-MM-dd"))}</h1>");
             sb.AppendLine($"  <p class=\"mt-2 text-sm text-slate-400\">Generated {DateTime.Now:HH:mm} · <span class=\"text-slate-300\">{targets.Count}</span> batch{(targets.Count == 1 ? "" : "es")}</p>");
-            sb.AppendLine($"  <p class=\"mt-3 text-xs text-slate-500\">Drag to pan · Wheel to zoom · Double-click chart to reset zoom (Chart.js + zoom plugin)</p>");
+            sb.AppendLine($"  <p class=\"mt-3 text-xs text-slate-500\">Drag to pan · Wheel to zoom in/out (can zoom out past the data for context) · Double-click chart to reset zoom</p>");
             sb.AppendLine("</header>");
 
             for (var t = 0; t < targets.Count; t++) {
@@ -177,8 +177,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("            wheel: { enabled: true },");
                     sb.AppendLine("            pinch: { enabled: true },");
                     sb.AppendLine("            mode: 'xy'");
-                    sb.AppendLine("          },");
-                    sb.AppendLine("          limits: { x: { min: 'original', max: 'original' }, y: { min: 'original', max: 'original' } }");
+                    sb.AppendLine("          }");
                     sb.AppendLine("        }");
                     sb.AppendLine("      }");
                     sb.AppendLine("    }");
