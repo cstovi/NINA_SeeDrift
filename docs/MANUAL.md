@@ -12,6 +12,8 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 
 ## Options (Plugins → SeeDrift)
 
+For **Night report folder**, **Concurrency**, and **Minimum exposures**, hover anywhere on the row (label or text box) to see the full hint in a tooltip.
+
 | Setting | Meaning |
 |--------|---------|
 | **Night report folder** | Directory for the rolling **night HTML** file (`SeeDrift_night_YYYYMMDD.html`). Created if missing. If you leave this blank, SeeDrift uses **`Documents\SeeDrift`** (your **Documents** folder, not Desktop). When a run finishes successfully, **NINA’s status bar** shows the **full path** to the file that was written. |
