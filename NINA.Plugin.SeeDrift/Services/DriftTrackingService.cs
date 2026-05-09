@@ -133,8 +133,25 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return;
             }
 
-            var all = FitsFolderImport.EnumerateSortedRecursive(root);
-            var windowed = FitsFolderImport.FilterObservationUtcInclusive(all, obsStartUtc, obsEndUtc);
+            progress?.Report(new ApplicationStatus {
+                Source = "SeeDrift",
+                Status = "Scanning image folder for LIGHT files in your UTC window…",
+                Progress = 0,
+                MaxProgress = 0
+            });
+
+            var windowed = FitsFolderImport.EnumerateSortedRecursiveForUtcWindow(
+                root,
+                obsStartUtc,
+                obsEndUtc,
+                msg => progress?.Report(new ApplicationStatus {
+                    Source = "SeeDrift",
+                    Status = msg,
+                    Progress = 0,
+                    MaxProgress = 0
+                }),
+                token);
+
             if (windowed.Count < 2) {
                 Logger.Warning($"SeeDrift: fewer than 2 LIGHT frames in window — no report ({windowed.Count} found).");
                 return;

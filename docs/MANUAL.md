@@ -45,6 +45,7 @@ When **`%LocalAppData%\NINA\Logs`** contains matching session lines, **between-f
 ## Technical notes
 
 - **Sort order:** Numeric suffix after the last `_` in the file name when present (NINA-style `_0019`), then **DATE-OBS** / fallbacks — see `FitsFolderImport`.
+- **Wrong UTC window / empty window:** While scanning, SeeDrift applies a **file-year quick check** before opening each FITS: if both the file’s creation and last-write **years** lie entirely outside the calendar years spanned by your window, the header is not read. That makes a mistaken year (for example 2025 vs 2026 data) return almost immediately instead of reading every header on disk. NINA’s status line shows periodic **Scanning folder…** progress. Rare copies with FITS **DATE-OBS** inside the window but filesystem timestamps from another year could be skipped — widen the window if that applies.
 - **Observation filter:** FITS time keywords converted to UTC; bounds are **inclusive**.
 - **Solve failures:** Frames that do not solve are skipped for the trace (implementation logs errors).
 - **Jump detection:** Still runs on the solved-sample sequence where applicable.

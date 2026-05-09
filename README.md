@@ -36,7 +36,7 @@ Set **Options → Imaging → image file path** in NINA to the folder where ligh
 
 ### Test report (options panel)
 
-Under **Plugins → SeeDrift**, enter **observation start/end (UTC)** as ISO 8601 and click **Run test report**. Uses the same pipeline as Stop but with your persisted window instead of Arm timestamps.
+Under **Plugins → SeeDrift**, enter **observation start/end (UTC)** as ISO 8601 and click **Run test report**. Uses the same pipeline as Stop but with your persisted window instead of Arm timestamps. The folder scan shows status in NINA’s progress line; if the year in your window does not match the files on disk (for example 2025 vs 2026), SeeDrift skips opening those FITS headers and finishes quickly.
 
 ### Session bookkeeping
 

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-05-09
+
+### Fixed
+
+- **Scan performance:** Recursive folder scan for the UTC window skips reading FITS headers when both file timestamps’ **years** fall outside the window’s year span (fast exit for wrong-year test dates); periodic status text while scanning.
+
 ## [0.5.0] — 2026-05-09
 
 ### Breaking
