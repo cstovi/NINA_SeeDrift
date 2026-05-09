@@ -148,7 +148,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("      responsive: true, maintainAspectRatio: false,");
                     sb.AppendLine("      scales: {");
                     sb.AppendLine($"        x: {{ title: {{ display: true, text: '{xTitle}', color: '#94a3b8' }}, grid: {{ color: 'rgba(148,163,184,0.12)' }}, ticks: {{ color: '#cbd5e1' }}, border: {{ color: '#475569' }} }},");
-                    sb.AppendLine($"        y: {{ title: {{ display: true, text: '{yTitle}', color: '#94a3b8' }}, grid: {{ color: 'rgba(148,163,184,0.12)' }}, ticks: {{ color: '#cbd5e1' }}, border: {{ color: '#475569' }} }}");
+                    sb.AppendLine($"        y: {{ reverse: true, title: {{ display: true, text: '{yTitle}', color: '#94a3b8' }}, grid: {{ color: 'rgba(148,163,184,0.12)' }}, ticks: {{ color: '#cbd5e1' }}, border: {{ color: '#475569' }} }}");
                     sb.AppendLine("      },");
                     sb.AppendLine("      plugins: {");
                     sb.AppendLine("        tooltip: {");
