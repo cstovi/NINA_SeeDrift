@@ -322,7 +322,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             Report(
-                $"Done — night report saved ({built.Count} frames): {nightSavedPath}",
+                $"Complete — night report saved ({built.Count} frames): {nightSavedPath}",
                 built.Count,
                 built.Count);
 

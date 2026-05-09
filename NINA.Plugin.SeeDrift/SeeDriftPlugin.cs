@@ -147,9 +147,11 @@ namespace NINA.Plugin.SeeDrift {
 
         public bool TestReportIndeterminate => _testReportIndeterminate;
 
-        /// <summary>Shows the progress row while a test report is running.</summary>
+        /// <summary>Shows the progress row while a test report runs, and keeps it visible after completion until the next run.</summary>
         public Visibility TestReportChromeVisibility =>
-            _testReportBusy ? Visibility.Visible : Visibility.Collapsed;
+            _testReportBusy || !string.IsNullOrWhiteSpace(_testReportStatusText)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
 
         private void BeginTestReportUi() {
             _testReportBusy = true;
@@ -167,8 +169,8 @@ namespace NINA.Plugin.SeeDrift {
 
         private void EndTestReportUi() {
             _testReportBusy = false;
-            _testReportStatusText = "";
             _testReportIndeterminate = false;
+            // Keep last status line (Complete — … or Stopped — …) so the panel does not go blank.
             RaisePropertyChanged(nameof(TestReportNotBusy));
             RaisePropertyChanged(nameof(TestReportStatusText));
             RaisePropertyChanged(nameof(TestReportProgressValue));

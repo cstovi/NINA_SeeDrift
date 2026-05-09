@@ -37,7 +37,7 @@ SeeDrift also appends its own messages to **`%LocalAppData%\NINA\SeeDrift\SeeDri
 1. Under **Test report**, set **NINA log file** (Browse or paste a full path to a `.log` file).
 2. Click **Run test report**. SeeDrift collects **every** saved-light path from that file (full file, no time picker), then solves and correlates like Stop.
 
-**While the run is in progress**, a **progress panel** appears directly under **Run test report** (reading log → checking FITS headers → solving each frame). If nothing is added to the HTML, a dialog explains common causes. **SeeDrift Stop** uses **NINA’s main status bar** instead.
+**While the run is in progress**, a **status panel** appears directly under **Run test report** (reading log → checking FITS headers → solving each frame). When the run ends, the **last status line stays visible** (for example **Complete — …** with the saved HTML path) until you start another test or leave the panel cleared by starting again. If nothing is added to the HTML, a dialog explains common causes. **SeeDrift Stop** uses **NINA’s main status bar** instead; successful Stop finishes with a **Complete — …** line there too.
 
 ### Rolling HTML file
 

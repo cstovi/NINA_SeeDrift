@@ -82,7 +82,7 @@
                     Background="#1e293b" BorderBrush="#334155" BorderThickness="1"
                     Visibility="{Binding TestReportChromeVisibility, Mode=OneWay}">
                 <StackPanel>
-                    <TextBlock Text="Test report progress" FontWeight="SemiBold" Foreground="#94a3b8" FontSize="10" Margin="0,0,0,6"/>
+                    <TextBlock Text="Test report status" FontWeight="SemiBold" Foreground="#94a3b8" FontSize="10" Margin="0,0,0,6"/>
                     <TextBlock Text="{Binding TestReportStatusText, Mode=OneWay}" Foreground="#7dd3fc" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"/>
                     <ProgressBar Height="16"
                                  Minimum="0"
@@ -96,7 +96,7 @@
                 </StackPanel>
             </Border>
 
-            <TextBlock Text="While Test report runs, status updates directly under the Run button. SeeDrift Stop uses NINA’s main status bar instead."
+            <TextBlock Text="While Test report runs, status updates under Run; when finished, the last line stays until you run again. SeeDrift Stop uses NINA’s main status bar instead."
                        FontSize="10" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,16"/>
 
             <TextBlock Text="Tip: plate solving uses your NINA plate-solve profile (same solvers as the Plate Solve tool)." FontSize="11" Foreground="#888" TextWrapping="Wrap"/>
