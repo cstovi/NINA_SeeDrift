@@ -445,7 +445,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
             } else {
                 Logger.Warning(
                     "SeeDrift: all frames share identical pointing in FITS headers (often fixed CRVAL/OBJCT). " +
-                    "Prefer per-frame solved RA/DEC in metadata if you expect dither or tracking motion, or use pixel registration for folder import.");
+                    "Prefer per-frame solved RA/DEC in metadata if you expect dither or tracking motion, or enable pixel registration in plugin options.");
             }
         }
 

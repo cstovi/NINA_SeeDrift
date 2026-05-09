@@ -118,7 +118,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var xTitle = pixel ? "Cumulative X (pixels)" : "ΔRA (arcsec)";
             var yTitle = pixel ? "Cumulative Y (pixels)" : "ΔDec (arcsec)";
             var blurb = pixel
-                ? $"Frames: {samples.Count} · Cumulative pixel shifts from phase correlation · frame 1 = origin (0, 0)"
+                ? $"Frames: {samples.Count} · Cumulative pixel shifts (central-crop SSD registration) · frame 1 = origin (0, 0)"
                 : $"Frames: {samples.Count} · ΔRA / ΔDec in arcsec relative to frame 1 · sorted by DATE-OBS";
 
             var sb = new StringBuilder();

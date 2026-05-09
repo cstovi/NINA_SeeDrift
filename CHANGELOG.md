@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **README / MANUAL:** Removed obsolete **Math.NET** install step; noted real dependencies (**OxyPlot**, **Newtonsoft.Json**, etc.) if the host needs them.
 - **MANUAL:** Pixel path described accurately (**SSD template** registration, sub-pixel refinement; **not** FFT). **Live vs import:** while **armed**, live uses the same header vs pixel mode as the option (locked at **Start**), not “headers only.”
 - **CHANGELOG (0.4.4 note):** The pixel path has never used Math.NET FFT; that line in the log was wrong (retroactive clarification in this release).
+- **HTML export:** Pixel-mode report blurb matches the real registration method.
 
 ### Changed
 
