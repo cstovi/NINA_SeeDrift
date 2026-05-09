@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **NINA_shared:** [NINA_PLUGIN_GUIDE.md](NINA_shared/NINA_PLUGIN_GUIDE.md) — conventions for session-scoped exports (use log/FITS session signals instead of generation date for headings and stamps; single helper for filenames + HTML; rolling overwrite behavior). Indexed from `NINA_shared/README.md` and linked from `NINA_shared/gitship.mdc`.
+
 ## [0.7.27] — 2026-05-09
 
 ### Changed

@@ -23,4 +23,6 @@ Do **not** assume a fixed subtree or maintain a static deny-list of folder names
 
 **Full guide:** [NINA_IMAGE_PATH_ENUMERATION.md](./NINA_IMAGE_PATH_ENUMERATION.md)
 
+**Session-scoped exports (HTML titles, filenames):** [NINA_PLUGIN_GUIDE.md](./NINA_PLUGIN_GUIDE.md)
+
 **Reference implementation (LIGHT-only):** `NINA.Plugin.SeeDrift/Utility/NinaLightPathEnumeration.cs` in the SeeDrift repo.
