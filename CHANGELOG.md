@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.19] — 2026-05-09
+
+### Fixed
+
+- **Pixel registration:** Validate frame-to-frame SSD shift with an **inverse** registration (cur→prev). If `forward + inverse` is not small in pixels, or the forward shift exceeds **42%** of the crop’s shorter side, the step is **rejected** (no change to cumulative offset for that frame) instead of accepting a false minimum. Reduces spurious huge “jumps” / derived arcsec spikes when consecutive images still match visually.
+
+### Documentation
+
+- **MANUAL:** Note bidirectional check and per-frame shift cap.
+
 ## [0.4.18] — 2026-05-09
 
 ### Fixed

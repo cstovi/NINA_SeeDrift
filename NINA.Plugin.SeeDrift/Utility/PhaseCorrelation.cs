@@ -1,4 +1,5 @@
 using System;
+using NINA.Core.Utility;
 
 namespace NINA.Plugin.SeeDrift.Utility {
 
@@ -17,6 +18,18 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
         private const int FineRadius    = 4;
         private const int FineTplHalf   = 48;   // 97×97 template at full resolution
+
+        /// <summary>
+        /// Forward + inverse shift must nearly cancel; otherwise a false SSD minimum is likely
+        /// (ambiguous stars, artifacts, etc.). Tuned loose for sub-pixel asymmetry only.
+        /// </summary>
+        private const double BidirectionalResidualMaxPx = 6.0;
+
+        /// <summary>
+        /// Reject single-frame shifts larger than this fraction of the crop’s smaller side
+        /// (guards pathological matches; real dithers are usually much smaller than the crop).
+        /// </summary>
+        private const double MaxSingleFrameShiftFraction = 0.42;
 
         public static bool TryEstimateShift(
             double[,] reference, double[,] moving,
@@ -61,6 +74,45 @@ namespace NINA.Plugin.SeeDrift.Utility {
             } catch {
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Like <see cref="TryEstimateShift"/> but runs the inverse registration (cur→prev) and
+        /// requires <c>forward + inverse ≈ 0</c>. Prevents rare false coarse/fine minima that
+        /// accumulate into huge phantom drift while consecutive frames still look aligned by eye.
+        /// </summary>
+        public static bool TryEstimateShiftValidated(
+                double[,] prevCrop, double[,] curCrop,
+                out double shiftY, out double shiftX) {
+
+            shiftY = 0;
+            shiftX = 0;
+            if (!TryEstimateShift(prevCrop, curCrop, out var fy, out var fx))
+                return false;
+            if (!TryEstimateShift(curCrop, prevCrop, out var by, out var bx))
+                return false;
+
+            var rows = prevCrop.GetLength(0);
+            var cols = prevCrop.GetLength(1);
+            var maxStep = Math.Min(rows, cols) * MaxSingleFrameShiftFraction;
+            if (fx * fx + fy * fy > maxStep * maxStep) {
+                Logger.Debug(
+                    $"SeeDrift: SSD registration rejected — |shift|={Math.Sqrt(fx * fx + fy * fy):F1}px exceeds {maxStep:F0}px cap");
+                return false;
+            }
+
+            var rx = fx + bx;
+            var ry = fy + by;
+            if (rx * rx + ry * ry > BidirectionalResidualMaxPx * BidirectionalResidualMaxPx) {
+                Logger.Debug(
+                    $"SeeDrift: SSD registration rejected — bidirectional residual ({rx:F2}, {ry:F2})px " +
+                    $"(fwd {fx:F2},{fy:F2} inv {bx:F2},{by:F2})");
+                return false;
+            }
+
+            shiftY = fy;
+            shiftX = fx;
+            return true;
         }
 
         /// <summary>

@@ -289,7 +289,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 double dx = 0;
                 double dy = 0;
-                if (!PhaseCorrelation.TryEstimateShift(prevCrop, crop, out dy, out dx))
+                if (!PhaseCorrelation.TryEstimateShiftValidated(prevCrop, crop, out dy, out dx))
                     skippedImage++;
 
                 cumX += dx;
@@ -407,7 +407,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                             _liveCumX = 0;
                             _liveCumY = 0;
                         } else {
-                            if (PhaseCorrelation.TryEstimateShift(_prevLiveCrop, crop, out var dy, out var dx)) {
+                            if (PhaseCorrelation.TryEstimateShiftValidated(_prevLiveCrop, crop, out var dy, out var dx)) {
                                 _liveCumX += dx;
                                 _liveCumY += dy;
                             }
