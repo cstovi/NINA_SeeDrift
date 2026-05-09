@@ -6,9 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- **NINA_shared:** [NINA_PLUGIN_GUIDE.md](NINA_shared/NINA_PLUGIN_GUIDE.md) — conventions for session-scoped exports (use log/FITS session signals instead of generation date for headings and stamps; single helper for filenames + HTML; rolling overwrite behavior). Indexed from `NINA_shared/README.md` and linked from `NINA_shared/gitship.mdc`.
+- **Documentation layout:** Shared See\* docs (**`gitship.mdc`**, **`NINA_IMAGE_PATH_ENUMERATION.md`**, **`NINA_plugin_guide.md`** including session-scoped exports) now live only in the workspace sibling folder **`../NINA_shared/`** (same parent as this repo). The nested **`NINA_SeeDrift/NINA_shared/`** copy was removed; `.cursor/rules/gitship.mdc` points agents at **`../NINA_shared/`**.
 
 ## [0.7.27] — 2026-05-09
 
@@ -67,7 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
+- **`NINA_shared`** (workspace sibling folder) documentation: **`NINA_IMAGE_PATH_ENUMERATION.md`** and **`gitship.mdc`** describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
 ## [0.7.19] — 2026-05-09
 
