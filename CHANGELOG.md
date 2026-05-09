@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.18] — 2026-05-09
+
+### Fixed
+
+- **Jump detection (pixel registration):** When the trace has plate-scale **derived** ΔRA/ΔDec on every frame (the dockable’s arcsec plot), classify jumps using **derived** frame-to-frame steps instead of cumulative **pixel** steps. The old pixel-only metric could disagree with the drawn path (per-frame `dec` / Alt-Az `q` in `PixelShiftToRaDec`), producing jump diamonds that did not match visible kinks or missing obvious ones.
+
+### Documentation
+
+- **MANUAL:** Explain jump metrics in header vs pixel vs derived-pixel modes.
+
 ## [0.4.17] — 2026-05-09
 
 ### Changed

@@ -8,7 +8,8 @@ namespace NINA.Plugin.SeeDrift.Utility {
     /// <summary>
     /// Detects large frame-to-frame position jumps (dithers, slews, re-centres, etc.) in a
     /// sorted sample list and annotates each jump sample with <see cref="DriftSample.IsJump"/>
-    /// and a human-readable <see cref="DriftSample.JumpReason"/>.
+    /// and a human-readable <see cref="DriftSample.JumpReason"/>. Uses the same coordinates as
+    /// the drift plot when possible (derived ΔRA/ΔDec vs pixels vs FITS headers).
     /// </summary>
     internal static class JumpDetector {
 
@@ -31,16 +32,25 @@ namespace NINA.Plugin.SeeDrift.Utility {
             }
             if (samples.Count < 3) return;
             var isPixel = samples[0].IsPixelPath;
+            // When every frame has plate-scale-derived ΔRA/ΔDec, the plot uses those values; jump
+            // detection must use the same (per-frame dec / parallactic angle break tie with pixels).
+            var allPixelDerived = isPixel && samples.All(s => s.HasPixelDerivedRaDec);
 
             var steps = new double[samples.Count - 1];
             for (var i = 1; i < samples.Count; i++) {
-                if (isPixel) {
-                    var dx = samples[i].CumulativePixelX!.Value - samples[i - 1].CumulativePixelX!.Value;
-                    var dy = samples[i].CumulativePixelY!.Value - samples[i - 1].CumulativePixelY!.Value;
+                var prev = samples[i - 1];
+                var cur  = samples[i];
+                if (allPixelDerived) {
+                    var dra  = cur.PixelDerivedRaArcSec!.Value  - prev.PixelDerivedRaArcSec!.Value;
+                    var ddec = cur.PixelDerivedDecArcSec!.Value - prev.PixelDerivedDecArcSec!.Value;
+                    steps[i - 1] = Math.Sqrt(dra * dra + ddec * ddec);
+                } else if (isPixel) {
+                    var dx = cur.CumulativePixelX!.Value - prev.CumulativePixelX!.Value;
+                    var dy = cur.CumulativePixelY!.Value - prev.CumulativePixelY!.Value;
                     steps[i - 1] = Math.Sqrt(dx * dx + dy * dy);
                 } else {
-                    var dra  = samples[i].DeltaRaArcSec  - samples[i - 1].DeltaRaArcSec;
-                    var ddec = samples[i].DeltaDecArcSec - samples[i - 1].DeltaDecArcSec;
+                    var dra  = cur.DeltaRaArcSec  - prev.DeltaRaArcSec;
+                    var ddec = cur.DeltaDecArcSec - prev.DeltaDecArcSec;
                     steps[i - 1] = Math.Sqrt(dra * dra + ddec * ddec);
                 }
             }
@@ -49,7 +59,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
             Array.Sort(sorted);
             var median    = sorted[sorted.Length / 2];
             double threshold;
-            if (isPixel) {
+            if (isPixel && !allPixelDerived) {
                 var dev = new double[steps.Length];
                 for (var k = 0; k < steps.Length; k++)
                     dev[k] = Math.Abs(steps[k] - median);
@@ -63,9 +73,11 @@ namespace NINA.Plugin.SeeDrift.Utility {
             for (var i = 1; i < samples.Count; i++) {
                 if (steps[i - 1] > threshold) {
                     samples[i].IsJump = true;
-                    samples[i].JumpReason = isPixel
-                        ? $"Large shift {steps[i - 1]:F1}px (median {median:F1}px)"
-                        : $"Large shift {steps[i - 1]:F1}\" (median {median:F1}\")";
+                    samples[i].JumpReason = allPixelDerived
+                        ? $"Large shift {steps[i - 1]:F1}″ (median {median:F1}″, derived from pixels)"
+                        : isPixel
+                            ? $"Large shift {steps[i - 1]:F1}px (median {median:F1}px)"
+                            : $"Large shift {steps[i - 1]:F1}\" (median {median:F1}\")";
                 }
             }
         }
