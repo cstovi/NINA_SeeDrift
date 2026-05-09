@@ -41,6 +41,7 @@ Session discipline (**one scope / one target run**, separate folders for replay)
 - **Header RA/Dec:** primary HDU FITS keywords (`CRVAL1/2`, `OBJCTRA`/`OBJCTDEC`, or `RA`/`DEC`). If these do not update each sub, the header plot looks flat or stacked.
 - **Pixel registration:** uncompressed primary image data only; central crop; normalized phase correlation (integer pixel shifts). Not identical to external tools’ sub-pixel tuning but matches the intent of a cumulative **detector** trail.
 - **RA wrap:** handled when computing deltas in arcseconds (small-angle approximation with cos(Dec)).
+- **NINA log correlation:** On folder import, SeeDrift scans `%LocalAppData%\NINA\Logs` (±1 calendar day) and matches jump frames to log lines within **300 seconds** of **DATE-OBS** (exposure start). Labels favour sequencer **triggers** (e.g. `CenterAfterDriftTrigger`, `DitherAfterExposures`) when those lines appear; guider and slew lines are fallbacks. Log file timestamps are interpreted as **local** time and converted to UTC for comparison with FITS times.
 
 ## Troubleshooting
 

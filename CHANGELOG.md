@@ -20,6 +20,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Pointing plot **subtitle** shows how many frames were plotted so sparse traces are obvious at a glance.
 - Slightly smaller plot markers when many frames are loaded (>100) for readability.
 
+## [0.4.1] — 2026-05-09
+
+### Fixed
+
+- **NINA log jump correlation:** Recognize NINA 3.2 sequencer wording (`CenterAfterDriftTrigger`, `Starting Trigger: …`, `Slewing from`, etc.). Replaced the ineffective `center.after` pattern (it does not match `CenterAfter*` identifiers). Pattern order prefers **trigger/intent** lines before generic guider “Dither”.
+- Widen the jump↔log-event match window to **300 seconds** so long subs can align with trigger lines after **`DATE-OBS`**.
+
 ## [0.2.0] — 2026-05-08
 
 ### Added

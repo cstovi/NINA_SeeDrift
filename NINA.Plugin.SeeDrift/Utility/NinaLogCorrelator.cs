@@ -17,20 +17,25 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
         /// <summary>
         /// Maximum gap between a FITS frame timestamp and a log event to consider them correlated.
+        /// Jumps use exposure start time; sequencer triggers may log up to roughly one exposure later.
         /// </summary>
-        private static readonly TimeSpan MatchWindow = TimeSpan.FromSeconds(120);
+        private static readonly TimeSpan MatchWindow = TimeSpan.FromSeconds(300);
 
         private static readonly string LogFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "Logs");
 
-        // Patterns: (case-insensitive, any part of the line)
+        // Patterns: first match wins per line. Put sequence *triggers* (intent) before generic guider text.
+        // NINA 3.2 uses names like CenterAfterDriftTrigger — not "center" + sep + "after".
         private static readonly (Regex Pattern, string Label)[] _eventPatterns = {
-            (new Regex(@"dither",          RegexOptions.IgnoreCase | RegexOptions.Compiled), "Dither"),
-            (new Regex(@"meridian.?flip",  RegexOptions.IgnoreCase | RegexOptions.Compiled), "Meridian flip"),
-            (new Regex(@"center.after",    RegexOptions.IgnoreCase | RegexOptions.Compiled), "Center after drift"),
-            (new Regex(@"plate.?solv",     RegexOptions.IgnoreCase | RegexOptions.Compiled), "Plate solve"),
-            (new Regex(@"slewto|slew.to",  RegexOptions.IgnoreCase | RegexOptions.Compiled), "Slew"),
+            (new Regex(@"Starting\s+Trigger:.*CenterAfterDrift", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Center after drift"),
+            (new Regex(@"Starting\s+Trigger:.*DitherAfterExposures", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Dither (after exposures)"),
+            (new Regex(@"centerafterdrift", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Center after drift"),
+            (new Regex(@"ditherafterexposures", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Dither (after exposures)"),
+            (new Regex(@"meridian.?flip", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Meridian flip"),
+            (new Regex(@"dither", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Dither"),
+            (new Regex(@"plate.?solv", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Plate solve"),
+            (new Regex(@"slewto|slew\.to|\bslewing\b", RegexOptions.IgnoreCase | RegexOptions.Compiled), "Slew"),
         };
 
         // NINA 3.x log line timestamp patterns — try several common NLog layouts.
