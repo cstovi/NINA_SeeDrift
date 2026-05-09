@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.5.7] — 2026-05-09
+
+### Fixed
+
+- **Night HTML:** Subtitle now reports **batch count** (each Stop/Test run), not “targets”. Section titles list **distinct FITS OBJECT names** in that batch so mixed-target nights no longer show only the first frame’s target while the sequencer table lists other file names.
+
 ## [0.5.6] — 2026-05-09
 
 ### Changed

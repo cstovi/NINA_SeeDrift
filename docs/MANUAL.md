@@ -36,7 +36,7 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 
 ### Rolling HTML file
 
-Each completed batch adds or refreshes content in the night report under **Night report folder**. Open the HTML in a browser; Chart.js loads once from the CDN (needs network unless you host scripts locally).
+Each **SeeDrift Stop** or **Test report** completion adds or refreshes content in the night report under **Night report folder**. The subtitle counts **batches** (runs), not astronomical targets. A single batch can include frames from **several** FITS **OBJECT** names if they all fall in your UTC window—the heading lists the distinct target names; **Sequencer events** rows always show the actual file names from disk.
 
 ### Sequencer events in HTML
 

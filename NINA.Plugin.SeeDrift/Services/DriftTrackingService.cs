@@ -226,9 +226,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             ApplyJumpAndLogAnnotation(built);
 
-            var targetName = windowed[0].TargetLabel;
-            if (string.IsNullOrWhiteSpace(targetName))
-                targetName = "Unknown";
+            var targetName = HtmlReportExporter.SummarizeTargetsForBatch(built);
 
             await Application.Current!.Dispatcher.InvokeAsync(() => {
                 CompletedTargets.Add(new CompletedTarget {

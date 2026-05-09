@@ -11,7 +11,7 @@ namespace NINA.Plugin.SeeDrift.Services {
     public static class HtmlReportExporter {
 
         /// <summary>
-        /// Writes a single rolling nightly HTML with one chart section per completed target.
+        /// Writes a single rolling nightly HTML with one chart section per completed batch (each SeeDrift Stop or Test report run).
         /// Overwrites the file each call so it always reflects the full session so far.
         /// </summary>
         public static void WriteNightReport(
@@ -35,7 +35,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("  table.logtbl th{color:#aac8ff}");
             sb.AppendLine("</style></head><body>");
             sb.AppendLine($"<h1>SeeDrift — night {DateTime.Now:yyyy-MM-dd}</h1>");
-            sb.AppendLine($"<p>Generated {DateTime.Now:HH:mm} · {targets.Count} target{(targets.Count == 1 ? "" : "s")}</p>");
+            sb.AppendLine($"<p>Generated {DateTime.Now:HH:mm} · {targets.Count} batch{(targets.Count == 1 ? "" : "es")}</p>");
 
             for (var t = 0; t < targets.Count; t++) {
                 var target = targets[t];
@@ -45,8 +45,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 const string xTitle = "ΔRA (arcsec)";
                 const string yTitle = "ΔDec (arcsec)";
                 var canvasId = $"c{t}";
+                var title = SummarizeTargetsForBatch(samples);
 
-                sb.AppendLine($"<h2>{Escape(target.Name)}</h2>");
+                sb.AppendLine($"<h2>{Escape(title)}</h2>");
                 sb.AppendLine($"<p>{samples.Count} frames · plate-solved drift · stopped {target.StoppedUtc.ToLocalTime():HH:mm}</p>");
                 sb.AppendLine($"<canvas id=\"{canvasId}\"></canvas>");
 
@@ -66,7 +67,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine($"  new Chart(document.getElementById('{canvasId}'), {{");
                 sb.AppendLine("    type: 'scatter',");
                 sb.AppendLine("    data: { datasets: [{");
-                sb.AppendLine($"      label: '{Escape(target.Name)}',");
+                sb.AppendLine($"      label: '{Escape(title)}',");
                 sb.AppendLine("      data: pts, borderColor: '#64c8ff',");
                 sb.AppendLine("      backgroundColor: 'rgba(100,200,255,0.35)',");
                 sb.AppendLine("      showLine: true, tension: 0.12, pointRadius: 3, borderWidth: 1.5");
@@ -86,6 +87,27 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             sb.AppendLine("</body></html>");
             File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// One Stop/Test batch may include frames with different FITS OBJECT names; builds a readable heading from distinct <see cref="DriftSample.TargetName"/> values.
+        /// </summary>
+        public static string SummarizeTargetsForBatch(IReadOnlyList<DriftSample> samples) {
+            var distinct = samples
+                .Select(s => s.TargetName?.Trim())
+                .Where(n => !string.IsNullOrEmpty(n))
+                .Select(n => n!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (distinct.Count == 0)
+                return "Unknown";
+            if (distinct.Count == 1)
+                return distinct[0];
+            const int maxListed = 4;
+            if (distinct.Count <= maxListed)
+                return string.Join(" · ", distinct);
+            return string.Join(" · ", distinct.Take(maxListed)) + $" (+{distinct.Count - maxListed} more)";
         }
 
         private static void AppendSequencerEdgeTable(StringBuilder sb, IReadOnlyList<DriftSample> samples) {
