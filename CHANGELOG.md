@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.6.2] — 2026-05-09
+
+### Changed
+
+- **`settings.json`:** Removed obsolete **Test observation start/end** UTC fields (log-file workflow only); loading settings rewrites the file without those keys.
+- **Logging:** SeeDrift messages are mirrored to **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** in addition to NINA’s application log.
+
 ## [0.6.1] — 2026-05-09
 
 ### Fixed

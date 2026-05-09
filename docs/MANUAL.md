@@ -19,6 +19,8 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 | **Working folder** | Reserved for possible future scratch use when solving; solving currently uses **`IImageDataFactory.CreateFromFile`** on originals. Default on first run: `%TEMP%\SeeDrift`. |
 | **NINA log file** | Used only by **Run test report**: path to a saved `.log` file (Browse opens `%LocalAppData%\NINA\Logs`). Persisted in settings. |
 
+SeeDrift also appends its own messages to **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** (same folder as `settings.json`). The main NINA application log still receives the same lines.
+
 **Tip:** Plate solving uses your **NINA plate-solve profile** (same engines/settings as the Plate Solve tool).
 
 ## Workflow

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using System.Windows;
 using NINA.Core.Enum;
 using NINA.Core.Model;
-using NINA.Core.Utility;
 using NINA.Image.Interfaces;
 using NINA.PlateSolving;
 using NINA.PlateSolving.Interfaces;
@@ -65,14 +64,14 @@ namespace NINA.Plugin.SeeDrift.Services {
             Application.Current?.Dispatcher.Invoke(() => {
                 _armUtc = DateTime.UtcNow;
                 IsArmed = true;
-                Logger.Info("SeeDrift: armed (plate-solve on Stop).");
+                SeeDriftLog.Info("SeeDrift: armed (plate-solve on Stop).");
             });
         }
 
         /// <summary>Process files from NINA default image path between <see cref="_armUtc"/> and disarm time.</summary>
         public async Task DisarmAsync(IProgress<ApplicationStatus>? progress, CancellationToken token) {
             if (!IsArmed) {
-                Logger.Warning("SeeDrift: Disarm called while not armed — ignored.");
+                SeeDriftLog.Warning("SeeDrift: Disarm called while not armed — ignored.");
                 return;
             }
 
@@ -97,7 +96,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 IProgress<ApplicationStatus>? progress,
                 CancellationToken token) {
             if (string.IsNullOrWhiteSpace(logFilePath)) {
-                Logger.Error("SeeDrift: Test report — no log file path.");
+                SeeDriftLog.Error("SeeDrift: Test report — no log file path.");
                 progress?.Report(StatusOnly("Test report failed — no log file path."));
                 return false;
             }
@@ -105,13 +104,13 @@ namespace NINA.Plugin.SeeDrift.Services {
             try {
                 logFilePath = Path.GetFullPath(logFilePath.Trim());
             } catch {
-                Logger.Error("SeeDrift: Test report — invalid log file path.");
+                SeeDriftLog.Error("SeeDrift: Test report — invalid log file path.");
                 progress?.Report(StatusOnly("Test report failed — invalid log file path."));
                 return false;
             }
 
             if (!File.Exists(logFilePath)) {
-                Logger.Error($"SeeDrift: Test report — log file not found: {logFilePath}");
+                SeeDriftLog.Error($"SeeDrift: Test report — log file not found: {logFilePath}");
                 progress?.Report(StatusOnly($"Log file not found — {Path.GetFileName(logFilePath)}"));
                 return false;
             }
@@ -164,13 +163,13 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             var profile = _plugin.ProfileService.ActiveProfile;
             if (profile?.PlateSolveSettings == null) {
-                Logger.Error("SeeDrift: No active NINA profile or plate-solve settings.");
+                SeeDriftLog.Error("SeeDrift: No active NINA profile or plate-solve settings.");
                 Report("Stopped — no plate-solve settings in the active NINA profile.");
                 return false;
             }
 
             if (logFilesToRead == null || logFilesToRead.Count == 0) {
-                Logger.Warning("SeeDrift: no NINA log files to read — check %LocalAppData%\\NINA\\Logs exists and contains .log files.");
+                SeeDriftLog.Warning("SeeDrift: no NINA log files to read — check %LocalAppData%\\NINA\\Logs exists and contains .log files.");
                 Report("Stopped — no .log files found under %LocalAppData%\\NINA\\Logs.");
                 return false;
             }
@@ -185,7 +184,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     windowEndUtc,
                     out var orderedSaves,
                     out _) || orderedSaves.Count < 2) {
-                Logger.Warning(
+                SeeDriftLog.Warning(
                     $"SeeDrift: fewer than 2 saved-light lines in log(s) — no report ({orderedSaves.Count} candidates).");
                 Report($"Stopped — only {orderedSaves.Count} usable saved-light path(s) in the log (need ≥2). Expect BaseImageData SaveToDisk lines.");
                 return false;
@@ -196,7 +195,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var windowed = FitsFolderImport.BuildEntriesFromLogSaveOrder(orderedSaves, msg => Report(msg));
 
             if (windowed.Count < 2) {
-                Logger.Warning($"SeeDrift: fewer than 2 LIGHT frames after FITS filter — no report ({windowed.Count} kept).");
+                SeeDriftLog.Warning($"SeeDrift: fewer than 2 LIGHT frames after FITS filter — no report ({windowed.Count} kept).");
                 Report($"Stopped — only {windowed.Count} LIGHT frame(s) after FITS filter (paths missing, wrong type, or not FITS).");
                 return false;
             }
@@ -237,7 +236,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     img = await _imageDataFactory.CreateFromFile(
                         entry.Path, 32, false, RawConverterEnum.FREEIMAGE, token).ConfigureAwait(false);
                 } catch (Exception ex) {
-                    Logger.Warning($"SeeDrift: could not load image for solve — {entry.Path}: {ex.Message}");
+                    SeeDriftLog.Warning($"SeeDrift: could not load image for solve — {entry.Path}: {ex.Message}");
                     continue;
                 }
 
@@ -245,7 +244,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 try {
                     result = await imageSolver.Solve(img, ps, progress, token).ConfigureAwait(false);
                 } catch (Exception ex) {
-                    Logger.Warning($"SeeDrift: plate solve failed — {entry.Path}: {ex.Message}");
+                    SeeDriftLog.Warning($"SeeDrift: plate solve failed — {entry.Path}: {ex.Message}");
                 } finally {
                     if (img is IDisposable d)
                         d.Dispose();
@@ -260,7 +259,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             if (built.Count < 2) {
-                Logger.Warning($"SeeDrift: fewer than 2 plate-solved frames — no report segment.");
+                SeeDriftLog.Warning($"SeeDrift: fewer than 2 plate-solved frames — no report segment.");
                 Report("Stopped — fewer than 2 frames solved (check plate solver profile and FITS readability).");
                 return false;
             }
@@ -282,7 +281,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             Report($"Done — added {built.Count} solved frames to tonight’s HTML report.", built.Count, built.Count);
 
-            Logger.Info($"SeeDrift: batch complete — {built.Count} solved frames → night report.");
+            SeeDriftLog.Info($"SeeDrift: batch complete — {built.Count} solved frames → night report.");
             return true;
         }
 
@@ -309,9 +308,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 Directory.CreateDirectory(folder);
                 var path = Path.Combine(folder, $"SeeDrift_night_{DateTime.Now:yyyyMMdd}.html");
                 HtmlReportExporter.WriteNightReport(CompletedTargets, path);
-                Logger.Info($"SeeDrift: night report saved → {path}");
+                SeeDriftLog.Info($"SeeDrift: night report saved → {path}");
             } catch (Exception ex) {
-                Logger.Error($"SeeDrift: failed to write night report: {ex.Message}");
+                SeeDriftLog.Error($"SeeDrift: failed to write night report: {ex.Message}");
             }
         }
 

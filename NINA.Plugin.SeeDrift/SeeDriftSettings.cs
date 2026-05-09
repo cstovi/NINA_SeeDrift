@@ -15,31 +15,31 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Historic Test report: path to a NINA .log file (Saved image to … lines).</summary>
         public string TestReportLogFilePath { get; set; } = "";
 
-        /// <summary>Obsolete — retained so older settings.json deserialize without errors.</summary>
-        public string TestObservationStartUtcIso { get; set; } = "";
-
-        /// <summary>Obsolete — retained so older settings.json deserialize without errors.</summary>
-        public string TestObservationEndUtcIso { get; set; } = "";
-
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "SeeDrift", "settings.json");
 
         public static SeeDriftSettings Load() {
             try {
-                if (File.Exists(SettingsPath))
-                    return JsonConvert.DeserializeObject<SeeDriftSettings>(File.ReadAllText(SettingsPath)) ?? new SeeDriftSettings();
+                if (File.Exists(SettingsPath)) {
+                    var s = JsonConvert.DeserializeObject<SeeDriftSettings>(File.ReadAllText(SettingsPath)) ?? new SeeDriftSettings();
+                    try {
+                        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+                        File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(s, Formatting.Indented));
+                    } catch { }
+                    return s;
+                }
             } catch { }
-            var s = new SeeDriftSettings();
+            var defaults = new SeeDriftSettings();
             try {
                 var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
                 if (!string.IsNullOrEmpty(docs))
-                    s.HtmlExportFolder = Path.Combine(docs, "SeeDrift");
+                    defaults.HtmlExportFolder = Path.Combine(docs, "SeeDrift");
             } catch { }
             try {
-                s.TempWorkingFolder = Path.Combine(Path.GetTempPath(), "SeeDrift");
+                defaults.TempWorkingFolder = Path.Combine(Path.GetTempPath(), "SeeDrift");
             } catch { }
-            return s;
+            return defaults;
         }
 
         public void Save() {

@@ -42,6 +42,8 @@ Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste i
 
 **Clear completed targets (session)** resets in-memory completed targets for the rolling night file layout (see manual if you re-run the same night).
 
+SeeDrift also writes **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** (plugin messages, in addition to NINA’s own log).
+
 See **[docs/MANUAL.md](docs/MANUAL.md)** for options, HTML location, and troubleshooting.
 
 ## Changelog

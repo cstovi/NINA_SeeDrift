@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using NINA.Core.Utility;
 using NINA.Plugin.SeeDrift.Models;
 
 namespace NINA.Plugin.SeeDrift.Utility {
@@ -127,7 +126,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
             var windowed = w0.HasValue && w1.HasValue;
             if (!windowed && (windowStartUtc.HasValue || windowEndUtc.HasValue)) {
-                Logger.Warning("SeeDrift: log path collector — incomplete UTC window; ignoring window filter.");
+                SeeDriftLog.Warning("SeeDrift: log path collector — incomplete UTC window; ignoring window filter.");
                 windowed = false;
                 w0 = w1 = null;
             }
@@ -197,7 +196,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
                 // Log filenames (and typical NINA timestamps without "Z") follow local calendar days — use local date, not UTC midnight date.
                 var sessionDate = samples[0].ExposureStartUtc.ToLocalTime().Date;
-                Logger.Debug($"SeeDrift: log correlator — sessionDate(local)={sessionDate:yyyy-MM-dd}, first sample UTC={samples[0].ExposureStartUtc:o}");
+                SeeDriftLog.Debug($"SeeDrift: log correlator — sessionDate(local)={sessionDate:yyyy-MM-dd}, first sample UTC={samples[0].ExposureStartUtc:o}");
 
                 var triggers = new List<TimedTrigger>();
                 var pulses = new List<DitherPulse>();
@@ -225,12 +224,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 centerDriftLines.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
                 imageSaves.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
 
-                Logger.Debug(
+                SeeDriftLog.Debug(
                     $"SeeDrift: log correlator — triggers={triggers.Count}, dither pulses={pulses.Count}, center drift lines={centerDriftLines.Count}, image saves={imageSaves.Count}");
                 AssignInterFrameEdges(samples, triggers, pulses, centerDriftLines, imageSaves);
 
                 if (triggers.Count == 0) {
-                    Logger.Debug("SeeDrift: log correlator — no Starting Trigger lines in date window");
+                    SeeDriftLog.Debug("SeeDrift: log correlator — no Starting Trigger lines in date window");
                     return (CountJumpsWithNextFrameLogInterval(samples), true, 0, CountSequencerEdges(samples), 0, 0);
                 }
 
@@ -238,17 +237,17 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (firstJump != null) {
                     var nearest = triggers.OrderBy(e => (e.UtcTime - firstJump!.ExposureStartUtc).Duration()).First();
                     var gap = (nearest.UtcTime - firstJump.ExposureStartUtc).Duration();
-                    Logger.Debug(
+                    SeeDriftLog.Debug(
                         $"SeeDrift: log correlator — first jump UTC={firstJump.ExposureStartUtc:o}, nearest trigger '{nearest.Label}' UTC={nearest.UtcTime:o}, gap={gap.TotalSeconds:F0}s (not used for UI — only strict between-frame intervals)");
                 }
 
                 var matchedJumps = CountJumpsWithNextFrameLogInterval(samples);
                 var (traceDithers, traceCenters) = CountSequencerTriggersInTraceSpan(samples, triggers);
-                Logger.Debug(
+                SeeDriftLog.Debug(
                     $"SeeDrift: log correlator — jumps with next-frame log interval={matchedJumps}, trace span triggers: dither={traceDithers}, center={traceCenters}");
                 return (matchedJumps, true, triggers.Count, CountSequencerEdges(samples), traceDithers, traceCenters);
             } catch (Exception ex) {
-                Logger.Debug($"SeeDrift: log correlation skipped: {ex.Message}");
+                SeeDriftLog.Debug($"SeeDrift: log correlation skipped: {ex.Message}");
                 return (0, false, 0, 0, 0, 0);
             }
         }

@@ -11,7 +11,6 @@ using Application = System.Windows.Application;
 using Microsoft.Win32;
 using NINA.Core.Model;
 using NINA.Core.Utility;
-using static NINA.Core.Utility.Logger;
 using NINA.Image.Interfaces;
 using NINA.Plugin;
 using NINA.Plugin.Interfaces;
@@ -103,14 +102,14 @@ namespace NINA.Plugin.SeeDrift {
 
             await Application.Current!.Dispatcher.InvokeAsync(BeginTestReportUi);
             await Task.Yield();
-            Logger.Info($"SeeDrift: Test report starting — {TestReportLogFilePath.Trim()}");
+            SeeDriftLog.Info($"SeeDrift: Test report starting — {TestReportLogFilePath.Trim()}");
             var ok = false;
             try {
                 var progress = new Progress<ApplicationStatus>(OnTestReportApplicationStatus);
                 ok = await DriftTracker.RunTestReportFromLogAsync(TestReportLogFilePath.Trim(), progress, CancellationToken.None)
                     .ConfigureAwait(false);
             } catch (Exception ex) {
-                Logger.Error($"SeeDrift: Test report failed — {ex.Message}");
+                SeeDriftLog.Error($"SeeDrift: Test report failed — {ex.Message}");
             } finally {
                 await Application.Current!.Dispatcher.InvokeAsync(EndTestReportUi);
             }
