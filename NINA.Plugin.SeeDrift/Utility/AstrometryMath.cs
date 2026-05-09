@@ -72,12 +72,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
             if (isEq) {
                 deltaDecArcSec = -dy * s;
-                deltaRaArcSec  = -dx * s / cosDec;
+                deltaRaArcSec  =  dx * s / cosDec;
             } else {
                 var q    = parallacticAngleRad;
                 var cosQ = Math.Cos(q);
                 var sinQ = Math.Sin(q);
-                var east = s * (-dx * cosQ - dy * sinQ);
+                var east = s * (dx * cosQ - dy * sinQ);
                 deltaDecArcSec = s * (dx * sinQ - dy * cosQ);
                 deltaRaArcSec  = east / cosDec;
             }
