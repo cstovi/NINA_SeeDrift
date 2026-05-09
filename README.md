@@ -32,7 +32,7 @@ Set **Options → Imaging → image file path** in NINA so saved lights land whe
 ### Sequencer (recommended)
 
 1. Add **SeeDrift Start** before capture and **SeeDrift Stop** when finished.
-2. **Stop** reads NINA log files, collects **Saved image to …** paths between Start and Stop, plate-solves each **LIGHT** (header filter), builds drift samples, and **appends** to the rolling **night HTML** (one drift chart and sequencer block per target when the batch spans multiple `OBJECT` names). **NINA’s status bar** shows the **full path** on success (plain text). **Plugins → SeeDrift** also shows **Open** with the HTML **file name** as a click target after a successful run; if **Night report folder** is empty, the default is **`Documents\SeeDrift`** (not Desktop).
+2. **Stop** reads NINA log files, collects **Saved image to …** paths between Start and Stop, plate-solves each **LIGHT** (header filter), builds drift samples, and **appends** to the rolling **night HTML** (one drift chart and sequencer block per target when the batch spans multiple `OBJECT` names). **NINA’s status bar** shows the **full path** on success (plain text). **Plugins → SeeDrift** also shows **Open** with the HTML **file name** as a click target after a successful run; if **Night report folder** is empty, the default is **`Documents\SeeDrift`** (not Desktop). If you set **Discord webhook**, Stop also uploads that HTML to your channel (**Previous session report** never uploads).
 
 ### Previous session Log (options panel)
 

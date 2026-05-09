@@ -22,6 +22,9 @@ namespace NINA.Plugin.SeeDrift {
         /// </summary>
         public int MinExposuresPerTarget { get; set; } = 50;
 
+        /// <summary>Optional Discord Execute Webhook URL (<c>https://discord.com/api/webhooks/...</c>). Empty = disabled. Token is secret — never log.</summary>
+        public string DiscordWebhookUrl { get; set; } = "";
+
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "SeeDrift", "settings.json");

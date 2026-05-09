@@ -30,6 +30,25 @@
                 <TextBox Grid.Column="1" Text="{Binding HtmlExportFolder, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
             </Grid>
 
+            <Grid Margin="0,0,0,16" ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="400">
+                <Grid.ToolTip>
+                    <ToolTip>
+                        <TextBlock MaxWidth="420" TextWrapping="Wrap"
+                                   Text="Optional. Paste a Discord channel webhook URL (Integrations → Webhooks). After SeeDrift Stop writes the night HTML, the file is POSTed as an attachment. The URL contains a secret token — do not share it. Leave empty to disable. Previous session report never uploads to Discord."/>
+                    </ToolTip>
+                </Grid.ToolTip>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="160"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Discord webhook:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox Grid.Column="1"
+                         Text="{Binding DiscordWebhookUrl, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalAlignment="Center"
+                         FontFamily="Consolas"
+                         ToolTip="https://discord.com/api/webhooks/… (secret — never share)"/>
+            </Grid>
+
             <Grid Margin="0,0,0,10" ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="400">
                 <Grid.ToolTip>
                     <ToolTip>

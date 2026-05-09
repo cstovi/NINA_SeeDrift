@@ -66,8 +66,10 @@ namespace NINA.Plugin.SeeDrift {
             PlateSolveParallelism = NormalizePlateSolveParallelism(Settings.PlateSolveParallelism);
             MinExposuresPerTarget = NormalizeMinExposuresPerTarget(Settings.MinExposuresPerTarget);
             _testReportLogFilePath = Settings.TestReportLogFilePath ?? "";
+            _discordWebhookUrl = Settings.DiscordWebhookUrl ?? "";
             _isInitializing = false;
             RaisePropertyChanged(nameof(TestReportLogFilePath));
+            RaisePropertyChanged(nameof(DiscordWebhookUrl));
 
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
             BrowseTestReportLogCommand = new RelayCommand(_ => BrowseTestReportLog());
@@ -196,7 +198,7 @@ namespace NINA.Plugin.SeeDrift {
                 app.Dispatcher.Invoke(Apply);
         }
 
-        internal void NotifyNightReportSaved(string absolutePath, string completeStatusLine) {
+        internal void NotifyNightReportSaved(string absolutePath, string completeStatusLine, bool postDiscordIfConfigured) {
             void Apply() {
                 _nightReportLinkPath = absolutePath;
                 _testReportStatusText = completeStatusLine;
@@ -215,6 +217,9 @@ namespace NINA.Plugin.SeeDrift {
                 Apply();
             else
                 app.Dispatcher.Invoke(Apply);
+
+            if (postDiscordIfConfigured)
+                DiscordWebhookNotifier.EnqueueUpload(_discordWebhookUrl, absolutePath);
         }
 
         private static string FormatStatusForPanel(string? status, string? path) {
@@ -316,6 +321,7 @@ namespace NINA.Plugin.SeeDrift {
             try {
                 Settings.HtmlExportFolder = _htmlExportFolder;
                 Settings.TestReportLogFilePath = _testReportLogFilePath;
+                Settings.DiscordWebhookUrl = _discordWebhookUrl;
                 Settings.PlateSolveParallelism = _plateSolveParallelism;
                 Settings.MinExposuresPerTarget = _minExposuresPerTarget;
                 Settings.Save();
@@ -350,6 +356,20 @@ namespace NINA.Plugin.SeeDrift {
             if (value < 1) return Math.Clamp(CpuTopology.PhysicalCoreCount, 1, max);
             if (value > max) return max;
             return value;
+        }
+
+        private string _discordWebhookUrl = "";
+
+        /// <summary>Optional Discord webhook URL (Execute Webhook). Empty disables upload. URL contains a secret token — never logged.</summary>
+        public string DiscordWebhookUrl {
+            get => _discordWebhookUrl;
+            set {
+                var v = value ?? "";
+                if (v == _discordWebhookUrl) return;
+                _discordWebhookUrl = v;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
         }
 
         private int _minExposuresPerTarget = 50;
