@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -16,8 +15,8 @@ using NINA.Plugin.SeeDrift.Utility;
 namespace NINA.Plugin.SeeDrift.Services {
 
     /// <summary>
-    /// Plate-solves saved LIGHT files discovered under the NINA image directory for a UTC observation window
-    /// (SeeDrift Start→Stop, or the Test report window) and writes the rolling night HTML report.
+    /// Plate-solves LIGHT files referenced by NINA “Saved image to …” log lines (SeeDrift Start→Stop scans logs under
+    /// <c>%LocalAppData%\NINA\Logs</c>; Test report uses a log file you choose) and writes the rolling night HTML report.
     /// </summary>
     public sealed class DriftTrackingService : IDisposable {
 
@@ -83,22 +82,44 @@ namespace NINA.Plugin.SeeDrift.Services {
             await Application.Current!.Dispatcher.InvokeAsync(() => { IsArmed = false; });
 
             try {
-                await RunDiskBatchAndReportAsync(startUtc, disarmUtc, resetSession: false, progress, token)
+                var logFiles = NinaLogCorrelator.GetAllNinaLogFiles();
+                await RunBatchFromLogsAsync(logFiles, startUtc, disarmUtc, resetSession: false, progress, token)
                     .ConfigureAwait(false);
             } finally {
                 _armUtc = null;
             }
         }
 
-        /// <summary>Test report: same pipeline using an observation UTC window (typically from plugin Test fields).</summary>
-        public async Task RunTestReportAsync(
-                DateTime obsStartUtc,
-                DateTime obsEndUtc,
+        /// <summary>Test report: plate-solves lights listed in the chosen NINA log file (full file).</summary>
+        public async Task RunTestReportFromLogAsync(
+                string logFilePath,
                 IProgress<ApplicationStatus>? progress,
                 CancellationToken token) {
-            var a = obsStartUtc.Kind == DateTimeKind.Utc ? obsStartUtc : obsStartUtc.ToUniversalTime();
-            var b = obsEndUtc.Kind == DateTimeKind.Utc ? obsEndUtc : obsEndUtc.ToUniversalTime();
-            await RunDiskBatchAndReportAsync(a, b, resetSession: true, progress, token).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(logFilePath)) {
+                Logger.Error("SeeDrift: Test report — no log file path.");
+                return;
+            }
+
+            try {
+                logFilePath = Path.GetFullPath(logFilePath.Trim());
+            } catch {
+                Logger.Error("SeeDrift: Test report — invalid log file path.");
+                return;
+            }
+
+            if (!File.Exists(logFilePath)) {
+                Logger.Error($"SeeDrift: Test report — log file not found: {logFilePath}");
+                return;
+            }
+
+            await RunBatchFromLogsAsync(
+                    new[] { logFilePath },
+                    windowStartUtc: null,
+                    windowEndUtc: null,
+                    resetSession: true,
+                    progress,
+                    token)
+                .ConfigureAwait(false);
         }
 
         public void ResetSession() {
@@ -114,18 +135,16 @@ namespace NINA.Plugin.SeeDrift.Services {
             LogTraceCenterTriggerCount = 0;
         }
 
-        private async Task RunDiskBatchAndReportAsync(
-                DateTime obsStartUtc, DateTime obsEndUtc, bool resetSession,
-                IProgress<ApplicationStatus>? progress, CancellationToken token) {
+        private async Task RunBatchFromLogsAsync(
+                IReadOnlyList<string> logFilesToRead,
+                DateTime? windowStartUtc,
+                DateTime? windowEndUtc,
+                bool resetSession,
+                IProgress<ApplicationStatus>? progress,
+                CancellationToken token) {
 
             if (resetSession)
                 ResetSession();
-
-            var root = NinaPaths.TryGetDefaultImageDirectory(_plugin.ProfileService);
-            if (string.IsNullOrEmpty(root)) {
-                Logger.Error("SeeDrift: NINA image file path is not set or folder does not exist. Check Options → General → file path.");
-                return;
-            }
 
             var profile = _plugin.ProfileService.ActiveProfile;
             if (profile?.PlateSolveSettings == null) {
@@ -133,33 +152,33 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return;
             }
 
-            if (profile.ImageFileSettings == null) {
-                Logger.Error("SeeDrift: Active profile has no image file settings.");
+            if (logFilesToRead == null || logFilesToRead.Count == 0) {
+                Logger.Warning("SeeDrift: no NINA log files to read — check %LocalAppData%\\NINA\\Logs exists and contains .log files.");
                 return;
             }
 
             progress?.Report(new ApplicationStatus {
                 Source = "SeeDrift",
-                Status = "Scanning image folder for LIGHT files in your observation window…",
+                Status = "Reading NINA logs for saved light paths…",
                 Progress = 0,
                 MaxProgress = 0
             });
 
-            var windowed = FitsFolderImport.EnumerateSortedRecursiveForUtcWindow(
-                root,
-                profile.ImageFileSettings,
-                obsStartUtc,
-                obsEndUtc,
-                msg => progress?.Report(new ApplicationStatus {
-                    Source = "SeeDrift",
-                    Status = msg,
-                    Progress = 0,
-                    MaxProgress = 0
-                }),
-                token);
+            if (!NinaLogCorrelator.TryCollectSavedImagePathsFromLogs(
+                    logFilesToRead,
+                    windowStartUtc,
+                    windowEndUtc,
+                    out var orderedSaves,
+                    out _) || orderedSaves.Count < 2) {
+                Logger.Warning(
+                    $"SeeDrift: fewer than 2 saved-light lines in log(s) — no report ({orderedSaves.Count} candidates).");
+                return;
+            }
+
+            var windowed = FitsFolderImport.BuildEntriesFromLogSaveOrder(orderedSaves);
 
             if (windowed.Count < 2) {
-                Logger.Warning($"SeeDrift: fewer than 2 LIGHT frames in window — no report ({windowed.Count} found).");
+                Logger.Warning($"SeeDrift: fewer than 2 LIGHT frames after FITS filter — no report ({windowed.Count} kept).");
                 return;
             }
 
@@ -224,7 +243,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return;
             }
 
-            ApplyJumpAndLogAnnotation(built);
+            ApplyJumpAndLogAnnotation(built, logFilesToRead);
 
             var targetName = HtmlReportExporter.SummarizeTargetsForBatch(built);
 
@@ -240,10 +259,10 @@ namespace NINA.Plugin.SeeDrift.Services {
             Logger.Info($"SeeDrift: batch complete — {built.Count} solved frames → night report.");
         }
 
-        private void ApplyJumpAndLogAnnotation(List<DriftSample> frames) {
+        private void ApplyJumpAndLogAnnotation(List<DriftSample> frames, IReadOnlyList<string>? correlatorLogPaths) {
             JumpDetector.AnnotateJumps(frames);
             var (logMatched, logFound, triggersLoaded, sequencerEdges, traceDithers, traceCenters) =
-                NinaLogCorrelator.AnnotateWithLogEvents(frames);
+                NinaLogCorrelator.AnnotateWithLogEvents(frames, correlatorLogPaths);
             JumpCount = JumpDetector.CountJumps(frames);
             LogCorrelatedCount = logMatched;
             LogWasFound = logFound;

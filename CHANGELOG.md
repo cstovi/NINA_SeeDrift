@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.6.0] — 2026-05-09
+
+### Changed
+
+- **Breaking (behavior):** Drift batches no longer walk the imaging folder tree by FITS observation window. **SeeDrift Start→Stop** collects **`Saved image to …`** paths from **`%LocalAppData%\NINA\Logs\*.log`** with timestamps between Start and Stop. **Test report** replaces date/time pickers with a **user-selected `.log` file** and solves every light path referenced there.
+- **Correlation:** Sequencer annotation parses the **same log file set** (Stop: all logs in folder; Test: chosen file) so triggers align with the frames list.
+
 ## [0.5.10] — 2026-05-09
 
 ### Changed

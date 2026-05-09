@@ -162,7 +162,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (rows.Count == 0) {
                 sb.AppendLine("    <div class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/40 p-4\">");
                 sb.AppendLine("      <p class=\"text-sm text-slate-300\">No correlated dither or center-after-drift events for this batch.</p>");
-                sb.AppendLine("      <p class=\"mt-2 text-xs leading-relaxed text-slate-500\">SeeDrift matches lines in <code class=\"rounded bg-slate-800 px-1 py-0.5 text-slate-300\">%LocalAppData%\\NINA\\Logs</code> to your frame times (NINA lines are usually local wall time). If logs were rotated, observation times do not overlap your captures, or session paths differ, this section stays empty — it is not a bug in the drift chart.</p>");
+                sb.AppendLine("      <p class=\"mt-2 text-xs leading-relaxed text-slate-500\">SeeDrift reads the same NINA log(s) used to build this batch’s frame list (Saved image to …, triggers, dither lines). If this section is empty, those lines did not fall in strict between-frame intervals or the log did not match — not a bug in the drift chart.</p>");
                 sb.AppendLine("    </div>");
                 sb.AppendLine("  </div>");
                 return;

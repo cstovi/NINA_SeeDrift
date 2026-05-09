@@ -19,6 +19,17 @@ namespace NINA.Plugin.SeeDrift.Utility {
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "Logs");
 
+        /// <summary>All <c>*.log</c> files in <see cref="LogFolder"/> (SeeDrift Start→Stop uses these for saved paths + correlation).</summary>
+        internal static IReadOnlyList<string> GetAllNinaLogFiles() {
+            if (!Directory.Exists(LogFolder))
+                return Array.Empty<string>();
+            try {
+                return Directory.GetFiles(LogFolder, "*.log", SearchOption.TopDirectoryOnly);
+            } catch {
+                return Array.Empty<string>();
+            }
+        }
+
         /// <summary>Center-after-drift trigger fired (NINA sequencer).</summary>
         private static readonly Regex RxTriggerCenter = new Regex(
             @"Starting\s+Trigger:.*CenterAfterDrift", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -91,13 +102,92 @@ namespace NINA.Plugin.SeeDrift.Utility {
         }
 
         /// <summary>
+        /// Collects “Saved image to …” paths from NINA logs. When both window endpoints are null, every save line in the
+        /// listed files is kept (historic single-file replay). Otherwise keeps lines whose timestamp falls in
+        /// <paramref name="windowStartUtc"/>…<paramref name="windowEndUtc"/> inclusive (UTC).
+        /// Results are sorted by log time; duplicate paths keep the earliest line.
+        /// </summary>
+        internal static bool TryCollectSavedImagePathsFromLogs(
+                IEnumerable<string> logFilePaths,
+                DateTime? windowStartUtc,
+                DateTime? windowEndUtc,
+                out List<(string path, DateTime lineUtc)> orderedUniquePaths,
+                out List<string> filesOpenedOk) {
+
+            orderedUniquePaths = new List<(string path, DateTime lineUtc)>();
+            filesOpenedOk = new List<string>();
+
+            static DateTime AsUtc(DateTime t) =>
+                t.Kind == DateTimeKind.Utc ? t : t.ToUniversalTime();
+
+            DateTime? w0 = windowStartUtc.HasValue ? AsUtc(windowStartUtc.Value) : (DateTime?)null;
+            DateTime? w1 = windowEndUtc.HasValue ? AsUtc(windowEndUtc.Value) : (DateTime?)null;
+            if (w0.HasValue && w1.HasValue && w1.Value < w0.Value)
+                (w0, w1) = (w1, w0);
+
+            var windowed = w0.HasValue && w1.HasValue;
+            if (!windowed && (windowStartUtc.HasValue || windowEndUtc.HasValue)) {
+                Logger.Warning("SeeDrift: log path collector — incomplete UTC window; ignoring window filter.");
+                windowed = false;
+                w0 = w1 = null;
+            }
+
+            var rawEvents = new List<(DateTime utc, string path)>();
+
+            foreach (var logPath in logFilePaths) {
+                if (string.IsNullOrWhiteSpace(logPath))
+                    continue;
+                try {
+                    if (!File.Exists(logPath))
+                        continue;
+                    using var fs = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    using var sr = new StreamReader(fs);
+                    filesOpenedOk.Add(logPath);
+
+                    string? line;
+                    while ((line = sr.ReadLine()) != null) {
+                        if (!TryParseTimestamp(line, out var ts))
+                            continue;
+
+                        if (windowed && (ts < w0!.Value || ts > w1!.Value))
+                            continue;
+
+                        var mSave = RxSavedImageTo.Match(line);
+                        if (!mSave.Success)
+                            continue;
+
+                        var rawPath = mSave.Groups[1].Value.Trim().Trim('\'', '"');
+                        if (string.IsNullOrEmpty(rawPath) || ShouldIgnoreSavePath(rawPath))
+                            continue;
+
+                        rawEvents.Add((ts, rawPath));
+                    }
+                } catch {
+                    // skip unreadable log
+                }
+            }
+
+            rawEvents.Sort((x, y) => x.utc.CompareTo(y.utc));
+
+            var seenPath = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (utc, p) in rawEvents) {
+                if (seenPath.Add(p))
+                    orderedUniquePaths.Add((p, utc));
+            }
+
+            return filesOpenedOk.Count > 0;
+        }
+
+        /// <summary>
         /// Loads sequencer triggers and dither pulses; sets hints and inter-frame edge fields.
         /// Returns matched jump count (jumps whose next frame has a strict between-exposure dither/center interval),
         /// log found, trigger count in the parsed date window, edge marker count,
         /// and dither vs center trigger counts whose timestamps fall from first to last frame (exposure start UTC, inclusive).
         /// </summary>
+        /// <param name="explicitLogPaths">When non-null and non-empty, parse only these files (full content). Otherwise discover logs by session date.</param>
         public static (int MatchedJumps, bool LogFound, int TriggersLoaded, int SequencerEdges, int TraceDitherTriggers, int TraceCenterTriggers) AnnotateWithLogEvents(
-                List<DriftSample> samples) {
+                List<DriftSample> samples,
+                IReadOnlyList<string>? explicitLogPaths = null) {
             if (samples.Count == 0) return (0, false, 0, 0, 0, 0);
             try {
                 foreach (var s in samples) {
@@ -113,8 +203,22 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 var pulses = new List<DitherPulse>();
                 var centerDriftLines = new List<CenterDriftLogLine>();
                 var imageSaves = new List<ImageSaveEvent>();
-                if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses, centerDriftLines, imageSaves))
-                    return (0, false, 0, 0, 0, 0);
+
+                bool loaded;
+                if (explicitLogPaths != null && explicitLogPaths.Count > 0) {
+                    loaded = false;
+                    foreach (var path in explicitLogPaths.Distinct(StringComparer.OrdinalIgnoreCase)) {
+                        if (!File.Exists(path))
+                            continue;
+                        loaded = true;
+                        ParseLogLines(path, triggers, pulses, centerDriftLines, imageSaves);
+                    }
+                    if (!loaded)
+                        return (0, false, 0, 0, 0, 0);
+                } else {
+                    if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses, centerDriftLines, imageSaves))
+                        return (0, false, 0, 0, 0, 0);
+                }
 
                 triggers.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
                 pulses.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
@@ -205,7 +309,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
             return map;
         }
 
-        private static bool ShouldIgnoreSavePath(string fullPath) {
+        internal static bool ShouldIgnoreSavePath(string fullPath) {
             var p = fullPath.Replace('/', '\\');
             return p.IndexOf("PlateSolver", StringComparison.OrdinalIgnoreCase) >= 0
                 || p.IndexOf(@"\AppData\Local\Temp\", StringComparison.OrdinalIgnoreCase) >= 0;

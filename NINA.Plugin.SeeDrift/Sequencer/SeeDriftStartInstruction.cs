@@ -9,7 +9,7 @@ namespace NINA.Plugin.SeeDrift.Sequencer {
 
     [Export(typeof(ISequenceItem))]
     [ExportMetadata("Name", "SeeDrift Start")]
-    [ExportMetadata("Description", "Arms SeeDrift — starts the arm timestamp used with Stop to select LIGHT frames (observation times vs FITS UTC) under the NINA image folder for plate solving and the drift HTML report.")]
+    [ExportMetadata("Description", "Arms SeeDrift — Start time used with Stop to select Saved image to … lines in NINA session logs (arm→disarm) for plate solving and the drift HTML report.")]
     [ExportMetadata("Icon", "SeeDrift_Icon")]
     [ExportMetadata("Category", "SeeDrift")]
     public class SeeDriftStartInstruction : SequenceItem {

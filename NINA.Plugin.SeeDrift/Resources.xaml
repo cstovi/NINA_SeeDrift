@@ -12,7 +12,7 @@
         <StackPanel Margin="8" MaxWidth="620">
 
             <TextBlock Text="Drift report (plate solving)" FontWeight="Bold" Margin="0,0,0,4"/>
-            <TextBlock Text="SeeDrift Stop plate-solves LIGHT frames saved under your NINA image folder whose observation time falls between SeeDrift Start and Stop (session window). Configure NINA Options → Imaging → image file path."
+            <TextBlock Text="SeeDrift uses your NINA session log: Start→Stop reads all .log files under %LocalAppData%\\NINA\\Logs and plate-solves LIGHT paths from “Saved image to …” lines between Start and Stop (no full-folder scan). Configure NINA Options → Imaging so saved paths match where you store lights."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"/>
 
             <TextBlock Text="NINA image folder (read-only)" FontWeight="Bold" Margin="0,0,0,4"/>
@@ -40,51 +40,19 @@
 
             <Separator Margin="0,0,0,12"/>
 
-            <TextBlock Text="Test report" FontWeight="Bold" Margin="0,0,0,4"/>
-            <TextBlock Text="Uses the same pipeline as SeeDrift Stop: walks your Imaging file pattern for LIGHT frames and filters by observation time (FITS UTC internally). Pick calendar date and time in your PC’s local timezone."
+            <TextBlock Text="Test report (historic session)" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBlock Text="Pick a saved NINA .log file. SeeDrift plate-solves every LIGHT frame listed on “Saved image to …” lines in that file — fast, no date window. Same drift + sequencer correlation as Stop."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
-            <TextBlock Text="Observation start (local time)" FontWeight="SemiBold" Margin="0,0,0,4"/>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                <DatePicker SelectedDate="{Binding TestObservationStartDate}" Width="150" VerticalAlignment="Center"/>
-                <TextBlock Text="time" Margin="12,0,6,0" VerticalAlignment="Center" Foreground="#AAA" FontSize="11"/>
-                <ComboBox ItemsSource="{Binding ObservationClockHours}" SelectedItem="{Binding TestObservationStartHour}" Width="56" VerticalAlignment="Center" Margin="0,0,4,0">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StringFormat={}{0:D2}}"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <TextBlock Text=":" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                <ComboBox ItemsSource="{Binding ObservationClockMinutes}" SelectedItem="{Binding TestObservationStartMinute}" Width="56" VerticalAlignment="Center">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StringFormat={}{0:D2}}"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-            </StackPanel>
-
-            <TextBlock Text="Observation end (local time)" FontWeight="SemiBold" Margin="0,0,0,4"/>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                <DatePicker SelectedDate="{Binding TestObservationEndDate}" Width="150" VerticalAlignment="Center"/>
-                <TextBlock Text="time" Margin="12,0,6,0" VerticalAlignment="Center" Foreground="#AAA" FontSize="11"/>
-                <ComboBox ItemsSource="{Binding ObservationClockHours}" SelectedItem="{Binding TestObservationEndHour}" Width="56" VerticalAlignment="Center" Margin="0,0,4,0">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StringFormat={}{0:D2}}"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <TextBlock Text=":" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                <ComboBox ItemsSource="{Binding ObservationClockMinutes}" SelectedItem="{Binding TestObservationEndMinute}" Width="56" VerticalAlignment="Center">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding StringFormat={}{0:D2}}"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-            </StackPanel>
+            <TextBlock Text="NINA log file" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0" Text="{Binding TestReportLogFilePath, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseTestReportLogCommand}" Padding="10,4" MinWidth="88"/>
+            </Grid>
 
             <TextBlock Text="Progress and status appear only while Run test report is active (then hidden). SeeDrift Stop reports progress in NINA’s main status bar."
                        FontSize="10" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,8"/>

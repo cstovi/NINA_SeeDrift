@@ -127,6 +127,53 @@ namespace NINA.Plugin.SeeDrift.Utility {
         }
 
         /// <summary>
+        /// Builds LIGHT replay entries from ordered “Saved image to …” paths (see NINA logs). Preserves log order,
+        /// skips duplicates, missing files, non-FITS extensions, and calibration frames per <see cref="FitsCoordinates.PassesLightFilterForReplay"/>.
+        /// </summary>
+        public static IReadOnlyList<FitsReplayEntry> BuildEntriesFromLogSaveOrder(
+                IReadOnlyList<(string path, DateTime logLineUtc)> orderedSaves) {
+
+            var result = new List<FitsReplayEntry>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (path, logUtc) in orderedSaves) {
+                if (string.IsNullOrWhiteSpace(path) || !seen.Add(path))
+                    continue;
+
+                var ext = Path.GetExtension(path);
+                if (string.IsNullOrEmpty(ext) || Extensions.All(e => !ext.Equals(e, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                try {
+                    if (!File.Exists(path))
+                        continue;
+                } catch {
+                    continue;
+                }
+
+                if (!FitsCoordinates.TryReadPrimaryHeader(path, out var cards))
+                    continue;
+
+                if (!FitsCoordinates.PassesLightFilterForReplay(cards))
+                    continue;
+
+                DateTime? obsUtc = null;
+                if (FitsCoordinates.TryParseObservationUtc(cards, out var parsedUtc))
+                    obsUtc = parsedUtc;
+
+                var sortUtc = obsUtc ?? logUtc;
+                var exposureUtc = obsUtc ?? File.GetLastWriteTimeUtc(path);
+
+                cards.TryGetValue("OBJECT", out var obj);
+                var target = string.IsNullOrWhiteSpace(obj) ? Path.GetFileNameWithoutExtension(path) : obj.Trim();
+
+                result.Add(new FitsReplayEntry(path, sortUtc, exposureUtc, target));
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// Skip reading the FITS header when both filesystem timestamps’ **years** are strictly below
         /// <paramref name="yearLo"/> or strictly above <paramref name="yearHi"/> (window calendar-year span).
         /// </summary>
