@@ -95,10 +95,7 @@
                 </StackPanel>
             </Border>
 
-            <TextBlock Text="While Test report runs, status updates under Run; when finished, the last line stays until you run again. SeeDrift Stop uses NINA’s main status bar instead."
-                       FontSize="10" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,16"/>
-
-            <TextBlock Text="Tip: plate solving uses your NINA plate-solve profile (same solvers as the Plate Solve tool)." FontSize="11" Foreground="#888" TextWrapping="Wrap"/>
+            <TextBlock Text="Tip: plate solving uses your NINA plate-solve profile (same solvers as the Plate Solve tool)." FontSize="11" Foreground="#888" TextWrapping="Wrap" Margin="0,4,0,0"/>
         </StackPanel>
     </DataTemplate>
 
