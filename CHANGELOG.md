@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.17] — 2026-05-09
+
+### Changed
+
+- **Plot legend:** Dither/center sequencer series titles drop the redundant “(between frames)” wording.
+- **Summary line:** After a successful log read, shows **DitherAfterExposures** and **CenterAfterDrift** counts for triggers whose UTC falls between the **first and last frame** exposure starts (inclusive), plus the existing date-window total and interval count.
+
+### Documentation
+
+- **MANUAL:** Note trace-span trigger counts in the dockable summary.
+
 ## [0.4.16] — 2026-05-09
 
 ### Changed

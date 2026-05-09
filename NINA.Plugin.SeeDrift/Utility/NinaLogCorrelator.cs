@@ -93,11 +93,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
         /// <summary>
         /// Loads sequencer triggers and dither pulses; sets hints and inter-frame edge fields.
         /// Returns matched jump count (jumps whose next frame has a strict between-exposure dither/center interval),
-        /// log found, trigger count, edge marker count.
+        /// log found, trigger count in the parsed date window, edge marker count,
+        /// and dither vs center trigger counts whose timestamps fall from first to last frame (exposure start UTC, inclusive).
         /// </summary>
-        public static (int MatchedJumps, bool LogFound, int TriggersLoaded, int SequencerEdges) AnnotateWithLogEvents(
+        public static (int MatchedJumps, bool LogFound, int TriggersLoaded, int SequencerEdges, int TraceDitherTriggers, int TraceCenterTriggers) AnnotateWithLogEvents(
                 List<DriftSample> samples) {
-            if (samples.Count == 0) return (0, false, 0, 0);
+            if (samples.Count == 0) return (0, false, 0, 0, 0, 0);
             try {
                 foreach (var s in samples) {
                     s.SequencerLogHint = null;
@@ -112,7 +113,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 var centerDriftLines = new List<CenterDriftLogLine>();
                 var imageSaves = new List<ImageSaveEvent>();
                 if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses, centerDriftLines, imageSaves))
-                    return (0, false, 0, 0);
+                    return (0, false, 0, 0, 0, 0);
 
                 triggers.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
                 pulses.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
@@ -125,7 +126,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
                 if (triggers.Count == 0) {
                     Logger.Debug("SeeDrift: log correlator — no Starting Trigger lines in date window");
-                    return (CountJumpsWithNextFrameLogInterval(samples), true, 0, CountSequencerEdges(samples));
+                    return (CountJumpsWithNextFrameLogInterval(samples), true, 0, CountSequencerEdges(samples), 0, 0);
                 }
 
                 var firstJump = samples.OrderBy(s => s.FrameIndex).FirstOrDefault(s => s.IsJump);
@@ -137,12 +138,38 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 }
 
                 var matchedJumps = CountJumpsWithNextFrameLogInterval(samples);
-                Logger.Debug($"SeeDrift: log correlator — jumps with next-frame log interval={matchedJumps}");
-                return (matchedJumps, true, triggers.Count, CountSequencerEdges(samples));
+                var (traceDithers, traceCenters) = CountSequencerTriggersInTraceSpan(samples, triggers);
+                Logger.Debug(
+                    $"SeeDrift: log correlator — jumps with next-frame log interval={matchedJumps}, trace span triggers: dither={traceDithers}, center={traceCenters}");
+                return (matchedJumps, true, triggers.Count, CountSequencerEdges(samples), traceDithers, traceCenters);
             } catch (Exception ex) {
                 Logger.Debug($"SeeDrift: log correlation skipped: {ex.Message}");
-                return (0, false, 0, 0);
+                return (0, false, 0, 0, 0, 0);
             }
+        }
+
+        /// <summary>
+        /// Counts <c>Starting Trigger:</c> lines in <paramref name="triggers"/> whose UTC time lies between
+        /// the first and last sample exposure starts (by <see cref="DriftSample.FrameIndex"/>), inclusive.
+        /// </summary>
+        private static (int Dither, int Center) CountSequencerTriggersInTraceSpan(
+                IReadOnlyList<DriftSample> samples,
+                IReadOnlyList<TimedTrigger> triggers) {
+            if (samples.Count == 0) return (0, 0);
+            var ordered = samples.OrderBy(s => s.FrameIndex).ToList();
+            var tLo = ordered[0].ExposureStartUtc;
+            var tHi = ordered[^1].ExposureStartUtc;
+            if (tHi < tLo)
+                (tLo, tHi) = (tHi, tLo);
+            var d = 0;
+            var c = 0;
+            foreach (var tr in triggers) {
+                if (tr.UtcTime < tLo || tr.UtcTime > tHi)
+                    continue;
+                if (tr.Kind == TriggerKind.Dither) d++;
+                else c++;
+            }
+            return (d, c);
         }
 
         /// <summary>Jumps where the <em>following</em> frame boundary has a logged dither/center between exposures.</summary>

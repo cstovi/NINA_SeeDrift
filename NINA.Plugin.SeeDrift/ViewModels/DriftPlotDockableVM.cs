@@ -350,7 +350,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 double baseMarkerSize) {
 
             var ditherSeries = new ScatterSeries {
-                Title               = "Dither (between frames)",
+                Title               = "Dither",
                 MarkerType          = MarkerType.Triangle,
                 MarkerSize          = baseMarkerSize + 2.5,
                 MarkerFill          = OxyColor.FromAColor(220, OxyColor.FromRgb(255, 152, 0)),
@@ -359,7 +359,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 TrackerFormatString = "{Tag}"
             };
             var centerSeries = new ScatterSeries {
-                Title               = "Center (between frames)",
+                Title               = "Center",
                 MarkerType          = MarkerType.Square,
                 MarkerSize          = baseMarkerSize + 2.0,
                 MarkerFill          = OxyColor.FromAColor(210, OxyColor.FromRgb(0, 188, 212)),
@@ -615,7 +615,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                 else if (_tracker.LogTriggerCount == 0)
                     logStr = " · NINA log: read, 0 sequencer triggers in date window";
                 else
-                    logStr = $" · NINA log: {_tracker.LogTriggerCount} trigger(s), {_tracker.LogSequencerEdgeCount} between-frame interval(s)";
+                    logStr = $" · NINA log: {_tracker.LogTriggerCount} in date window · {_tracker.LogTraceDitherTriggerCount} DitherAfterExposures, {_tracker.LogTraceCenterTriggerCount} CenterAfterDrift in trace · {_tracker.LogSequencerEdgeCount} interval(s)";
 
                 // RA/Dec spread (works for both modes from the delta values).
                 var minRa  = samples.Min(s => s.DeltaRaArcSec);

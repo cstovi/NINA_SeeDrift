@@ -70,6 +70,16 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <summary>Frames where a dither or center trigger fell strictly between the previous and this exposure.</summary>
         public int LogSequencerEdgeCount { get; private set; }
 
+        /// <summary>
+        /// <c>DitherAfterExposures</c> <c>Starting Trigger:</c> lines with UTC from first to last frame exposure start (inclusive).
+        /// </summary>
+        public int LogTraceDitherTriggerCount { get; private set; }
+
+        /// <summary>
+        /// <c>CenterAfterDrift</c> <c>Starting Trigger:</c> lines with UTC from first to last frame exposure start (inclusive).
+        /// </summary>
+        public int LogTraceCenterTriggerCount { get; private set; }
+
         public DriftTrackingService(SeeDriftPlugin plugin, IImageSaveMediator imageSaveMediator) {
             _plugin = plugin;
             _imageSaveMediator = imageSaveMediator;
@@ -129,6 +139,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 LogWasFound = false;
                 LogTriggerCount = 0;
                 LogSequencerEdgeCount = 0;
+                LogTraceDitherTriggerCount = 0;
+                LogTraceCenterTriggerCount = 0;
             });
         }
 
@@ -326,16 +338,20 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         /// <summary>
         /// Jump detection + NINA log trigger correlation. Mutates <paramref name="frames"/> in-place;
-        /// updates <see cref="JumpCount"/>, <see cref="LogCorrelatedCount"/>, <see cref="LogWasFound"/>.
+        /// updates <see cref="JumpCount"/>, <see cref="LogCorrelatedCount"/>, <see cref="LogWasFound"/>,
+        /// log summary counts, and trace-span dither/center totals.
         /// </summary>
         private void ApplyJumpAndLogAnnotation(List<DriftSample> frames) {
             JumpDetector.AnnotateJumps(frames);
-            var (logMatched, logFound, triggersLoaded, sequencerEdges) = NinaLogCorrelator.AnnotateWithLogEvents(frames);
+            var (logMatched, logFound, triggersLoaded, sequencerEdges, traceDithers, traceCenters) =
+                NinaLogCorrelator.AnnotateWithLogEvents(frames);
             JumpCount = JumpDetector.CountJumps(frames);
             LogCorrelatedCount = logMatched;
             LogWasFound = logFound;
             LogTriggerCount = triggersLoaded;
             LogSequencerEdgeCount = sequencerEdges;
+            LogTraceDitherTriggerCount = traceDithers;
+            LogTraceCenterTriggerCount = traceCenters;
         }
 
         private void OnImageSaved(object? sender, ImageSavedEventArgs e) {
