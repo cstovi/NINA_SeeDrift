@@ -64,6 +64,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine(
                 $"      <p class=\"mt-2 text-sm text-slate-400\">Generated {Escape(DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))} <span class=\"text-slate-500\">(local)</span></p>");
             sb.Append(FormatPageHeaderLogsHtml(targets));
+            sb.AppendLine(
+                "      <p class=\"mt-3 text-xs text-slate-600\">Reset drift chart zoom: <strong>double-click</strong> the chart, or press <kbd class=\"rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 font-mono text-[10px] text-slate-300\">R</kbd> or <kbd class=\"rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 font-mono text-[10px] text-slate-300\">Esc</kbd> (when not typing in a field).</p>");
             sb.AppendLine("    </div>");
             sb.AppendLine("  </div>");
             sb.AppendLine("</header>");
@@ -95,7 +97,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 if (filteredGroups.Count == 0) {
                     sb.AppendLine("  <div class=\"mt-6 rounded-lg border border-amber-900/40 bg-slate-900/60 p-4\">");
-                    sb.AppendLine($"    <p class=\"text-sm text-slate-300\">No target in this batch had at least <span class=\"text-amber-300\">{min}</span> solved exposure{(min == 1 ? "" : "s")}. Lower <span class=\"text-sky-300\">Minimum exposures per target</span> in Plugins → SeeDrift, or capture more frames per target.</p>");
+                    sb.AppendLine($"    <p class=\"text-sm text-slate-300\">No target in this run had at least <span class=\"text-amber-300\">{min}</span> solved exposure{(min == 1 ? "" : "s")}. Lower <span class=\"text-sky-300\">Minimum exposures per target</span> in Plugins → SeeDrift, or capture more frames per target.</p>");
                     sb.AppendLine("  </div>");
                     sb.AppendLine("</section>");
                     continue;
@@ -224,6 +226,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("    }");
                     sb.AppendLine("  });");
                     sb.AppendLine("  el.addEventListener('dblclick', function() { chart.resetZoom(); });");
+                    sb.AppendLine("  window.seedriftCharts = window.seedriftCharts || [];");
+                    sb.AppendLine("  window.seedriftCharts.push(chart);");
                     sb.AppendLine("})();");
                     sb.AppendLine("</script>");
 
@@ -234,6 +238,22 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine("</section>");
             }
 
+            sb.AppendLine("<script>");
+            sb.AppendLine("(function(){");
+            sb.AppendLine("  document.addEventListener('keydown', function(ev) {");
+            sb.AppendLine("    var k = ev.key;");
+            sb.AppendLine("    if (k !== 'r' && k !== 'R' && k !== 'Escape') return;");
+            sb.AppendLine("    var t = ev.target;");
+            sb.AppendLine("    if (t && t.closest && t.closest('input, textarea, select, [contenteditable=\"true\"]')) return;");
+            sb.AppendLine("    var charts = window.seedriftCharts;");
+            sb.AppendLine("    if (!charts || !charts.length) return;");
+            sb.AppendLine("    ev.preventDefault();");
+            sb.AppendLine("    for (var i = 0; i < charts.length; i++) {");
+            sb.AppendLine("      try { charts[i].resetZoom(); } catch (e) {}");
+            sb.AppendLine("    }");
+            sb.AppendLine("  });");
+            sb.AppendLine("})();");
+            sb.AppendLine("</script>");
             sb.AppendLine("</main></body></html>");
             File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
         }
@@ -396,7 +416,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (rows.Count == 0) {
                 sb.AppendLine("      <div class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/40 p-4\">");
                 sb.AppendLine($"        <p class=\"text-sm text-slate-300\">No correlated dither or center-after-drift events between consecutive frames for target <span class=\"text-sky-300\">{Escape(sectionTargetName)}</span>.</p>");
-                sb.AppendLine("        <p class=\"mt-2 text-xs leading-relaxed text-slate-500\">SeeDrift reads the same NINA log(s) used for this batch. Events attach only to intervals between two lights of the same target.</p>");
+                sb.AppendLine("        <p class=\"mt-2 text-xs leading-relaxed text-slate-500\">SeeDrift reads the same NINA log(s) used for this run. Events attach only to intervals between two lights of the same target.</p>");
                 sb.AppendLine("      </div>");
                 sb.AppendLine("    </div>");
                 return;
@@ -448,7 +468,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (paths.Count == 1) {
                 sb.AppendLine($"        <p class=\"mt-1 break-all text-slate-400\">{Escape(paths[0])}</p>");
             } else {
-                sb.AppendLine($"        <p class=\"mt-1 text-xs text-slate-500\">{paths.Count} files (union of all batches below)</p>");
+                sb.AppendLine($"        <p class=\"mt-1 text-xs text-slate-500\">{paths.Count} files — union of each <strong class=\"font-medium text-slate-400\">run</strong> below (<strong class=\"font-medium text-slate-400\">Stop</strong> scans every <span class=\"font-mono\">.log</span> under NINA Logs at once; <strong class=\"font-medium text-slate-400\">Test report</strong> uses one file you choose).</p>");
                 sb.AppendLine("        <ul class=\"mt-2 max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-slate-400\">");
                 const int max = 16;
                 foreach (var p in paths.Take(max))

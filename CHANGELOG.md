@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.16] — 2026-05-09
+
+### Changed
+
+- **Night HTML:** **R** or **Esc** resets drift chart zoom (same as double-click the canvas); header explains this. User-visible copy uses **run** instead of **batch** where it meant one Stop/Test completion; multi-file log list clarifies that **Stop** reads **all** `*.log` under NINA Logs while **Test report** uses **one** chosen file.
+
 ## [0.7.15] — 2026-05-09
 
 ### Changed
