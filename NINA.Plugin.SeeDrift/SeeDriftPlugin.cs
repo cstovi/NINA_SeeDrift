@@ -39,7 +39,6 @@ namespace NINA.Plugin.SeeDrift {
         public SeeDriftSettings Settings { get; }
         public DriftTrackingService DriftTracker { get; }
 
-        public ICommand ResetSessionCommand { get; }
         public ICommand RunTestReportCommand { get; }
         public ICommand BrowseTestReportLogCommand { get; }
 
@@ -55,14 +54,12 @@ namespace NINA.Plugin.SeeDrift {
 
             _isInitializing = true;
             HtmlExportFolder = Settings.HtmlExportFolder;
-            TempWorkingFolder = Settings.TempWorkingFolder;
             PlateSolveParallelism = NormalizePlateSolveParallelism(Settings.PlateSolveParallelism);
             MinExposuresPerTarget = NormalizeMinExposuresPerTarget(Settings.MinExposuresPerTarget);
             _testReportLogFilePath = Settings.TestReportLogFilePath ?? "";
             _isInitializing = false;
             RaisePropertyChanged(nameof(TestReportLogFilePath));
 
-            ResetSessionCommand = new RelayCommand(_ => DriftTracker.ResetSession());
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
             BrowseTestReportLogCommand = new RelayCommand(_ => BrowseTestReportLog());
         }
@@ -214,7 +211,6 @@ namespace NINA.Plugin.SeeDrift {
             _isSyncing = true;
             try {
                 Settings.HtmlExportFolder = _htmlExportFolder;
-                Settings.TempWorkingFolder = _tempWorkingFolder;
                 Settings.TestReportLogFilePath = _testReportLogFilePath;
                 Settings.PlateSolveParallelism = _plateSolveParallelism;
                 Settings.MinExposuresPerTarget = _minExposuresPerTarget;
@@ -228,12 +224,6 @@ namespace NINA.Plugin.SeeDrift {
         public string HtmlExportFolder {
             get => _htmlExportFolder;
             set { _htmlExportFolder = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
-        }
-
-        private string _tempWorkingFolder = "";
-        public string TempWorkingFolder {
-            get => _tempWorkingFolder;
-            set { _tempWorkingFolder = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
         }
 
         private int _plateSolveParallelism = 4;

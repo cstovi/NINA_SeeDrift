@@ -25,16 +25,6 @@
                 </StackPanel>
             </Grid>
 
-            <TextBlock Text="Scratch / temp (reserved)" FontWeight="Bold" Margin="0,0,0,6"/>
-            <Grid Margin="0,0,0,16">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="160"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Working folder:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="1" Text="{Binding TempWorkingFolder, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
-            </Grid>
-
             <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="160"/>
@@ -78,9 +68,8 @@
             </Grid>
 
             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                <Button Content="Run test report" Command="{Binding RunTestReportCommand}" Padding="12,6" Margin="0,0,12,0"
+                <Button Content="Run test report" Command="{Binding RunTestReportCommand}" Padding="12,6"
                         IsEnabled="{Binding TestReportNotBusy, Mode=OneWay}"/>
-                <Button Content="Clear completed targets (session)" Command="{Binding ResetSessionCommand}" Padding="12,6"/>
             </StackPanel>
 
             <Border Margin="0,0,0,12" Padding="8,8,8,8" CornerRadius="4"

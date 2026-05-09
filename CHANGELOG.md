@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`NINA_shared/`** documentation: [NINA_IMAGE_PATH_ENUMERATION.md](NINA_shared/NINA_IMAGE_PATH_ENUMERATION.md) and [gitship.mdc](NINA_shared/gitship.mdc) describe how See\* plugins should enumerate files under NINA’s image directory using **`GetFilePattern(imageType)`** and **`$$IMAGETYPE$$`** (LIGHT vs DARK vs FLAT vs BIAS) instead of blind recursion.
 
+## [0.7.5] — 2026-05-09
+
+### Removed
+
+- **Clear completed targets (session)** button — session reset remains automatic at the start of each **Stop** / **Test report** run.
+- **Working folder** (scratch/temp) option — it was never read by the solver (plate solving uses **`IImageDataFactory.CreateFromFile`** on your saved lights); the setting only cluttered **Plugins → SeeDrift**.
+
 ## [0.7.4] — 2026-05-09
 
 ### Added

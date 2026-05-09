@@ -38,11 +38,7 @@ Set **Options → Imaging → image file path** in NINA so saved lights land whe
 
 Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste its path), then **Run test report**. The entire log file is used. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving).
 
-### Session bookkeeping
-
-**Clear completed targets (session)** resets in-memory completed targets for the rolling night file layout (see manual if you re-run the same night).
-
-Under **Plugins → SeeDrift**, **Concurrency** controls how many frames are plate-solved in parallel (default 4), and **Minimum exposures per target** hides targets with fewer solved frames in each batch’s night HTML section (default 1 lists every target). Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
+**Concurrency** controls how many frames are plate-solved in parallel (default 4), and **Minimum exposures per target** hides targets with fewer solved frames in each batch’s night HTML section (default 1 lists every target). Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
 
 SeeDrift also writes **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** (plugin messages, in addition to NINA’s own log).
 
