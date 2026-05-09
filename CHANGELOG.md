@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.25] — 2026-05-09
+
+### Changed
+
+- **Night HTML drift charts:** ΔRA and ΔDec use **matching arcsecond span** (max of the two data extents, plus padding, centered on the points—includes sequencer markers in the bounds). The chart area is **square** (`aspect-ratio: 1`) with Chart.js `aspectRatio: 1`, so the drift path is **isotropic** (no independent vertical stretching). Single-point or tiny spreads get a minimum span so the plot stays readable.
+
 ## [0.7.24] — 2026-05-09
 
 ### Fixed
