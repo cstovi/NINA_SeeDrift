@@ -469,7 +469,7 @@ namespace NINA.Plugin.SeeDrift.ViewModels {
                     $"{frameCount} frames · cumulative Δx/Δy in pixels{psHint} · frame 1 = origin · scroll to zoom";
             else
                 subtitle =
-                    $"{frameCount} frames · ΔRA / ΔDec in arcsec relative to frame 1{psHint} · sorted by DATE-OBS";
+                    $"{frameCount} frames · ΔRA / ΔDec in arcsec relative to frame 1{psHint} · sorted by DATE-OBS, then filename #";
 
             var m = new PlotModel {
                 Title = useRaDec

@@ -31,7 +31,7 @@ The csproj includes a post-build copy to that folder when NINA is not locking th
 ### Offline testing (no camera)
 
 1. Open **SeeDrift**.
-2. Click **Import FITS folder…** and choose a folder with existing lights (`.fits` / `.fit` / `.fts`, non-recursive). The trace resets and replays files sorted by **DATE-OBS** when present.
+2. Click **Import FITS folder…** and choose a folder with existing lights (`.fits` / `.fit` / `.fts`, non-recursive). The trace resets and replays files sorted by **DATE-OBS** when present, then by filename exposure number (`_0019`, …) when timestamps tie.
 3. Use **Export HTML…** if you want a report file.
 
 Coordinates are read from each FITS primary header (`CRVAL` / `OBJCTRA`+`OBJCTDEC` / `RA`+`DEC`). If headers do not move frame-to-frame, the plot stays flat until metadata or optional plate solving is added.

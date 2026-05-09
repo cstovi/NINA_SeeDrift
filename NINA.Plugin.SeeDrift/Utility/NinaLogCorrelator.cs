@@ -156,7 +156,10 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static int CountSequencerEdges(List<DriftSample> samples) =>
             samples.Count(s => s.EdgeHadDitherTrigger || s.EdgeHadCenterTrigger);
 
-        /// <summary>Latest SaveToDisk UTC per FITS basename (ignores plate-solver temps).</summary>
+        /// <summary>
+        /// Earliest SaveToDisk UTC per FITS basename (ignores plate-solver temps).
+        /// Uses the first logged save so a later re-save does not push <c>t0</c> past the real inter-frame gap.
+        /// </summary>
         private static Dictionary<string, DateTime> BuildSaveUtcByFileName(IReadOnlyList<ImageSaveEvent> saves) {
             var map = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
             foreach (var ev in saves) {
@@ -165,7 +168,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 var name = Path.GetFileName(ev.FilePath.Trim());
                 if (string.IsNullOrEmpty(name))
                     continue;
-                if (!map.TryGetValue(name, out var prevT) || ev.UtcTime >= prevT)
+                if (!map.TryGetValue(name, out var prevT) || ev.UtcTime < prevT)
                     map[name] = ev.UtcTime;
             }
             return map;

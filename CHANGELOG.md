@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.11] — 2026-05-09
+
+### Fixed
+
+- **Folder import order:** After **DATE-OBS** (etc.), tie-break by numeric suffix after the last `_` in the file name (e.g. `…_0019.fits`) so plot **frame numbers** match NINA’s exposure sequence when timestamps are identical or ambiguous — fixes between-frame log markers appearing one frame late (e.g. center/dither shown **20→21** instead of **19→20**).
+- **SaveToDisk map:** Use the **earliest** logged save per file name so a later re-save does not move the inter-frame window past the real trigger time.
+
+### Documentation
+
+- **README / MANUAL / plot subtitle / HTML report:** Note sort order includes filename exposure number on ties.
+
 ## [0.4.10] — 2026-05-09
 
 ### Fixed

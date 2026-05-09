@@ -24,7 +24,9 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static readonly string[] Extensions = { ".fits", ".fit", ".fts" };
 
         /// <summary>
-        /// Non-recursive scan; sorts by FITS observation time when possible, else file creation UTC, then path.
+        /// Non-recursive scan; sorts by FITS observation time when possible, else file creation UTC,
+        /// then numeric suffix after the last underscore in the file name (NINA <c>$$EXPOSURENUMBER$$</c> style),
+        /// then path — so replay order matches sequencer frame numbers when timestamps tie or drift slightly.
         /// </summary>
         public static IReadOnlyList<FitsReplayEntry> EnumerateSorted(string folderPath) {
             if (!Directory.Exists(folderPath))
@@ -58,9 +60,26 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
             return list
                 .OrderBy(x => x.sortUtc)
+                .ThenBy(x => ExposureSequenceTieBreak(x.path))
                 .ThenBy(x => x.path, StringComparer.OrdinalIgnoreCase)
                 .Select(x => new FitsReplayEntry(x.path, x.sortUtc, x.exposureUtc, x.target))
                 .ToList();
+        }
+
+        /// <summary>Trailing <c>_NNN</c> before extension (e.g. <c>…_20.00s_0019.fits</c> → 19); else <see cref="int.MaxValue"/>.</summary>
+        private static int ExposureSequenceTieBreak(string fullPath) {
+            var fn = Path.GetFileName(fullPath);
+            var dot = fn.LastIndexOf('.');
+            if (dot <= 0)
+                return int.MaxValue;
+            var stem = fn.AsSpan(0, dot);
+            var us = stem.LastIndexOf('_');
+            if (us < 0 || us >= stem.Length - 1)
+                return int.MaxValue;
+            var tail = stem[(us + 1)..];
+            return int.TryParse(tail, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n)
+                ? n
+                : int.MaxValue;
         }
     }
 }

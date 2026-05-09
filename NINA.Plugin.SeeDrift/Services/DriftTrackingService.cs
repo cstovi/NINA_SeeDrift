@@ -169,7 +169,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>
-        /// Clears the trace and loads all qualifying FITS in the folder (non-recursive), sorted by DATE-OBS when present.
+        /// Clears the trace and loads all qualifying FITS in the folder (non-recursive), sorted by DATE-OBS when present, then filename exposure suffix when times tie.
         /// </summary>
         public void ImportFitsFolder(string folderPath) {
             if (_disposed || string.IsNullOrWhiteSpace(folderPath))
