@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Documentation layout:** Shared See\* docs (**`gitship.mdc`**, **`NINA_IMAGE_PATH_ENUMERATION.md`**, **`NINA_plugin_guide.md`** including session-scoped exports) now live only in the workspace sibling folder **`../NINA_shared/`** (same parent as this repo). The nested **`NINA_SeeDrift/NINA_shared/`** copy was removed; `.cursor/rules/gitship.mdc` points agents at **`../NINA_shared/`**.
 
+## [0.7.31] — 2026-05-10
+
+### Changed
+
+- **Night HTML movement line:** Clarifies that totals are **Σ|Δstep|** on each axis between **consecutive** plotted frames (not net first→last displacement). Adds **pixel** equivalents: **detector** Σ|Δx|/Σ|Δy| when pixel-registration data exists; otherwise **≈** px from arcseconds ÷ median **″/px** parsed from FITS **XPIXSZ**/**FOCALLEN** per frame.
+
 ## [0.7.30] — 2026-05-10
 
 ### Added

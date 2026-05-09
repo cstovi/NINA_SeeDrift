@@ -19,6 +19,9 @@ namespace NINA.Plugin.SeeDrift.Models {
         /// <summary>Cumulative detector Y shift in pixels (down positive).</summary>
         public double? CumulativePixelY { get; init; }
 
+        /// <summary>Nominal arcsec/px from FITS (<c>XPIXSZ</c> + <c>FOCALLEN</c>) when readable; used for pixel-equivalent totals in HTML.</summary>
+        public double? NominalPlateScaleArcSecPerPx { get; init; }
+
         public bool IsPixelPath => CumulativePixelX.HasValue && CumulativePixelY.HasValue;
 
         /// <summary>

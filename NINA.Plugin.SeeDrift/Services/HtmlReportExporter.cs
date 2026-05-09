@@ -405,12 +405,67 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
         }
 
+        /// <summary>Sums absolute cumulative-pixel steps between consecutive frames (detector axes).</summary>
+        private static void SumAbsoluteSegmentMovementInPixels(IReadOnlyList<DriftSample> group, out double sumAbsPx, out double sumAbsPy) {
+            sumAbsPx = 0;
+            sumAbsPy = 0;
+            if (group.Count < 2)
+                return;
+            var p0 = group[0];
+            if (!p0.CumulativePixelX.HasValue || !p0.CumulativePixelY.HasValue)
+                return;
+            var prevX = p0.CumulativePixelX!.Value;
+            var prevY = p0.CumulativePixelY!.Value;
+            for (var i = 1; i < group.Count; i++) {
+                var s = group[i];
+                if (!s.CumulativePixelX.HasValue || !s.CumulativePixelY.HasValue)
+                    return;
+                sumAbsPx += Math.Abs(s.CumulativePixelX!.Value - prevX);
+                sumAbsPy += Math.Abs(s.CumulativePixelY!.Value - prevY);
+                prevX = s.CumulativePixelX.Value;
+                prevY = s.CumulativePixelY.Value;
+            }
+        }
+
+        /// <summary>Median nominal arcsec/px among samples that have FITS scale (for pixel-equivalent caption).</summary>
+        private static bool TryMedianNominalPlateScale(IReadOnlyList<DriftSample> group, out double medianArcSecPerPx) {
+            medianArcSecPerPx = 0;
+            var list = new List<double>();
+            foreach (var s in group) {
+                if (s.NominalPlateScaleArcSecPerPx is double v && v > 0)
+                    list.Add(v);
+            }
+
+            if (list.Count == 0)
+                return false;
+            list.Sort();
+            medianArcSecPerPx = list[list.Count / 2];
+            return true;
+        }
+
         private static string FormatMovementTotalsLine(IReadOnlyList<DriftSample> group) {
             if (group.Count < 2)
                 return "Single frame — no frame-to-frame movement to sum.";
             SumAbsoluteSegmentMovementAlongTrace(group, out var sumRa, out var sumDec);
-            return FormattableString.Invariant(
-                $"Total movement along trace (Σ |Δstep| between consecutive frames): ΔRA {sumRa:0.###}″ · ΔDec {sumDec:0.###}″");
+            var intro =
+                "Total movement along trace — Σ|Δstep| on each sky axis between consecutive plotted points (every frame-to-frame hop counts once; not net displacement from first to last frame): ";
+            var arc = FormattableString.Invariant($"ΔRA {sumRa:0.###}″ · ΔDec {sumDec:0.###}″");
+
+            if (group.All(s => s.IsPixelPath)) {
+                SumAbsoluteSegmentMovementInPixels(group, out var spx, out var spy);
+                var px = FormattableString.Invariant($" · detector Σ|Δx| {spx:0.##} px · Σ|Δy| {spy:0.##} px");
+                return intro + arc + px;
+            }
+
+            if (TryMedianNominalPlateScale(group, out var scale)) {
+                var eqRa = sumRa / scale;
+                var eqDec = sumDec / scale;
+                var approx = FormattableString.Invariant(
+                    $" · ≈ Σ|Δx| {eqRa:0.##} px · Σ|Δy| {eqDec:0.##} px equivalent (÷ median {scale:0.###}″/px from FITS XPIXSZ+FOCALLEN)");
+                return intro + arc + approx;
+            }
+
+            return intro + arc;
         }
 
         private static string FormatScatterPointsJsonAnchored(IReadOnlyList<DriftSample> group) {

@@ -353,7 +353,20 @@ namespace NINA.Plugin.SeeDrift.Services {
                     continue;
                 var entry = windowed[idx];
                 var label = entry.TargetLabel;
-                AccumulateFromParsed(sc.Value.RaHours, sc.Value.DecDeg, entry.ExposureUtc, entry.Path, label, trace, null, null, out var sample);
+                double? nomScale = null;
+                if (TryResolveHeaderCards(entry, out var hdrCards) && FitsCoordinates.TryReadPlateScale(hdrCards, out var sPx))
+                    nomScale = sPx;
+                AccumulateFromParsed(
+                    sc.Value.RaHours,
+                    sc.Value.DecDeg,
+                    entry.ExposureUtc,
+                    entry.Path,
+                    label,
+                    trace,
+                    null,
+                    null,
+                    nomScale,
+                    out var sample);
                 built.Add(sample);
             }
 
@@ -572,6 +585,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             TraceState st,
             double? cumulativePixelX,
             double? cumulativePixelY,
+            double? nominalPlateScaleArcSecPerPx,
             out DriftSample sample) {
 
             if (st.RefRaHours == null || st.RefDecDeg == null) {
@@ -595,7 +609,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 RawRaHours = raHours,
                 RawDecDeg = decDeg,
                 CumulativePixelX = cumulativePixelX,
-                CumulativePixelY = cumulativePixelY
+                CumulativePixelY = cumulativePixelY,
+                NominalPlateScaleArcSecPerPx = nominalPlateScaleArcSecPerPx
             };
         }
 
