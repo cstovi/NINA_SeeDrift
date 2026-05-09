@@ -15,7 +15,7 @@ See [README.md](../README.md). Copy **`NINA.Plugin.SeeDrift.dll`** (and dependen
 | Setting | Meaning |
 |--------|---------|
 | **NINA image folder** | Read-only display of `ActiveProfile.ImageFileSettings.FilePath`. Paths in the log must still resolve on disk (configure **NINA Options → Imaging → image file path** so saves land where you expect). |
-| **Night report folder** | Directory for the rolling **night HTML** file (`SeeDrift_night_YYYYMMDD.html`). Created if missing. |
+| **Night report folder** | Directory for the rolling **night HTML** file (`SeeDrift_night_YYYYMMDD.html`). Created if missing. If you leave this blank, SeeDrift uses **`Documents\SeeDrift`** (your **Documents** folder, not Desktop). When a run finishes successfully, **NINA’s status bar** shows the **full path** to the file that was written. |
 | **Working folder** | Reserved for possible future scratch use when solving; solving currently uses **`IImageDataFactory.CreateFromFile`** on originals. Default on first run: `%TEMP%\SeeDrift`. |
 | **NINA log file** | Used only by **Run test report**: path to a saved `.log` file (Browse opens `%LocalAppData%\NINA\Logs`). Persisted in settings. |
 
@@ -61,6 +61,7 @@ When log lines match **between-frame** intervals, **dither** and **center-after-
 | Symptom | Likely cause |
 |--------|----------------|
 | Empty or tiny trace | Fewer than two **Saved image to …** lines in range (Stop) or in the file (Test); paths missing on disk; plate solve failing — check logs and solver profile. |
+| “Done” but no HTML where I looked | Default folder is **`Documents\SeeDrift`**, not Desktop, unless you set **Night report folder**. Copy the path from **NINA’s status bar** after a successful run, or check **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** if the status line reports a save error. |
 | Paths not found | Log contains paths from another PC or moved folders — files must exist where the log says. |
 | No sequencer table | Triggers not in strict between-frame intervals for this ordering — expected sometimes. |
 | Plugin DLL not updating | NINA has the DLL locked — close NINA and rebuild/copy. |

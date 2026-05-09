@@ -25,7 +25,11 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Night report folder:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="1" Text="{Binding HtmlExportFolder, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1">
+                    <TextBox Text="{Binding HtmlExportFolder, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Leave empty for Documents\SeeDrift (not Desktop). After Stop/Test, NINA’s status bar shows the full saved path."
+                               FontSize="10" Foreground="#777" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                </StackPanel>
             </Grid>
 
             <TextBlock Text="Scratch / temp (reserved)" FontWeight="Bold" Margin="0,0,0,6"/>

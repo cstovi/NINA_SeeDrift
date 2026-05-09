@@ -278,18 +278,38 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             var targetName = HtmlReportExporter.SummarizeTargetsForBatch(built);
 
+            string? nightSavedPath = null;
+            string? nightSaveError = null;
+
             await Application.Current!.Dispatcher.InvokeAsync(() => {
                 CompletedTargets.Add(new CompletedTarget {
                     Name = targetName,
                     StoppedUtc = DateTime.UtcNow,
                     Samples = built
                 });
-                WriteNightReport();
+                if (!TryWriteNightReport(out nightSavedPath, out nightSaveError)) {
+                    // Avoid leaving a batch in memory that never reached disk.
+                    if (CompletedTargets.Count > 0)
+                        CompletedTargets.RemoveAt(CompletedTargets.Count - 1);
+                }
             });
 
-            Report($"Done — added {built.Count} solved frames to tonight’s HTML report.", built.Count, built.Count);
+            if (nightSaveError != null) {
+                Report(
+                    $"Stopped — could not save night HTML: {nightSaveError}. " +
+                    "Check Plugins → SeeDrift → Night report folder (empty = Documents\\SeeDrift). See %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log.",
+                    built.Count,
+                    built.Count);
+                SeeDriftLog.Error($"SeeDrift: night HTML save failed after successful solve — {nightSaveError}");
+                return false;
+            }
 
-            SeeDriftLog.Info($"SeeDrift: batch complete — {built.Count} solved frames → night report.");
+            Report(
+                $"Done — night report saved ({built.Count} frames): {nightSavedPath}",
+                built.Count,
+                built.Count);
+
+            SeeDriftLog.Info($"SeeDrift: batch complete — {built.Count} solved frames → {nightSavedPath}");
             return true;
         }
 
@@ -306,19 +326,43 @@ namespace NINA.Plugin.SeeDrift.Services {
             LogTraceCenterTriggerCount = traceCenters;
         }
 
-        private void WriteNightReport() {
-            if (CompletedTargets.Count == 0) return;
+        /// <summary>
+        /// Writes all <see cref="CompletedTargets"/> to the rolling night HTML file.
+        /// Uses <see cref="SeeDriftPlugin.HtmlExportFolder"/> when set (trimmed); otherwise
+        /// <c>%USERPROFILE%\Documents\SeeDrift</c> — not the Desktop unless you set that folder explicitly.
+        /// </summary>
+        private bool TryWriteNightReport(out string? fullPath, out string? errorMessage) {
+            fullPath = null;
+            errorMessage = null;
+            if (CompletedTargets.Count == 0) {
+                errorMessage = "internal: no batches to write";
+                return false;
+            }
+
             try {
-                var folder = _plugin.HtmlExportFolder;
-                if (string.IsNullOrWhiteSpace(folder))
-                    folder = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SeeDrift");
+                var raw = _plugin.HtmlExportFolder;
+                var folder = string.IsNullOrWhiteSpace(raw?.Trim())
+                    ? Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                        "SeeDrift")
+                    : raw.Trim();
+                folder = Path.GetFullPath(folder);
                 Directory.CreateDirectory(folder);
                 var path = Path.Combine(folder, $"SeeDrift_night_{DateTime.Now:yyyyMMdd}.html");
+                path = Path.GetFullPath(path);
                 HtmlReportExporter.WriteNightReport(CompletedTargets, path);
+                if (!File.Exists(path)) {
+                    errorMessage = "file missing after write";
+                    return false;
+                }
+
+                fullPath = path;
                 SeeDriftLog.Info($"SeeDrift: night report saved → {path}");
+                return true;
             } catch (Exception ex) {
+                errorMessage = ex.Message;
                 SeeDriftLog.Error($"SeeDrift: failed to write night report: {ex.Message}");
+                return false;
             }
         }
 
