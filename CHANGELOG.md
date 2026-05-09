@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Pointing plot **subtitle** shows how many frames were plotted so sparse traces are obvious at a glance.
 - Slightly smaller plot markers when many frames are loaded (>100) for readability.
 
+## [0.4.3] — 2026-05-09
+
+### Changed
+
+- **Pixel → ΔRA sign:** Restore the original EQ and Alt/Az formulas (`ΔRA` ∝ `-dx` as before the experimental horizontal flip).
+
 ## [0.4.2] — 2026-05-09
 
 ### Fixed
