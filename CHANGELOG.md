@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Night HTML:** Logged-dither interval results now render as a clearer bordered block: the bold **Logged dither intervals total** sits above a collapsed-by-default table of the individual frame-pair dither measurements.
+
 ## [0.8.0] — 2026-05-10
 
 ### Added

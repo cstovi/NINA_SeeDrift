@@ -182,7 +182,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{Escape(FormatMovementTotalsLine(grp))}</p>");
                     var ditherSegHtml = FormatDitherIntervalMovementHtml(grp);
                     if (!string.IsNullOrEmpty(ditherSegHtml))
-                        sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{ditherSegHtml}</p>");
+                        sb.Append(ditherSegHtml);
                     sb.Append(FormatAnalysisSummaryHtml(analysis));
                     sb.Append(FormatTimelineHtml(analysis));
 
@@ -452,14 +452,14 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>
-        /// HTML body (already safe: numeric formatting only; <see cref="Escape"/> not required for content).
+        /// HTML body (already safe: generated labels + numeric formatting only).
         /// Lists plate-solved segment ΔRA/ΔDec for each frame pair whose logs include a dither trigger on that edge,
         /// then Σ|Δ| totals across those intervals only.
         /// </summary>
         private static string FormatDitherIntervalMovementHtml(IReadOnlyList<DriftSample> group) {
             if (group.Count < 2)
                 return "";
-            var lines = new List<string>();
+            var rows = new List<(string Label, string DeltaRa, string DeltaDec, string Pixel)>();
             var pixelPath = group.All(s => s.IsPixelPath);
             double sumAbsRa = 0;
             double sumAbsDec = 0;
@@ -482,8 +482,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var cur = group[i];
                 var label = FormattableString.Invariant(
                     $"Frames {prev.FrameIndex + 1}→{cur.FrameIndex + 1}");
-                var arc = FormattableString.Invariant($"ΔRA {FmtSignedArcSec(dRa)}″ · ΔDec {FmtSignedArcSec(dDec)}″");
-                var parts = new List<string> { $"{label}: {arc}" };
+                var pxText = "";
 
                 if (pixelPath
                     && prev.CumulativePixelX is double px0 && prev.CumulativePixelY is double py0
@@ -493,23 +492,52 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sumAbsPx += adx;
                     sumAbsPy += ady;
                     anyPxSegment = true;
-                    parts.Add(FormattableString.Invariant($"detector |Δx| {adx:0.##} px · |Δy| {ady:0.##} px"));
+                    pxText = FormattableString.Invariant($"|Δx| {adx:0.##} px · |Δy| {ady:0.##} px");
                 }
 
-                lines.Add("· " + string.Join(" · ", parts));
+                rows.Add((label, FmtSignedArcSec(dRa) + "″", FmtSignedArcSec(dDec) + "″", pxText));
             }
 
-            if (lines.Count == 0)
+            if (rows.Count == 0)
                 return "";
 
-            const string intro = "<br />Exposures with logged dithers between them.<br/>";
             var totalArc = FormattableString.Invariant(
-                $"Total — Σ|ΔRA| {sumAbsRa:0.###}″ · Σ|ΔDec| {sumAbsDec:0.###}″");
+                $"Logged dither intervals total — Σ|ΔRA| {sumAbsRa:0.###}″ · Σ|ΔDec| {sumAbsDec:0.###}″");
             if (anyPxSegment)
                 totalArc += FormattableString.Invariant(
                     $" · detector Σ|Δx| {sumAbsPx:0.##} px · Σ|Δy| {sumAbsPy:0.##} px");
-            return "<strong class=\"font-semibold\">" + totalArc + "</strong><br/>" + intro
-                + string.Join("<br/>", lines);
+
+            var sb = new StringBuilder();
+            sb.AppendLine("    <div class=\"mt-4 rounded-lg border border-purple-900/40 bg-slate-900/30 p-3 text-xs text-slate-400\">");
+            sb.AppendLine($"      <p class=\"font-semibold text-purple-200\">{totalArc}</p>");
+            sb.AppendLine("      <details class=\"mt-3\">");
+            sb.AppendLine(
+                $"        <summary class=\"cursor-pointer text-slate-300 marker:text-purple-300 hover:text-white\">Exposures with logged dithers between them — {rows.Count} result{(rows.Count == 1 ? "" : "s")} (click to expand)</summary>");
+            sb.AppendLine("        <div class=\"mt-3 overflow-x-auto\">");
+            sb.AppendLine("          <table class=\"min-w-full table-fixed divide-y divide-slate-700 text-left text-xs\">");
+            sb.AppendLine("            <thead class=\"bg-slate-900/80 text-purple-200\"><tr>");
+            sb.AppendLine("              <th class=\"w-[28%] px-3 py-2 font-medium\">Frames</th>");
+            sb.AppendLine("              <th class=\"w-[24%] px-3 py-2 font-medium\">ΔRA</th>");
+            sb.AppendLine("              <th class=\"w-[24%] px-3 py-2 font-medium\">ΔDec</th>");
+            if (anyPxSegment)
+                sb.AppendLine("              <th class=\"w-[24%] px-3 py-2 font-medium\">Detector pixels</th>");
+            sb.AppendLine("            </tr></thead>");
+            sb.AppendLine("            <tbody class=\"divide-y divide-slate-800 bg-slate-950/30 text-slate-300\">");
+            foreach (var row in rows) {
+                sb.AppendLine("              <tr>");
+                sb.AppendLine($"                <td class=\"px-3 py-2 font-mono text-[11px]\">{row.Label}</td>");
+                sb.AppendLine($"                <td class=\"px-3 py-2\">{row.DeltaRa}</td>");
+                sb.AppendLine($"                <td class=\"px-3 py-2\">{row.DeltaDec}</td>");
+                if (anyPxSegment)
+                    sb.AppendLine($"                <td class=\"px-3 py-2\">{row.Pixel}</td>");
+                sb.AppendLine("              </tr>");
+            }
+            sb.AppendLine("            </tbody>");
+            sb.AppendLine("          </table>");
+            sb.AppendLine("        </div>");
+            sb.AppendLine("      </details>");
+            sb.AppendLine("    </div>");
+            return sb.ToString();
         }
 
         private static string FmtSignedArcSec(double v) =>
