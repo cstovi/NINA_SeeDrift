@@ -572,7 +572,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("              <th class=\"w-[24%] px-3 py-2 font-medium\">ΔDec</th>");
             if (anyPxSegment)
                 sb.AppendLine("              <th class=\"w-[18%] px-3 py-2 font-medium\">Detector pixels</th>");
-            sb.AppendLine("              <th class=\"w-[20%] px-3 py-2 font-medium\">Assessment note</th>");
+            sb.AppendLine("              <th class=\"w-[20%] px-3 py-2 font-medium\">Exclusion note</th>");
             sb.AppendLine("            </tr></thead>");
             sb.AppendLine("            <tbody class=\"divide-y divide-slate-800 bg-slate-950/30 text-slate-300\">");
             foreach (var row in rows) {
@@ -582,7 +582,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine($"                <td class=\"px-3 py-2\">{row.DeltaDec}</td>");
                 if (anyPxSegment)
                     sb.AppendLine($"                <td class=\"px-3 py-2\">{row.Pixel}</td>");
-                sb.AppendLine($"                <td class=\"px-3 py-2 text-amber-200\">{Escape(row.Note)}</td>");
+                var note = string.IsNullOrWhiteSpace(row.Note) ? "-" : Escape(row.Note);
+                var noteClass = string.IsNullOrWhiteSpace(row.Note) ? "text-slate-500" : "text-amber-200";
+                sb.AppendLine($"                <td class=\"px-3 py-2 {noteClass}\">{note}</td>");
                 sb.AppendLine("              </tr>");
             }
             sb.AppendLine("            </tbody>");
