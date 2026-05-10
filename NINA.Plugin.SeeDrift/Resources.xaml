@@ -165,6 +165,76 @@
                 </StackPanel>
             </Border>
 
+            <Separator Margin="0,2,0,12"/>
+
+            <TextBlock Text="Compare saved reports" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBlock Text="Pick two SeeDrift HTML reports created by this analytics build. Comparison uses the embedded report data, so it does not scan FITS files or run plate solving again."
+                       Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="72"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Before:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox Grid.Column="1" Text="{Binding CompareBeforeReportPath, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <Button Grid.Column="2" Content="Browse…" Command="{Binding BrowseCompareBeforeReportCommand}" Padding="10,4" MinWidth="88"/>
+            </Grid>
+
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="72"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="After:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox Grid.Column="1" Text="{Binding CompareAfterReportPath, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <Button Grid.Column="2" Content="Browse…" Command="{Binding BrowseCompareAfterReportCommand}" Padding="10,4" MinWidth="88"/>
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <Button Content="Compare saved reports" Command="{Binding RunCompareReportsCommand}" Padding="12,6"/>
+            </StackPanel>
+
+            <Border Margin="0,0,0,12" Padding="8,8,8,8" CornerRadius="4"
+                    Background="#1e293b" BorderBrush="#334155" BorderThickness="1"
+                    Visibility="{Binding CompareReportChromeVisibility, Mode=OneWay}">
+                <StackPanel>
+                    <TextBlock Text="Comparison status" FontWeight="SemiBold" Foreground="#94a3b8" FontSize="10" Margin="0,0,0,6"/>
+                    <TextBlock Text="{Binding CompareReportStatusText, Mode=OneWay}" Foreground="#7dd3fc" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,0,0,4"/>
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding CompareReportLinkChromeVisibility, Mode=OneWay}">
+                        <TextBlock Text="Open " Foreground="#94a3b8" FontSize="12" VerticalAlignment="Center"/>
+                        <Button Content="{Binding CompareReportLinkFileName, Mode=OneWay}"
+                                Command="{Binding OpenCompareReportCommand}"
+                                Padding="0" Margin="0"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="#38bdf8" Cursor="Hand" FontSize="12"
+                                VerticalAlignment="Center">
+                            <Button.ToolTip>
+                                <ToolTip>
+                                    <TextBlock Text="{Binding CompareReportLinkPathHint, Mode=OneWay}" MaxWidth="520" TextWrapping="Wrap"/>
+                                </ToolTip>
+                            </Button.ToolTip>
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <TextBlock Text="{TemplateBinding Content}"
+                                                           Foreground="{TemplateBinding Foreground}"
+                                                           TextDecorations="Underline"/>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <TextBlock Text="Tip: plate solving uses your NINA plate-solve profile (same solvers as the Plate Solve tool)." FontSize="11" Foreground="#888" TextWrapping="Wrap" Margin="0,4,0,0"/>
         </StackPanel>
     </DataTemplate>

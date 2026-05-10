@@ -1,6 +1,6 @@
 # SeeDrift — NINA plugin
 
-**Plate-solves** **LIGHT** frames whose paths appear on **NINA “Saved image to …”** lines in your session **logs** (`%LocalAppData%\NINA\Logs`). **SeeDrift Start→Stop** keeps saves whose log timestamp falls between Start and Stop; **Previous session report** (plugin options) lets you pick a **saved `.log` file** from an earlier session and solves everything it references — no imaging-folder tree scan. Drift is **ΔRA / ΔDec in arcseconds** vs the **first solved frame per FITS target** (one chart per `OBJECT` when a batch mixes targets). Output is **HTML** (**Tailwind**, **Chart.js** with zoom/pan) with **dither** / **center-after-drift** and sequencer context in the report when logs correlate between consecutive frames of the same target.
+**Plate-solves** **LIGHT** frames whose paths appear on **NINA “Saved image to …”** lines in your session **logs** (`%LocalAppData%\NINA\Logs`). **SeeDrift Start→Stop** keeps saves whose log timestamp falls between Start and Stop; **Previous session report** (plugin options) lets you pick a **saved `.log` file** from an earlier session and solves everything it references — no imaging-folder tree scan. Drift is **ΔRA / ΔDec in arcseconds** vs the **first solved frame per FITS target** (one chart per `OBJECT` when a batch mixes targets). Output is **HTML** (**Tailwind**, **Chart.js** with zoom/pan) with **dither** / **center-after-drift** markers, advisory effectiveness metrics, drift-rate summaries, session-quality timeline, and settings hints when logs correlate between consecutive frames of the same target.
 
 There is **no live dockable chart** and **no pixel / header-only drift path** in this version.
 
@@ -41,6 +41,8 @@ Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste i
 Successful runs show **wall-clock time** (log read through plate solves and HTML save) in the **night HTML** batch line and in the **completion** line (**NINA status bar** after **Stop**; **Previous session report status** in the plugin panel).
 
 **Concurrency** is a **dropdown** from **1** up to **80% of physical cores** (rounded down, min **1**); on a fresh install it defaults to **physical core count** clamped to that maximum. Physical cores come from **`GetLogicalProcessorInformation`**; if that fails, SeeDrift uses **`Environment.ProcessorCount`** (logical processors) for the cap and default. **Minimum exposures per target** hides targets with fewer solved frames in each batch’s night HTML section (default **50**). Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
+
+Under **Compare saved reports**, pick two SeeDrift HTML reports made by this analytics build and click **Compare saved reports**. SeeDrift reads the embedded report data from the HTML files and writes a comparison HTML without scanning FITS files or running plate solves again.
 
 SeeDrift also writes **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** (plugin messages, in addition to NINA’s own log).
 

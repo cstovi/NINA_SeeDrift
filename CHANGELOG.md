@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-05-10
+
+### Added
+
+- **Release safety:** Tagged the known-good `0.7.35` build as **`v0.7.35`** and pushed it to origin before starting analytics work.
+- **Night HTML analytics:** Each target now shows **drift rate**, **dither effectiveness**, **center-after-drift effectiveness**, a compact **session quality timeline**, and advisory **settings hints from this session**.
+- **Structured report data:** Generated HTML embeds a `seedrift-report-data` JSON payload with solved samples, event metrics, drift summaries, and recommendations so future tools can reuse results without re-solving FITS files.
+- **Before/after comparison:** Plugins → SeeDrift now has **Compare saved reports**. Pick two analytics HTML reports and SeeDrift writes a comparison HTML from the embedded payloads only—no FITS scan and no plate solving.
+
 ### Changed
 
 - **Night HTML:** The **Sequencer events (NINA logs)** table is wrapped in a **collapsed-by-default** `<details>` block (click the summary to expand). The **dither-interval** caption shows the **Total — Σ|ΔRA| / Σ|ΔDec|** line **first**, in **bold**, then **Exposures with logged dithers between them.** and the per-interval lines.

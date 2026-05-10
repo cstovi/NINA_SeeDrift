@@ -25,6 +25,12 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Optional Discord Execute Webhook URL (<c>https://discord.com/api/webhooks/...</c>). Empty = disabled. Token is secret — never log.</summary>
         public string DiscordWebhookUrl { get; set; } = "";
 
+        /// <summary>Before/after comparison: first saved SeeDrift HTML report.</summary>
+        public string CompareBeforeReportPath { get; set; } = "";
+
+        /// <summary>Before/after comparison: second saved SeeDrift HTML report.</summary>
+        public string CompareAfterReportPath { get; set; } = "";
+
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "SeeDrift", "settings.json");

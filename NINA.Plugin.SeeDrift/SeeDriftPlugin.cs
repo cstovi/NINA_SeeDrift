@@ -32,6 +32,8 @@ namespace NINA.Plugin.SeeDrift {
         private bool _isSyncing;
 
         private string _testReportLogFilePath = "";
+        private string _compareBeforeReportPath = "";
+        private string _compareAfterReportPath = "";
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null)
@@ -49,6 +51,10 @@ namespace NINA.Plugin.SeeDrift {
         public ICommand RunTestReportCommand { get; }
         public ICommand BrowseTestReportLogCommand { get; }
         public ICommand OpenNightReportCommand { get; }
+        public ICommand BrowseCompareBeforeReportCommand { get; }
+        public ICommand BrowseCompareAfterReportCommand { get; }
+        public ICommand RunCompareReportsCommand { get; }
+        public ICommand OpenCompareReportCommand { get; }
 
         [ImportingConstructor]
         public SeeDriftPlugin(
@@ -66,14 +72,22 @@ namespace NINA.Plugin.SeeDrift {
             PlateSolveParallelism = NormalizePlateSolveParallelism(Settings.PlateSolveParallelism);
             MinExposuresPerTarget = NormalizeMinExposuresPerTarget(Settings.MinExposuresPerTarget);
             _testReportLogFilePath = Settings.TestReportLogFilePath ?? "";
+            _compareBeforeReportPath = Settings.CompareBeforeReportPath ?? "";
+            _compareAfterReportPath = Settings.CompareAfterReportPath ?? "";
             _discordWebhookUrl = Settings.DiscordWebhookUrl ?? "";
             _isInitializing = false;
             RaisePropertyChanged(nameof(TestReportLogFilePath));
+            RaisePropertyChanged(nameof(CompareBeforeReportPath));
+            RaisePropertyChanged(nameof(CompareAfterReportPath));
             RaisePropertyChanged(nameof(DiscordWebhookUrl));
 
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
             BrowseTestReportLogCommand = new RelayCommand(_ => BrowseTestReportLog());
             OpenNightReportCommand = new RelayCommand(_ => OpenNightReport());
+            BrowseCompareBeforeReportCommand = new RelayCommand(_ => BrowseCompareReport(before: true));
+            BrowseCompareAfterReportCommand = new RelayCommand(_ => BrowseCompareReport(before: false));
+            RunCompareReportsCommand = new RelayCommand(_ => RunCompareReports());
+            OpenCompareReportCommand = new RelayCommand(_ => OpenCompareReport());
         }
 
         /// <summary>Last-used NINA log path for previous session report (persisted).</summary>
@@ -82,6 +96,28 @@ namespace NINA.Plugin.SeeDrift {
             set {
                 if (value == _testReportLogFilePath) return;
                 _testReportLogFilePath = value ?? "";
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        public string CompareBeforeReportPath {
+            get => _compareBeforeReportPath;
+            set {
+                var v = value ?? "";
+                if (v == _compareBeforeReportPath) return;
+                _compareBeforeReportPath = v;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        public string CompareAfterReportPath {
+            get => _compareAfterReportPath;
+            set {
+                var v = value ?? "";
+                if (v == _compareAfterReportPath) return;
+                _compareAfterReportPath = v;
                 RaisePropertyChanged();
                 SyncSettingsFromProperties();
             }
@@ -99,6 +135,22 @@ namespace NINA.Plugin.SeeDrift {
                 dlg.InitialDirectory = logsDir;
             if (dlg.ShowDialog() == true && !string.IsNullOrWhiteSpace(dlg.FileName))
                 TestReportLogFilePath = dlg.FileName;
+        }
+
+        private void BrowseCompareReport(bool before) {
+            var dlg = new OpenFileDialog {
+                Filter = "SeeDrift HTML (*.html)|*.html|All files (*.*)|*.*",
+                CheckFileExists = true
+            };
+            var folder = ResolveHtmlExportFolder();
+            if (Directory.Exists(folder))
+                dlg.InitialDirectory = folder;
+            if (dlg.ShowDialog() != true || string.IsNullOrWhiteSpace(dlg.FileName))
+                return;
+            if (before)
+                CompareBeforeReportPath = dlg.FileName;
+            else
+                CompareAfterReportPath = dlg.FileName;
         }
 
         private async Task RunTestReportFireAsync() {
@@ -143,6 +195,8 @@ namespace NINA.Plugin.SeeDrift {
         private bool _testReportBusy;
         private string _testReportStatusText = "";
         private string? _nightReportLinkPath;
+        private string _compareReportStatusText = "";
+        private string? _compareReportLinkPath;
         private double _testReportProgressValue;
         private int _testReportProgressMaximum = 1;
         private bool _testReportIndeterminate;
@@ -177,6 +231,21 @@ namespace NINA.Plugin.SeeDrift {
 
         /// <summary>Full path for the open-link tooltip.</summary>
         public string NightReportLinkPathHint => _nightReportLinkPath ?? "";
+
+        public string CompareReportStatusText => _compareReportStatusText;
+
+        public Visibility CompareReportChromeVisibility =>
+            string.IsNullOrWhiteSpace(_compareReportStatusText) && string.IsNullOrWhiteSpace(_compareReportLinkPath)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
+        public Visibility CompareReportLinkChromeVisibility =>
+            string.IsNullOrWhiteSpace(_compareReportLinkPath) ? Visibility.Collapsed : Visibility.Visible;
+
+        public string CompareReportLinkFileName =>
+            string.IsNullOrWhiteSpace(_compareReportLinkPath) ? "" : Path.GetFileName(_compareReportLinkPath.Trim());
+
+        public string CompareReportLinkPathHint => _compareReportLinkPath ?? "";
 
         internal void ClearNightReportLink() {
             void Apply() {
@@ -257,6 +326,65 @@ namespace NINA.Plugin.SeeDrift {
             }
         }
 
+        private void RunCompareReports() {
+            try {
+                if (ReportComparisonService.TryWriteComparison(
+                        CompareBeforeReportPath,
+                        CompareAfterReportPath,
+                        ResolveHtmlExportFolder(),
+                        out var outputPath,
+                        out var error)) {
+                    _compareReportLinkPath = outputPath;
+                    _compareReportStatusText = $"Comparison saved: {outputPath}";
+                } else {
+                    _compareReportLinkPath = null;
+                    _compareReportStatusText = $"Comparison not created — {error}";
+                }
+            } catch (Exception ex) {
+                _compareReportLinkPath = null;
+                _compareReportStatusText = $"Comparison failed — {ex.Message}";
+            }
+
+            RaisePropertyChanged(nameof(CompareReportStatusText));
+            RaisePropertyChanged(nameof(CompareReportChromeVisibility));
+            RaisePropertyChanged(nameof(CompareReportLinkChromeVisibility));
+            RaisePropertyChanged(nameof(CompareReportLinkFileName));
+            RaisePropertyChanged(nameof(CompareReportLinkPathHint));
+        }
+
+        private void OpenCompareReport() {
+            try {
+                if (string.IsNullOrWhiteSpace(_compareReportLinkPath))
+                    return;
+                var p = _compareReportLinkPath.Trim();
+                if (!File.Exists(p)) {
+                    MessageBox.Show(
+                        $"File no longer exists:\n{p}",
+                        "SeeDrift",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                Process.Start(new ProcessStartInfo(p) { UseShellExecute = true });
+            } catch (Exception ex) {
+                MessageBox.Show(
+                    $"Could not open file:\n{ex.Message}",
+                    "SeeDrift",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+
+        private string ResolveHtmlExportFolder() {
+            if (!string.IsNullOrWhiteSpace(HtmlExportFolder))
+                return HtmlExportFolder.Trim();
+            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            return string.IsNullOrWhiteSpace(docs)
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Documents", "SeeDrift")
+                : Path.Combine(docs, "SeeDrift");
+        }
+
         private void BeginTestReportUi() {
             _testReportBusy = true;
             _testReportStatusText = "Previous session report — starting (status updates appear here)…";
@@ -321,6 +449,8 @@ namespace NINA.Plugin.SeeDrift {
             try {
                 Settings.HtmlExportFolder = _htmlExportFolder;
                 Settings.TestReportLogFilePath = _testReportLogFilePath;
+                Settings.CompareBeforeReportPath = _compareBeforeReportPath;
+                Settings.CompareAfterReportPath = _compareAfterReportPath;
                 Settings.DiscordWebhookUrl = _discordWebhookUrl;
                 Settings.PlateSolveParallelism = _plateSolveParallelism;
                 Settings.MinExposuresPerTarget = _minExposuresPerTarget;

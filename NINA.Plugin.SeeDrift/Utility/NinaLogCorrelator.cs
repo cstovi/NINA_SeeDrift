@@ -434,14 +434,23 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     continue;
 
                 var measuredTail = BuildMeasuredFrameToFrameLines(prev, cur);
+                var dHdrRa = cur.DeltaRaArcSec - prev.DeltaRaArcSec;
+                var dHdrDec = cur.DeltaDecArcSec - prev.DeltaDecArcSec;
+                double? dPx = null;
+                double? dPy = null;
+                if (cur.IsPixelPath && prev.CumulativePixelX.HasValue && cur.CumulativePixelX.HasValue) {
+                    dPx = cur.CumulativePixelX.Value - prev.CumulativePixelX.Value;
+                    dPy = cur.CumulativePixelY!.Value - prev.CumulativePixelY!.Value;
+                }
                 var usedPulses = new HashSet<DitherPulse>();
                 var markers = new List<SequencerEdgeMarker>();
 
                 foreach (var tr in inGap) {
                     var eventLines = new List<string> { BetweenFramesHoverLine(prev, cur) };
+                    DitherPulse? pulse = null;
                     if (tr.Kind == TriggerKind.Dither) {
                         eventLines.Add($"DitherAfterExposures @ {tr.UtcTime.ToLocalTime():HH:mm:ss}");
-                        var pulse = pulses
+                        pulse = pulses
                             .Where(p => p.UtcTime >= tr.UtcTime && p.UtcTime < t1Log && !usedPulses.Contains(p))
                             .OrderBy(p => p.UtcTime)
                             .FirstOrDefault();
@@ -463,6 +472,15 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         eventLines.AddRange(measuredTail);
                         markers.Add(new SequencerEdgeMarker {
                             IsDither = true,
+                            EventUtc = tr.UtcTime,
+                            FromFrameIndex = prev.FrameIndex,
+                            ToFrameIndex = cur.FrameIndex,
+                            DeltaRaArcSec = dHdrRa,
+                            DeltaDecArcSec = dHdrDec,
+                            DeltaPixelX = dPx,
+                            DeltaPixelY = dPy,
+                            LoggedGuiderDx = pulse?.Dx,
+                            LoggedGuiderDy = pulse?.Dy,
                             Tooltip = string.Join(Environment.NewLine, eventLines)
                         });
                     } else {
@@ -484,6 +502,15 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         eventLines.AddRange(measuredTail);
                         markers.Add(new SequencerEdgeMarker {
                             IsDither = false,
+                            EventUtc = tr.UtcTime,
+                            FromFrameIndex = prev.FrameIndex,
+                            ToFrameIndex = cur.FrameIndex,
+                            DeltaRaArcSec = dHdrRa,
+                            DeltaDecArcSec = dHdrDec,
+                            DeltaPixelX = dPx,
+                            DeltaPixelY = dPy,
+                            LoggedCenterDriftArcMin = centerDrift?.DriftArcMinutes,
+                            LoggedCenterThresholdArcMin = centerDrift?.ThresholdArcMinutes,
                             Tooltip = string.Join(Environment.NewLine, eventLines)
                         });
                     }

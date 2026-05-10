@@ -163,6 +163,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     var (targetName, grp) = filteredGroups[g];
                     var canvasId = $"c{t}_{g}";
                     var labelJson = JsonSerializer.Serialize($"{targetName} — drift path");
+                    var analysis = SessionAnalysisService.AnalyzeTarget(targetName, grp);
 
                     sb.AppendLine($"  <div class=\"{(g > 0 ? "mt-12 border-t border-slate-800 pt-10" : "mt-8")}\">");
                     sb.AppendLine("    <div class=\"flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between\">");
@@ -181,6 +182,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                     var ditherSegHtml = FormatDitherIntervalMovementHtml(grp);
                     if (!string.IsNullOrEmpty(ditherSegHtml))
                         sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{ditherSegHtml}</p>");
+                    sb.Append(FormatAnalysisSummaryHtml(analysis));
+                    sb.Append(FormatTimelineHtml(analysis));
                     sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center — placed along the segment between frames. Hover path for file name; hover △/□ for log detail.</p>");
 
                     var ptsJson = FormatScatterPointsJsonAnchored(grp);
@@ -316,6 +319,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine("</section>");
             }
 
+            sb.AppendLine("<script type=\"application/json\" id=\"seedrift-report-data\">");
+            sb.AppendLine(FormatReportPayloadJson(targets, min, sessionLogLabel));
+            sb.AppendLine("</script>");
             sb.AppendLine("<script>");
             sb.AppendLine("(function(){");
             sb.AppendLine("  document.addEventListener('keydown', function(ev) {");
@@ -508,6 +514,99 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         private static string FmtSignedArcSec(double v) =>
             string.Format(CultureInfo.InvariantCulture, "{0:+0.###;-0.###;0}", v);
+
+        private static string FormatAnalysisSummaryHtml(TargetAnalysis analysis) {
+            var sb = new StringBuilder();
+            sb.AppendLine("    <div class=\"mt-4 grid gap-3 sm:grid-cols-3\">");
+            sb.AppendLine("      <div class=\"rounded-lg border border-slate-700 bg-slate-900/40 p-3\">");
+            sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-sky-400\">Drift rate</p>");
+            var rate = analysis.DriftRate;
+            var px = rate.TotalPixelsPerMinute.HasValue
+                ? FormattableString.Invariant($" · ≈ {rate.TotalPixelsPerMinute.Value:0.##} px/min")
+                : "";
+            sb.AppendLine(
+                $"        <p class=\"mt-1 text-sm text-slate-200\">{rate.TotalArcSecPerMinute:0.###}″/min{Escape(px)}</p>");
+            sb.AppendLine(
+                $"        <p class=\"mt-1 text-xs text-slate-500\">ΔRA {FmtSignedArcSec(rate.DeltaRaArcSecPerMinute)}″/min · ΔDec {FmtSignedArcSec(rate.DeltaDecArcSecPerMinute)}″/min</p>");
+            sb.AppendLine("      </div>");
+            sb.AppendLine("      <div class=\"rounded-lg border border-slate-700 bg-slate-900/40 p-3\">");
+            sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-purple-400\">Dither effectiveness</p>");
+            if (analysis.Dithers.Count == 0) {
+                sb.AppendLine("        <p class=\"mt-1 text-sm text-slate-300\">No logged dithers on this target.</p>");
+            } else {
+                var weak = analysis.Dithers.Count(d => d.Assessment == "Weak");
+                var repeated = analysis.Dithers.Count(d => d.Assessment == "Repeated direction");
+                var med = analysis.Dithers.Select(d => d.MoveArcSec).OrderBy(v => v).ElementAt(analysis.Dithers.Count / 2);
+                sb.AppendLine(
+                    $"        <p class=\"mt-1 text-sm text-slate-200\">{analysis.Dithers.Count} dither{(analysis.Dithers.Count == 1 ? "" : "s")} · median {med:0.##}″</p>");
+                sb.AppendLine(
+                    $"        <p class=\"mt-1 text-xs text-slate-500\">Weak {weak} · repeated direction {repeated}</p>");
+            }
+            sb.AppendLine("      </div>");
+            sb.AppendLine("      <div class=\"rounded-lg border border-slate-700 bg-slate-900/40 p-3\">");
+            sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-pink-400\">Center-after-drift</p>");
+            if (analysis.Centers.Count == 0) {
+                sb.AppendLine("        <p class=\"mt-1 text-sm text-slate-300\">No correlated center events.</p>");
+            } else {
+                var helpful = analysis.Centers.Count(c => c.Assessment == "Helpful");
+                var partial = analysis.Centers.Count(c => c.Assessment == "Partial");
+                var ineffective = analysis.Centers.Count(c => c.Assessment == "Ineffective");
+                sb.AppendLine(
+                    $"        <p class=\"mt-1 text-sm text-slate-200\">{analysis.Centers.Count} center event{(analysis.Centers.Count == 1 ? "" : "s")}</p>");
+                sb.AppendLine(
+                    $"        <p class=\"mt-1 text-xs text-slate-500\">Helpful {helpful} · partial {partial} · ineffective {ineffective}</p>");
+            }
+            sb.AppendLine("      </div>");
+            sb.AppendLine("    </div>");
+
+            if (analysis.Recommendations.Count > 0) {
+                sb.AppendLine("    <div class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/30 p-3\">");
+                sb.AppendLine("      <p class=\"text-[10px] font-semibold uppercase tracking-wide text-amber-300\">Settings hints from this session</p>");
+                sb.AppendLine("      <ul class=\"mt-2 list-disc space-y-1 pl-5 text-xs text-slate-300\">");
+                foreach (var rec in analysis.Recommendations.Take(4))
+                    sb.AppendLine($"        <li>{Escape(rec.Text)}</li>");
+                sb.AppendLine("      </ul>");
+                sb.AppendLine("    </div>");
+            }
+
+            return sb.ToString();
+        }
+
+        private static string FormatTimelineHtml(TargetAnalysis analysis) {
+            if (analysis.Timeline.Count == 0)
+                return "";
+            var sb = new StringBuilder();
+            sb.AppendLine("    <div class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/30 p-3\">");
+            sb.AppendLine("      <p class=\"text-[10px] font-semibold uppercase tracking-wide text-sky-400\">Session quality timeline</p>");
+            sb.AppendLine("      <div class=\"mt-2 flex h-3 overflow-hidden rounded bg-slate-800\">");
+            var totalSeconds = analysis.Timeline.Sum(s => Math.Max(1.0, (s.EndUtc - s.StartUtc).TotalSeconds));
+            foreach (var seg in analysis.Timeline) {
+                var pct = 100.0 * Math.Max(1.0, (seg.EndUtc - seg.StartUtc).TotalSeconds) / totalSeconds;
+                var cls = seg.Tone == "good"
+                    ? "bg-emerald-500/80"
+                    : seg.Tone == "warn"
+                        ? "bg-amber-500/80"
+                        : "bg-sky-500/80";
+                sb.AppendLine(
+                    $"        <span class=\"{cls}\" style=\"width:{pct.ToString("0.###", CultureInfo.InvariantCulture)}%\" title=\"{Escape(seg.Label)}: {Escape(seg.Detail)}\"></span>");
+            }
+            sb.AppendLine("      </div>");
+            var counts = analysis.Timeline
+                .GroupBy(s => s.Label)
+                .Select(g => $"{Escape(g.Key)} {g.Count()}")
+                .ToList();
+            sb.AppendLine($"      <p class=\"mt-2 text-xs text-slate-500\">{string.Join(" · ", counts)}</p>");
+            sb.AppendLine("    </div>");
+            return sb.ToString();
+        }
+
+        private static string FormatReportPayloadJson(
+                IReadOnlyList<DriftTrackingService.CompletedTarget> targets,
+                int minExposuresPerTarget,
+                string sessionLogLabel) {
+            var payload = SessionAnalysisService.BuildReportPayload(targets, minExposuresPerTarget, sessionLogLabel);
+            return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
+        }
 
         private static string FormatMovementTotalsLine(IReadOnlyList<DriftSample> group) {
             if (group.Count < 2)
