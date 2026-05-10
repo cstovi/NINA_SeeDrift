@@ -287,7 +287,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 if (presolveNightErr != null) {
                     Report(
                         $"Stopped — could not save night HTML: {presolveNightErr}. " +
-                        "Check Plugins → SeeDrift → Night report folder (empty = Documents\\SeeDrift). See %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log.");
+                        "Check %LocalAppData%\\NINA\\SeeDrift\\Reports and %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log.");
                     SeeDriftLog.Error($"SeeDrift: night HTML save failed (pre-solve skip path) — {presolveNightErr}");
                     return false;
                 }
@@ -442,7 +442,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (nightSaveError != null) {
                 Report(
                     $"Stopped — could not save night HTML: {nightSaveError}. " +
-                    "Check Plugins → SeeDrift → Night report folder (empty = Documents\\SeeDrift). See %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log.");
+                    "Check %LocalAppData%\\NINA\\SeeDrift\\Reports and %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log.");
                 SeeDriftLog.Error($"SeeDrift: night HTML save failed after successful solve — {nightSaveError}");
                 return false;
             }
@@ -482,8 +482,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <summary>
         /// Writes all <see cref="CompletedTargets"/> to the rolling night HTML file
         /// (<c>SeeDrift_ranYYYYMMDD_sessYYYYMMDD.html</c> — run date when written, session date from data).
-        /// Uses <see cref="SeeDriftPlugin.HtmlExportFolder"/> when set (trimmed); otherwise
-        /// <c>%USERPROFILE%\Documents\SeeDrift</c> — not the Desktop unless you set that folder explicitly.
+        /// Uses the stable SeeDrift report library under <c>%LocalAppData%\NINA\SeeDrift\Reports</c>.
         /// </summary>
         private bool TryWriteNightReport(out string? fullPath, out string? errorMessage) {
             fullPath = null;
@@ -494,13 +493,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             try {
-                var raw = _plugin.HtmlExportFolder;
-                var folder = string.IsNullOrWhiteSpace(raw?.Trim())
-                    ? Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                        "SeeDrift")
-                    : raw.Trim();
-                folder = Path.GetFullPath(folder);
+                var folder = SeeDriftPaths.ResolveReportFolder();
                 Directory.CreateDirectory(folder);
                 var path = Path.Combine(folder, FormatNightReportHtmlFileName(CompletedTargets));
                 path = Path.GetFullPath(path);

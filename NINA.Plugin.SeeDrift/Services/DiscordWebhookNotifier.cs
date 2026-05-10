@@ -57,7 +57,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     SeeDriftLog.Info($"SeeDrift: Discord skipped large night HTML ({len} bytes) — {htmlPath}");
                     await SendTextOnlyAsync(
                             webhookUrl,
-                            $"SeeDrift — report **{fileName}** is too large to attach (~25 MiB Discord limit). Open it from **Night report folder** (Plugins → SeeDrift).")
+                            $"SeeDrift — report **{fileName}** is too large to attach (~25 MiB Discord limit). Open it from Plugins → SeeDrift or `%LocalAppData%\\NINA\\SeeDrift\\Reports`.")
                         .ConfigureAwait(false);
                     return;
                 }

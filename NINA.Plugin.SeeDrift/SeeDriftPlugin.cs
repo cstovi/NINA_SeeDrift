@@ -58,6 +58,10 @@ namespace NINA.Plugin.SeeDrift {
         public ICommand BrowseCompareAfterReportCommand { get; }
         public ICommand RunCompareReportsCommand { get; }
         public ICommand OpenCompareReportCommand { get; }
+        public ICommand RefreshSavedReportsCommand { get; }
+        public ICommand UseSavedReportAsBeforeCommand { get; }
+        public ICommand UseSavedReportAsAfterCommand { get; }
+        public ICommand OpenReportLibraryCommand { get; }
 
         [ImportingConstructor]
         public SeeDriftPlugin(
@@ -71,7 +75,6 @@ namespace NINA.Plugin.SeeDrift {
             DriftTracker = new DriftTrackingService(this, plateSolverFactory, imageDataFactory);
 
             _isInitializing = true;
-            HtmlExportFolder = Settings.HtmlExportFolder;
             PlateSolveParallelism = NormalizePlateSolveParallelism(Settings.PlateSolveParallelism);
             MinExposuresPerTarget = NormalizeMinExposuresPerTarget(Settings.MinExposuresPerTarget);
             _testReportLogFilePath = Settings.TestReportLogFilePath ?? "";
@@ -92,8 +95,13 @@ namespace NINA.Plugin.SeeDrift {
             BrowseCompareAfterReportCommand = new RelayCommand(_ => BrowseCompareReport(before: false));
             RunCompareReportsCommand = new RelayCommand(_ => RunCompareReports());
             OpenCompareReportCommand = new RelayCommand(_ => OpenCompareReport());
+            RefreshSavedReportsCommand = new RelayCommand(_ => RefreshSavedReports());
+            UseSavedReportAsBeforeCommand = new RelayCommand(_ => UseSelectedSavedReport(before: true));
+            UseSavedReportAsAfterCommand = new RelayCommand(_ => UseSelectedSavedReport(before: false));
+            OpenReportLibraryCommand = new RelayCommand(_ => OpenReportLibrary());
 
             _ = RefreshRecentLogSessionsAsync();
+            RefreshSavedReports();
         }
 
         /// <summary>Last-used NINA log path for previous session report (persisted).</summary>
@@ -289,6 +297,28 @@ namespace NINA.Plugin.SeeDrift {
 
         public string CompareReportStatusText => _compareReportStatusText;
 
+        public ObservableCollection<SavedSeeDriftReport> SavedReports { get; } = new();
+
+        private SavedSeeDriftReport? _selectedSavedReport;
+        public SavedSeeDriftReport? SelectedSavedReport {
+            get => _selectedSavedReport;
+            set {
+                if (ReferenceEquals(value, _selectedSavedReport)) return;
+                _selectedSavedReport = value;
+                RaisePropertyChanged();
+            }
+        }
+
+        private string _savedReportsStatusText = "Saved reports library";
+        public string SavedReportsStatusText {
+            get => _savedReportsStatusText;
+            private set {
+                if (value == _savedReportsStatusText) return;
+                _savedReportsStatusText = value;
+                RaisePropertyChanged();
+            }
+        }
+
         public Visibility CompareReportChromeVisibility =>
             string.IsNullOrWhiteSpace(_compareReportStatusText) && string.IsNullOrWhiteSpace(_compareReportLinkPath)
                 ? Visibility.Collapsed
@@ -301,6 +331,47 @@ namespace NINA.Plugin.SeeDrift {
             string.IsNullOrWhiteSpace(_compareReportLinkPath) ? "" : Path.GetFileName(_compareReportLinkPath.Trim());
 
         public string CompareReportLinkPathHint => _compareReportLinkPath ?? "";
+
+        private void RefreshSavedReports() {
+            try {
+                var reports = SavedSeeDriftReportService.LoadReports();
+                SavedReports.Clear();
+                foreach (var report in reports)
+                    SavedReports.Add(report);
+
+                SelectedSavedReport = SavedReports.FirstOrDefault(r =>
+                    string.Equals(r.Path, CompareAfterReportPath, StringComparison.OrdinalIgnoreCase))
+                    ?? SavedReports.FirstOrDefault();
+                SavedReportsStatusText = reports.Count == 0
+                    ? $"No SeeDrift HTML reports found in {SeeDriftPaths.ReportLibrary}."
+                    : $"Saved SeeDrift reports ({reports.Count}) from the report library.";
+            } catch (Exception ex) {
+                SavedReportsStatusText = $"Saved report scan failed — {ex.Message}";
+            }
+        }
+
+        private void UseSelectedSavedReport(bool before) {
+            if (SelectedSavedReport == null)
+                return;
+            if (before)
+                CompareBeforeReportPath = SelectedSavedReport.Path;
+            else
+                CompareAfterReportPath = SelectedSavedReport.Path;
+        }
+
+        private void OpenReportLibrary() {
+            try {
+                var folder = SeeDriftPaths.ResolveReportFolder();
+                Directory.CreateDirectory(folder);
+                Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+            } catch (Exception ex) {
+                MessageBox.Show(
+                    $"Could not open report folder:\n{ex.Message}",
+                    "SeeDrift",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
 
         internal void ClearNightReportLink() {
             void Apply() {
@@ -332,6 +403,7 @@ namespace NINA.Plugin.SeeDrift {
                 RaisePropertyChanged(nameof(TestReportStatusText));
                 RaisePropertyChanged(nameof(TestReportStatusDisplayText));
                 RaisePropertyChanged(nameof(TestReportChromeVisibility));
+                RefreshSavedReports();
             }
 
             var app = Application.Current;
@@ -405,6 +477,7 @@ namespace NINA.Plugin.SeeDrift {
             RaisePropertyChanged(nameof(CompareReportLinkChromeVisibility));
             RaisePropertyChanged(nameof(CompareReportLinkFileName));
             RaisePropertyChanged(nameof(CompareReportLinkPathHint));
+            RefreshSavedReports();
         }
 
         private void OpenCompareReport() {
@@ -432,12 +505,7 @@ namespace NINA.Plugin.SeeDrift {
         }
 
         private string ResolveHtmlExportFolder() {
-            if (!string.IsNullOrWhiteSpace(HtmlExportFolder))
-                return HtmlExportFolder.Trim();
-            var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            return string.IsNullOrWhiteSpace(docs)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Documents", "SeeDrift")
-                : Path.Combine(docs, "SeeDrift");
+            return SeeDriftPaths.ResolveReportFolder();
         }
 
         private void BeginTestReportUi() {
@@ -502,7 +570,6 @@ namespace NINA.Plugin.SeeDrift {
             if (_isInitializing || _isSyncing) return;
             _isSyncing = true;
             try {
-                Settings.HtmlExportFolder = _htmlExportFolder;
                 Settings.TestReportLogFilePath = _testReportLogFilePath;
                 Settings.CompareBeforeReportPath = _compareBeforeReportPath;
                 Settings.CompareAfterReportPath = _compareAfterReportPath;
@@ -513,12 +580,6 @@ namespace NINA.Plugin.SeeDrift {
             } finally {
                 _isSyncing = false;
             }
-        }
-
-        private string _htmlExportFolder = "";
-        public string HtmlExportFolder {
-            get => _htmlExportFolder;
-            set { _htmlExportFolder = value; RaisePropertyChanged(); SyncSettingsFromProperties(); }
         }
 
         private int _plateSolveParallelism =

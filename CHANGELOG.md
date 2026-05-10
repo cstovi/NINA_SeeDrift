@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.5] — 2026-05-10
+
+### Added
+
+- **Report library:** SeeDrift now stores night and comparison reports in `%LocalAppData%\NINA\SeeDrift\Reports`; the previous user-configurable report folder option was removed to keep reports in one predictable place.
+- **Compare saved reports:** Added a saved-report dropdown sourced from the report library. Use **Before** / **After** buttons to fill the existing comparison paths, or **Open folder** to view the library in Explorer; Browse/paste still work for reports saved elsewhere.
+
 ## [0.8.4] — 2026-05-10
 
 ### Added

@@ -19,21 +19,6 @@
                 <Grid.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="420" TextWrapping="Wrap"
-                                   Text="Leave empty for Documents\SeeDrift (not Desktop). After Stop or Run previous session report, NINA’s status bar shows the full saved path."/>
-                    </ToolTip>
-                </Grid.ToolTip>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="160"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Night report folder:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="1" Text="{Binding HtmlExportFolder, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center"/>
-            </Grid>
-
-            <Grid Margin="0,0,0,16" ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="400">
-                <Grid.ToolTip>
-                    <ToolTip>
-                        <TextBlock MaxWidth="420" TextWrapping="Wrap"
                                    Text="Optional. Paste a Discord channel webhook URL (Integrations → Webhooks). After SeeDrift Stop writes the night HTML, the file is POSTed as an attachment. The URL contains a secret token — do not share it. Leave empty to disable. Previous session report never uploads to Discord."/>
                     </ToolTip>
                 </Grid.ToolTip>
@@ -188,6 +173,30 @@
             <TextBlock Text="Compare saved reports" FontWeight="Bold" Margin="0,0,0,4"/>
             <TextBlock Text="Pick two SeeDrift HTML reports created by this analytics build. Comparison uses the embedded report data, so it does not scan FITS files or run plate solving again."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+            <TextBlock Text="{Binding SavedReportsStatusText, Mode=OneWay}"
+                       Foreground="#94a3b8" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,4"/>
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ComboBox Grid.Column="0"
+                          ItemsSource="{Binding SavedReports}"
+                          SelectedItem="{Binding SelectedSavedReport, Mode=TwoWay}"
+                          DisplayMemberPath="DisplayLabel"
+                          VerticalAlignment="Center"
+                          Margin="0,0,8,0"
+                          MinWidth="320"
+                          ToolTip="Saved SeeDrift reports from AppData\Local\NINA\SeeDrift\Reports."/>
+                <Button Grid.Column="1" Content="Before" Command="{Binding UseSavedReportAsBeforeCommand}" Padding="10,4" MinWidth="72" Margin="0,0,6,0"/>
+                <Button Grid.Column="2" Content="After" Command="{Binding UseSavedReportAsAfterCommand}" Padding="10,4" MinWidth="72" Margin="0,0,6,0"/>
+                <Button Grid.Column="3" Content="Refresh" Command="{Binding RefreshSavedReportsCommand}" Padding="10,4" MinWidth="88" Margin="0,0,6,0"/>
+                <Button Grid.Column="4" Content="Open folder" Command="{Binding OpenReportLibraryCommand}" Padding="10,4" MinWidth="96"/>
+            </Grid>
 
             <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>

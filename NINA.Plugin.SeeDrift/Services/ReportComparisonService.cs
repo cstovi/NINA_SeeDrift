@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using NINA.Plugin.SeeDrift.Models;
+using NINA.Plugin.SeeDrift.Utility;
 
 namespace NINA.Plugin.SeeDrift.Services {
 
@@ -32,9 +33,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return false;
 
             var result = Compare(beforePath, afterPath, before, after);
-            var folder = string.IsNullOrWhiteSpace(outputFolder)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SeeDrift")
-                : outputFolder.Trim();
+            var folder = SeeDriftPaths.ResolveReportFolder();
             Directory.CreateDirectory(folder);
             outputPath = Path.Combine(folder, $"SeeDrift_v{FileVersionStamp()}_compare_{DateTime.Now:yyyyMMdd_HHmmss}.html");
             result.OutputPath = outputPath;

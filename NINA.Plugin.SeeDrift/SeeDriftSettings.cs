@@ -7,9 +7,6 @@ namespace NINA.Plugin.SeeDrift {
 
     public class SeeDriftSettings {
 
-        /// <summary>Folder for rolling night HTML exports.</summary>
-        public string HtmlExportFolder { get; set; } = "";
-
         /// <summary>Previous session report: path to a NINA .log file (Saved image to … lines).</summary>
         public string TestReportLogFilePath { get; set; } = "";
 
@@ -46,13 +43,7 @@ namespace NINA.Plugin.SeeDrift {
                     return s;
                 }
             } catch { }
-            var defaults = new SeeDriftSettings();
-            try {
-                var docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-                if (!string.IsNullOrEmpty(docs))
-                    defaults.HtmlExportFolder = Path.Combine(docs, "SeeDrift");
-            } catch { }
-            return defaults;
+            return new SeeDriftSettings();
         }
 
         public void Save() {
