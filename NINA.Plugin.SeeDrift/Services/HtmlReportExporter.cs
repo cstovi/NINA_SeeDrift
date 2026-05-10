@@ -181,7 +181,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                     var ditherSegHtml = FormatDitherIntervalMovementHtml(grp);
                     if (!string.IsNullOrEmpty(ditherSegHtml))
                         sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{ditherSegHtml}</p>");
-                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Axes use the <strong>same</strong> arcsecond span on ΔRA and ΔDec (whichever axis needs more room sets the span; both are centered on the data). The chart is <strong>square</strong> so one arcsecond horizontally matches one vertically.</p>");
                     sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center — placed along the segment between frames. Hover path for file name; hover △/□ for log detail.</p>");
 
                     var ptsJson = FormatScatterPointsJsonAnchored(grp);
@@ -448,13 +447,19 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         /// <summary>
         /// HTML body (already safe: numeric formatting only; <see cref="Escape"/> not required for content).
-        /// Lists plate-solved segment ΔRA/ΔDec for each frame pair whose logs include a dither trigger on that edge.
+        /// Lists plate-solved segment ΔRA/ΔDec for each frame pair whose logs include a dither trigger on that edge,
+        /// then Σ|Δ| totals across those intervals only.
         /// </summary>
         private static string FormatDitherIntervalMovementHtml(IReadOnlyList<DriftSample> group) {
             if (group.Count < 2)
                 return "";
             var lines = new List<string>();
             var pixelPath = group.All(s => s.IsPixelPath);
+            double sumAbsRa = 0;
+            double sumAbsDec = 0;
+            double sumAbsPx = 0;
+            double sumAbsPy = 0;
+            var anyPxSegment = false;
 
             for (var i = 1; i < group.Count; i++) {
                 var markers = group[i].EdgeSequencerMarkers;
@@ -465,6 +470,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 GetAnchoredPlotPoint(group, i, out var x1, out var y1);
                 var dRa = x1 - x0;
                 var dDec = y1 - y0;
+                sumAbsRa += Math.Abs(dRa);
+                sumAbsDec += Math.Abs(dDec);
                 var prev = group[i - 1];
                 var cur = group[i];
                 var label = FormattableString.Invariant(
@@ -477,6 +484,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                     && cur.CumulativePixelX is double px1 && cur.CumulativePixelY is double py1) {
                     var adx = Math.Abs(px1 - px0);
                     var ady = Math.Abs(py1 - py0);
+                    sumAbsPx += adx;
+                    sumAbsPy += ady;
+                    anyPxSegment = true;
                     parts.Add(FormattableString.Invariant($"detector |Δx| {adx:0.##} px · |Δy| {ady:0.##} px"));
                 }
 
@@ -486,9 +496,13 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (lines.Count == 0)
                 return "";
 
-            const string intro =
-                "Per interval with a logged dither between exposures (same plate-solved Δ vs first frame as the chart; signed segment delta frame-to-frame):<br/>";
-            return intro + string.Join("<br/>", lines);
+            const string intro = "Exposures with logged dithers between them.<br/>";
+            var totalArc = FormattableString.Invariant(
+                $"Total — Σ|ΔRA| {sumAbsRa:0.###}″ · Σ|ΔDec| {sumAbsDec:0.###}″");
+            if (anyPxSegment)
+                totalArc += FormattableString.Invariant(
+                    $" · detector Σ|Δx| {sumAbsPx:0.##} px · Σ|Δy| {sumAbsPy:0.##} px");
+            return intro + string.Join("<br/>", lines) + "<br/>" + totalArc;
         }
 
         private static string FmtSignedArcSec(double v) =>
@@ -498,14 +512,12 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (group.Count < 2)
                 return "Single frame — no frame-to-frame movement to sum.";
             SumAbsoluteSegmentMovementAlongTrace(group, out var sumRa, out var sumDec);
-            var intro =
-                "Total movement along trace — Σ|Δstep| on each sky axis between consecutive plotted points (every frame-to-frame hop counts once; not net displacement from first to last frame): ";
             var arc = FormattableString.Invariant($"ΔRA {sumRa:0.###}″ · ΔDec {sumDec:0.###}″");
 
             if (group.All(s => s.IsPixelPath)) {
                 SumAbsoluteSegmentMovementInPixels(group, out var spx, out var spy);
                 var px = FormattableString.Invariant($" · detector Σ|Δx| {spx:0.##} px · Σ|Δy| {spy:0.##} px");
-                return intro + arc + px;
+                return arc + px;
             }
 
             if (TryMedianNominalPlateScale(group, out var scale)) {
@@ -513,10 +525,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var eqDec = sumDec / scale;
                 var approx = FormattableString.Invariant(
                     $" · ≈ Σ|Δx| {eqRa:0.##} px · Σ|Δy| {eqDec:0.##} px equivalent (÷ median {scale:0.###}″/px from FITS XPIXSZ+FOCALLEN)");
-                return intro + arc + approx;
+                return arc + approx;
             }
 
-            return intro + arc;
+            return arc;
         }
 
         private static string FormatScatterPointsJsonAnchored(IReadOnlyList<DriftSample> group) {
