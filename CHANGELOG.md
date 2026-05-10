@@ -6,9 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.3] — 2026-05-10
+
 ### Changed
 
+- **Report compatibility:** Saved reports now expose generator version and report schema in HTML metadata and the visible header. Compare accepts reports from different plugin versions when the embedded schema is supported, and rejects unsupported future schemas with a clear message.
+- **Report filenames:** New night and comparison HTML filenames include the plugin version (`SeeDrift_vX_Y_Z_W_...`) so outputs are easier to trace back to the generating build.
+
+## [0.8.2] — 2026-05-10
+
+### Changed
+
+- **Compare saved reports:** Before/after comparison now uses whole-report averages instead of matching target names. It compares assessed dither RA movement, dither Dec movement, RA/Dec balance, weak-dither rate, average center-after-drift improvement, and ineffective-center rate, then gives an overall better/worse/mixed read.
+
+## [0.8.1] — 2026-05-10
+
+### Changed
+
+- **Night HTML:** Drift charts now mark exposure-number gaps with an amber **?** tooltip: **Possibly missing/unsolved frames**. This indicates logged exposures fall between plotted solved points without claiming why they are absent.
 - **Night HTML:** Logged-dither interval results now render as a clearer bordered block: the bold **Logged dither intervals total** sits above a collapsed-by-default table of the individual frame-pair dither measurements.
+- **Analytics:** Very large outlier dither intervals are now classified as **suspect tracking**, excluded from weak/repeated-direction dither scoring, and reported with discounted absolute RA/Dec totals.
 
 ## [0.8.0] — 2026-05-10
 

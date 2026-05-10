@@ -70,6 +70,9 @@ namespace NINA.Plugin.SeeDrift.Services {
             return null;
         }
 
+        private static string CurrentPluginVersion() =>
+            typeof(HtmlReportExporter).Assembly.GetName().Version?.ToString() ?? "";
+
         /// <summary>
         /// Writes a single rolling HTML report with one subsection per target within each batch (each Stop or previous-session-report run).
         /// Drift is re-anchored to the first solved frame <em>of that target</em>; sequencer rows only include edges where
@@ -88,6 +91,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("<!DOCTYPE html>");
             sb.AppendLine("<html lang=\"en\" class=\"h-full\">");
             sb.AppendLine("<head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>");
+            sb.AppendLine($"<meta name=\"seedrift-report-kind\" content=\"night\"/><meta name=\"seedrift-generator-version\" content=\"{Escape(CurrentPluginVersion())}\"/><meta name=\"seedrift-report-schema\" content=\"1\"/>");
             sb.AppendLine($"<title>SeeDrift — Session Log {sessionLogLabel}</title>");
             sb.AppendLine($"<script src=\"{CdnTailwind}\"></script>");
             sb.AppendLine($"<script src=\"{CdnHammer}\"></script>");
@@ -111,6 +115,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine($"      <h1 class=\"text-xl font-semibold tracking-tight text-white\">SeeDrift — Session Log {Escape(sessionLogLabel)}</h1>");
             sb.AppendLine(
                 $"      <p class=\"mt-2 text-sm text-slate-400\">Generated {Escape(DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))} <span class=\"text-slate-500\">(local)</span></p>");
+            sb.AppendLine(
+                $"      <p class=\"mt-1 text-xs text-slate-500\">Report version v{Escape(CurrentPluginVersion())} · schema 1</p>");
             sb.Append(FormatPageHeaderLogsHtml(targets));
             sb.AppendLine(
                 "      <p class=\"mt-3 text-xs text-slate-600\">Reset drift chart zoom: <strong>double-click</strong> the chart, or press <kbd class=\"rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 font-mono text-[10px] text-slate-300\">R</kbd> or <kbd class=\"rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 font-mono text-[10px] text-slate-300\">Esc</kbd> (when not typing in a field).</p>");
@@ -178,7 +184,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"    <div class=\"seedrift-chart-box mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-2\">");
                     sb.AppendLine($"      <canvas id=\"{canvasId}\"></canvas>");
                     sb.AppendLine("    </div>");
-                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center — placed along the segment between frames. Hover path for file name; hover △/□ for log detail.</p>");
+                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center. <span class=\"text-amber-300\">?</span> marks possibly missing/unsolved frames between plotted points. Hover path, △/□, or ? markers for detail.</p>");
                     sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{Escape(FormatMovementTotalsLine(grp))}</p>");
                     var ditherSegHtml = FormatDitherIntervalMovementHtml(grp);
                     if (!string.IsNullOrEmpty(ditherSegHtml))
@@ -188,11 +194,13 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                     var ptsJson = FormatScatterPointsJsonAnchored(grp);
                     var edgeJson = FormatEdgeMidpointMarkersJson(grp);
+                    var gapJson = FormatPossibleGapMarkersJson(grp);
 
                     sb.AppendLine("<script>");
                     sb.AppendLine("(function(){");
                     sb.AppendLine($"  const pts = {ptsJson};");
                     sb.AppendLine($"  const edgeMarkers = {edgeJson};");
+                    sb.AppendLine($"  const gapMarkers = {gapJson};");
                     sb.AppendLine($"  const datasetLabel = {labelJson};");
                     sb.AppendLine($"  const el = document.getElementById('{canvasId}');");
                     sb.AppendLine("  function pointRadiusFn(ctx) {");
@@ -246,11 +254,29 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("      }");
                     sb.AppendLine("    });");
                     sb.AppendLine("  }");
+                    sb.AppendLine("  if (gapMarkers.length > 0) {");
+                    sb.AppendLine("    datasets.push({");
+                    sb.AppendLine("      label: 'Possibly missing/unsolved frames',");
+                    sb.AppendLine("      data: gapMarkers,");
+                    sb.AppendLine("      showLine: false,");
+                    sb.AppendLine("      borderColor: '#fbbf24',");
+                    sb.AppendLine("      backgroundColor: 'rgba(251,191,36,0.18)',");
+                    sb.AppendLine("      pointBorderColor: '#fbbf24',");
+                    sb.AppendLine("      pointBorderWidth: 1.5,");
+                    sb.AppendLine("      pointRadius: 7,");
+                    sb.AppendLine("      pointHoverRadius: 9,");
+                    sb.AppendLine("      hitRadius: 16,");
+                    sb.AppendLine("      pointStyle: 'rectRounded'");
+                    sb.AppendLine("    });");
+                    sb.AppendLine("  }");
                     sb.AppendLine("  function seedriftEqualArcsecBounds(mainPts, edgePts) {");
                     sb.AppendLine("    var xs = [], ys = [];");
                     sb.AppendLine("    for (var i = 0; i < mainPts.length; i++) { xs.push(mainPts[i].x); ys.push(mainPts[i].y); }");
                     sb.AppendLine("    if (edgePts && edgePts.length) {");
                     sb.AppendLine("      for (var j = 0; j < edgePts.length; j++) { xs.push(edgePts[j].x); ys.push(edgePts[j].y); }");
+                    sb.AppendLine("    }");
+                    sb.AppendLine("    if (gapMarkers && gapMarkers.length) {");
+                    sb.AppendLine("      for (var k = 0; k < gapMarkers.length; k++) { xs.push(gapMarkers[k].x); ys.push(gapMarkers[k].y); }");
                     sb.AppendLine("    }");
                     sb.AppendLine("    if (xs.length === 0) return null;");
                     sb.AppendLine("    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);");
@@ -268,6 +294,25 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("  const chart = new Chart(el, {");
                     sb.AppendLine("    type: 'scatter',");
                     sb.AppendLine("    data: { datasets: datasets },");
+                    sb.AppendLine("    plugins: [{");
+                    sb.AppendLine("      id: 'seedriftGapLabels',");
+                    sb.AppendLine("      afterDatasetsDraw: function(chart) {");
+                    sb.AppendLine("        var dsIndex = chart.data.datasets.findIndex(function(ds) { return ds.label === 'Possibly missing/unsolved frames'; });");
+                    sb.AppendLine("        if (dsIndex < 0) return;");
+                    sb.AppendLine("        var meta = chart.getDatasetMeta(dsIndex);");
+                    sb.AppendLine("        var ctx = chart.ctx;");
+                    sb.AppendLine("        ctx.save();");
+                    sb.AppendLine("        ctx.font = 'bold 10px sans-serif';");
+                    sb.AppendLine("        ctx.textAlign = 'center';");
+                    sb.AppendLine("        ctx.textBaseline = 'middle';");
+                    sb.AppendLine("        ctx.fillStyle = '#fbbf24';");
+                    sb.AppendLine("        for (var i = 0; i < meta.data.length; i++) {");
+                    sb.AppendLine("          var p = meta.data[i];");
+                    sb.AppendLine("          if (p && !p.hidden) ctx.fillText('?', p.x, p.y);");
+                    sb.AppendLine("        }");
+                    sb.AppendLine("        ctx.restore();");
+                    sb.AppendLine("      }");
+                    sb.AppendLine("    }],");
                     sb.AppendLine("    options: {");
                     sb.AppendLine("      responsive: true, maintainAspectRatio: true, aspectRatio: 1,");
                     sb.AppendLine("      scales: {");
@@ -281,6 +326,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("            label: function(ctx) {");
                     sb.AppendLine("              if (ctx.datasetIndex > 0) {");
                     sb.AppendLine("                var raw = ctx.raw;");
+                    sb.AppendLine("                if (raw && raw.isGap) return [raw.label || 'Possibly missing/unsolved frames', raw.tooltip || ''];");
                     sb.AppendLine("                var tip = raw && raw.tooltip ? String(raw.tooltip) : '';");
                     sb.AppendLine("                var kind = raw && raw.isDither ? 'DitherAfterExposures / pulse' : 'CenterAfterDrift';");
                     sb.AppendLine("                var hdr = kind + ' · ΔRA ' + ctx.parsed.x + '\" · ΔDec ' + ctx.parsed.y + '\"';");
@@ -459,8 +505,9 @@ namespace NINA.Plugin.SeeDrift.Services {
         private static string FormatDitherIntervalMovementHtml(IReadOnlyList<DriftSample> group) {
             if (group.Count < 2)
                 return "";
-            var rows = new List<(string Label, string DeltaRa, string DeltaDec, string Pixel)>();
+            var rows = new List<(string Label, string DeltaRa, string DeltaDec, string Pixel, string Note)>();
             var pixelPath = group.All(s => s.IsPixelPath);
+            var suspectFloor = CalculateSuspectDitherFloor(group);
             double sumAbsRa = 0;
             double sumAbsDec = 0;
             double sumAbsPx = 0;
@@ -476,6 +523,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 GetAnchoredPlotPoint(group, i, out var x1, out var y1);
                 var dRa = x1 - x0;
                 var dDec = y1 - y0;
+                var move = Math.Sqrt(dRa * dRa + dDec * dDec);
+                var note = move >= suspectFloor
+                    ? "Excluded from dither assessment: likely tracking issue / suspect jump."
+                    : "";
                 sumAbsRa += Math.Abs(dRa);
                 sumAbsDec += Math.Abs(dDec);
                 var prev = group[i - 1];
@@ -495,7 +546,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     pxText = FormattableString.Invariant($"|Δx| {adx:0.##} px · |Δy| {ady:0.##} px");
                 }
 
-                rows.Add((label, FmtSignedArcSec(dRa) + "″", FmtSignedArcSec(dDec) + "″", pxText));
+                rows.Add((label, FmtSignedArcSec(dRa) + "″", FmtSignedArcSec(dDec) + "″", pxText, note));
             }
 
             if (rows.Count == 0)
@@ -520,7 +571,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("              <th class=\"w-[24%] px-3 py-2 font-medium\">ΔRA</th>");
             sb.AppendLine("              <th class=\"w-[24%] px-3 py-2 font-medium\">ΔDec</th>");
             if (anyPxSegment)
-                sb.AppendLine("              <th class=\"w-[24%] px-3 py-2 font-medium\">Detector pixels</th>");
+                sb.AppendLine("              <th class=\"w-[18%] px-3 py-2 font-medium\">Detector pixels</th>");
+            sb.AppendLine("              <th class=\"w-[20%] px-3 py-2 font-medium\">Assessment note</th>");
             sb.AppendLine("            </tr></thead>");
             sb.AppendLine("            <tbody class=\"divide-y divide-slate-800 bg-slate-950/30 text-slate-300\">");
             foreach (var row in rows) {
@@ -530,6 +582,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine($"                <td class=\"px-3 py-2\">{row.DeltaDec}</td>");
                 if (anyPxSegment)
                     sb.AppendLine($"                <td class=\"px-3 py-2\">{row.Pixel}</td>");
+                sb.AppendLine($"                <td class=\"px-3 py-2 text-amber-200\">{Escape(row.Note)}</td>");
                 sb.AppendLine("              </tr>");
             }
             sb.AppendLine("            </tbody>");
@@ -542,6 +595,22 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         private static string FmtSignedArcSec(double v) =>
             string.Format(CultureInfo.InvariantCulture, "{0:+0.###;-0.###;0}", v);
+
+        private static double CalculateSuspectDitherFloor(IReadOnlyList<DriftSample> group) {
+            var moves = group
+                .Skip(1)
+                .SelectMany(s => s.EdgeSequencerMarkers ?? new List<SequencerEdgeMarker>())
+                .Where(m => m.IsDither)
+                .Select(m => Math.Sqrt(m.DeltaRaArcSec * m.DeltaRaArcSec + m.DeltaDecArcSec * m.DeltaDecArcSec))
+                .OrderBy(v => v)
+                .ToList();
+            if (moves.Count == 0)
+                return double.PositiveInfinity;
+            var median = moves[(moves.Count - 1) / 2];
+            return moves.Count > 1
+                ? Math.Max(300.0, median * 5.0)
+                : 600.0;
+        }
 
         private static string FormatAnalysisSummaryHtml(TargetAnalysis analysis) {
             var sb = new StringBuilder();
@@ -562,13 +631,20 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (analysis.Dithers.Count == 0) {
                 sb.AppendLine("        <p class=\"mt-1 text-sm text-slate-300\">No logged dithers on this target.</p>");
             } else {
-                var weak = analysis.Dithers.Count(d => d.Assessment == "Weak");
-                var repeated = analysis.Dithers.Count(d => d.Assessment == "Repeated direction");
-                var med = analysis.Dithers.Select(d => d.MoveArcSec).OrderBy(v => v).ElementAt(analysis.Dithers.Count / 2);
+                var assessed = analysis.Dithers.Where(d => !d.IsSuspect).ToList();
+                var weak = assessed.Count(d => d.Assessment == "Weak");
+                var repeated = assessed.Count(d => d.Assessment == "Repeated direction");
+                var med = assessed.Count == 0
+                    ? 0
+                    : assessed.Select(d => d.MoveArcSec).OrderBy(v => v).ElementAt(assessed.Count / 2);
                 sb.AppendLine(
-                    $"        <p class=\"mt-1 text-sm text-slate-200\">{analysis.Dithers.Count} dither{(analysis.Dithers.Count == 1 ? "" : "s")} · median {med:0.##}″</p>");
+                    $"        <p class=\"mt-1 text-sm text-slate-200\">{assessed.Count} assessed dither{(assessed.Count == 1 ? "" : "s")} · median {med:0.##}″</p>");
                 sb.AppendLine(
                     $"        <p class=\"mt-1 text-xs text-slate-500\">Weak {weak} · repeated direction {repeated}</p>");
+                if (analysis.SuspectDitherCount > 0) {
+                    sb.AppendLine(
+                        $"        <p class=\"mt-1 text-xs text-amber-300\">Excluded suspect tracking intervals: {analysis.SuspectDitherCount}; discounted RA {analysis.SuspectDitherDiscountedAbsRaArcSec:0.#}″ · Dec {analysis.SuspectDitherDiscountedAbsDecArcSec:0.#}″.</p>");
+                }
             }
             sb.AppendLine("      </div>");
             sb.AppendLine("      <div class=\"rounded-lg border border-slate-700 bg-slate-900/40 p-3\">");
@@ -706,6 +782,37 @@ namespace NINA.Plugin.SeeDrift.Services {
                         tooltip = markers[j].Tooltip ?? ""
                     });
                 }
+            }
+
+            return JsonSerializer.Serialize(list);
+        }
+
+        private static string FormatPossibleGapMarkersJson(IReadOnlyList<DriftSample> group) {
+            if (group.Count < 2)
+                return "[]";
+            var list = new List<object>();
+            for (var i = 1; i < group.Count; i++) {
+                var prev = group[i - 1];
+                var cur = group[i];
+                if (!FitsFolderImport.TryExposureSequenceFromFileName(prev.FileName, out var a)
+                    || !FitsFolderImport.TryExposureSequenceFromFileName(cur.FileName, out var b))
+                    continue;
+                var missing = b - a - 1;
+                if (missing <= 0)
+                    continue;
+
+                GetAnchoredPlotPoint(group, i - 1, out var px, out var py);
+                GetAnchoredPlotPoint(group, i, out var cx, out var cy);
+                var label = $"Possibly missing/unsolved frames ({missing})";
+                var tooltip =
+                    $"Possibly missing or unsolved frames: {missing} logged exposure(s) fall between {prev.FileName} and {cur.FileName} but are not in the solved trace. This jump may span more than one exposure.";
+                list.Add(new {
+                    x = Math.Round((px + cx) / 2.0, 4),
+                    y = Math.Round((py + cy) / 2.0, 4),
+                    isGap = true,
+                    label,
+                    tooltip
+                });
             }
 
             return JsonSerializer.Serialize(list);

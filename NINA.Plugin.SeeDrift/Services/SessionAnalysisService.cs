@@ -19,6 +19,9 @@ namespace NINA.Plugin.SeeDrift.Services {
             };
 
             analysis.Dithers.AddRange(BuildDitherAnalyses(ordered));
+            analysis.SuspectDitherCount = analysis.Dithers.Count(d => d.IsSuspect);
+            analysis.SuspectDitherDiscountedAbsRaArcSec = analysis.Dithers.Where(d => d.IsSuspect).Sum(d => Math.Abs(d.DeltaRaArcSec));
+            analysis.SuspectDitherDiscountedAbsDecArcSec = analysis.Dithers.Where(d => d.IsSuspect).Sum(d => Math.Abs(d.DeltaDecArcSec));
             analysis.Centers.AddRange(BuildCenterAnalyses(ordered));
             analysis.Timeline.AddRange(BuildTimeline(ordered, analysis));
             analysis.Recommendations.AddRange(BuildRecommendations(analysis));
@@ -109,14 +112,19 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         private static IEnumerable<DitherEventAnalysis> BuildDitherAnalyses(IReadOnlyList<DriftSample> ordered) {
-            var eventSteps = ordered
+            var allDitherSteps = ordered
                 .Skip(1)
                 .SelectMany(s => s.EdgeSequencerMarkers ?? new List<SequencerEdgeMarker>())
                 .Where(m => m.IsDither)
                 .Select(m => Math.Sqrt(m.DeltaRaArcSec * m.DeltaRaArcSec + m.DeltaDecArcSec * m.DeltaDecArcSec))
+                .OrderBy(v => v)
                 .ToList();
             var medianStep = MedianNonEventStep(ordered);
+            var medianDitherStep = allDitherSteps.Count == 0 ? medianStep : allDitherSteps[(allDitherSteps.Count - 1) / 2];
             var weakFloor = Math.Max(2.0, medianStep * 1.25);
+            var suspectFloor = allDitherSteps.Count > 1
+                ? Math.Max(300.0, medianDitherStep * 5.0)
+                : 600.0;
             double? prevRa = null;
             double? prevDec = null;
 
@@ -125,8 +133,12 @@ namespace NINA.Plugin.SeeDrift.Services {
                 if (markers == null) continue;
                 foreach (var marker in markers.Where(m => m.IsDither)) {
                     var move = Math.Sqrt(marker.DeltaRaArcSec * marker.DeltaRaArcSec + marker.DeltaDecArcSec * marker.DeltaDecArcSec);
+                    var suspect = move >= suspectFloor;
+                    var suspectReason = suspect
+                        ? FormattableString.Invariant($"Likely tracking issue: measured movement {move:0.##}\" is far outside normal logged dither scale ({medianDitherStep:0.##}\" median).")
+                        : "";
                     var repeated = false;
-                    if (prevRa.HasValue && prevDec.HasValue) {
+                    if (!suspect && prevRa.HasValue && prevDec.HasValue) {
                         var prevLen = Math.Sqrt(prevRa.Value * prevRa.Value + prevDec.Value * prevDec.Value);
                         if (prevLen > 0.001 && move > 0.001) {
                             var dot = (prevRa.Value * marker.DeltaRaArcSec + prevDec.Value * marker.DeltaDecArcSec) / (prevLen * move);
@@ -134,19 +146,25 @@ namespace NINA.Plugin.SeeDrift.Services {
                         }
                     }
 
-                    var assessment = move < weakFloor
-                        ? "Weak"
-                        : repeated
-                            ? "Repeated direction"
-                            : "Good";
-                    var detail = assessment == "Weak"
-                        ? FormattableString.Invariant($"Measured dither movement {move:0.##}\" is near/below the session floor of {weakFloor:0.##}\".")
-                        : repeated
-                            ? "This dither moved mostly in the same direction as the previous logged dither."
-                            : "Measured movement is clearly separated from nearby drift/noise.";
+                    var assessment = suspect
+                        ? "Suspect tracking"
+                        : move < weakFloor
+                            ? "Weak"
+                            : repeated
+                                ? "Repeated direction"
+                                : "Good";
+                    var detail = suspect
+                        ? suspectReason + " Excluded from dither assessment."
+                        : assessment == "Weak"
+                            ? FormattableString.Invariant($"Measured dither movement {move:0.##}\" is near/below the session floor of {weakFloor:0.##}\".")
+                            : repeated
+                                ? "This dither moved mostly in the same direction as the previous logged dither."
+                                : "Measured movement is clearly separated from nearby drift/noise.";
 
-                    prevRa = marker.DeltaRaArcSec;
-                    prevDec = marker.DeltaDecArcSec;
+                    if (!suspect) {
+                        prevRa = marker.DeltaRaArcSec;
+                        prevDec = marker.DeltaDecArcSec;
+                    }
 
                     yield return new DitherEventAnalysis {
                         FromFrameIndex = marker.FromFrameIndex,
@@ -158,6 +176,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                         EquivalentPixels = TryMedianPlateScale(ordered, out var scale) && scale > 0 ? move / scale : null,
                         LoggedGuiderDx = marker.LoggedGuiderDx,
                         LoggedGuiderDy = marker.LoggedGuiderDy,
+                        IsSuspect = suspect,
+                        SuspectReason = suspectReason,
                         Assessment = assessment,
                         Detail = detail
                     };
@@ -254,8 +274,17 @@ namespace NINA.Plugin.SeeDrift.Services {
                 };
             }
 
-            var weak = analysis.Dithers.Count(d => d.Assessment == "Weak");
-            if (analysis.Dithers.Count > 0 && weak * 2 >= analysis.Dithers.Count) {
+            var assessedDithers = analysis.Dithers.Where(d => !d.IsSuspect).ToList();
+            if (analysis.SuspectDitherCount > 0) {
+                emitted = true;
+                yield return new SessionRecommendation {
+                    Level = "warn",
+                    Text = FormattableString.Invariant($"Excluded {analysis.SuspectDitherCount} suspect dither interval(s) from dither assessment; discounted {analysis.SuspectDitherDiscountedAbsRaArcSec:0.#}\" RA and {analysis.SuspectDitherDiscountedAbsDecArcSec:0.#}\" Dec as likely tracking issues.")
+                };
+            }
+
+            var weak = assessedDithers.Count(d => d.Assessment == "Weak");
+            if (assessedDithers.Count > 0 && weak * 2 >= assessedDithers.Count) {
                 emitted = true;
                 yield return new SessionRecommendation {
                     Level = "warn",
@@ -263,7 +292,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 };
             }
 
-            var repeated = analysis.Dithers.Count(d => d.Assessment == "Repeated direction");
+            var repeated = assessedDithers.Count(d => d.Assessment == "Repeated direction");
             if (repeated > 0) {
                 emitted = true;
                 yield return new SessionRecommendation {
@@ -287,7 +316,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 };
             }
 
-            if (!emitted && analysis.Dithers.Count > 0) {
+            if (!emitted && assessedDithers.Count > 0) {
                 yield return new SessionRecommendation {
                     Level = "good",
                     Text = "Dither and center behaviour looks broadly consistent in this session."

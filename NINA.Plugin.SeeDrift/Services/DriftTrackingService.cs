@@ -520,11 +520,16 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
         }
 
-        /// <summary>Night report file name: local run date + session calendar day (NINA log filename date when available — same as HTML header).</summary>
+        /// <summary>Night report file name: plugin version + local run date + session calendar day (NINA log filename date when available — same as HTML header).</summary>
         private static string FormatNightReportHtmlFileName(IReadOnlyList<CompletedTarget> targets) {
             var ran = DateTime.Now.ToString("yyyyMMdd");
             var sess = ResolveSessionDateStamp(targets);
-            return $"SeeDrift_ran{ran}_sess{sess}.html";
+            return $"SeeDrift_v{FileVersionStamp()}_ran{ran}_sess{sess}.html";
+        }
+
+        private static string FileVersionStamp() {
+            var version = typeof(DriftTrackingService).Assembly.GetName().Version?.ToString() ?? "";
+            return version.Replace('.', '_');
         }
 
         /// <summary>Local <c>YYYYMMDD</c> for the imaging session (same rule as HTML header — log filename date first).</summary>

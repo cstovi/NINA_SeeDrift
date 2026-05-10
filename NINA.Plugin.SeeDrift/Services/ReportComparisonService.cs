@@ -11,6 +11,8 @@ using NINA.Plugin.SeeDrift.Models;
 namespace NINA.Plugin.SeeDrift.Services {
 
     internal static class ReportComparisonService {
+        private const int SupportedReportSchemaVersion = 1;
+
         private static readonly Regex RxPayload = new(
             "<script\\s+type=\"application/json\"\\s+id=\"seedrift-report-data\"\\s*>(.*?)</script>",
             RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
@@ -34,7 +36,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SeeDrift")
                 : outputFolder.Trim();
             Directory.CreateDirectory(folder);
-            outputPath = Path.Combine(folder, $"SeeDrift_compare_{DateTime.Now:yyyyMMdd_HHmmss}.html");
+            outputPath = Path.Combine(folder, $"SeeDrift_v{FileVersionStamp()}_compare_{DateTime.Now:yyyyMMdd_HHmmss}.html");
             result.OutputPath = outputPath;
             File.WriteAllText(outputPath, BuildHtml(result), Encoding.UTF8);
             return true;
@@ -66,6 +68,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                     errorMessage = $"Report payload was empty in {Path.GetFileName(p)}.";
                     return false;
                 }
+                if (parsed.SchemaVersion != SupportedReportSchemaVersion) {
+                    errorMessage = $"Report schema {parsed.SchemaVersion} in {Path.GetFileName(p)} is not supported by this build. Supported schema: {SupportedReportSchemaVersion}. Recreate the report or update SeeDrift.";
+                    return false;
+                }
                 payload = parsed;
                 return true;
             } catch (Exception ex) {
@@ -81,114 +87,206 @@ namespace NINA.Plugin.SeeDrift.Services {
                 SeeDriftReportPayload after) {
             var result = new ReportComparisonResult {
                 BeforePath = beforePath,
-                AfterPath = afterPath
+                AfterPath = afterPath,
+                BeforePluginVersion = before.PluginVersion,
+                AfterPluginVersion = after.PluginVersion,
+                BeforeSchemaVersion = before.SchemaVersion,
+                AfterSchemaVersion = after.SchemaVersion
             };
 
-            var afterByName = after.Targets
-                .GroupBy(t => t.TargetName, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-
-            foreach (var b in before.Targets) {
-                if (!afterByName.TryGetValue(b.TargetName, out var a))
-                    continue;
-
-                var beforeRate = b.Analysis.DriftRate.TotalArcSecPerMinute;
-                var afterRate = a.Analysis.DriftRate.TotalArcSecPerMinute;
-                var weakBefore = b.Analysis.Dithers.Count(d => d.Assessment == "Weak");
-                var weakAfter = a.Analysis.Dithers.Count(d => d.Assessment == "Weak");
-                var badCenterBefore = b.Analysis.Centers.Count(c => c.Assessment == "Ineffective");
-                var badCenterAfter = a.Analysis.Centers.Count(c => c.Assessment == "Ineffective");
-                result.Targets.Add(new ReportComparisonTargetResult {
-                    TargetName = b.TargetName,
-                    BeforeFrames = b.FrameCount,
-                    AfterFrames = a.FrameCount,
-                    BeforeDriftRateArcSecPerMinute = beforeRate,
-                    AfterDriftRateArcSecPerMinute = afterRate,
-                    BeforeWeakDithers = weakBefore,
-                    AfterWeakDithers = weakAfter,
-                    BeforeIneffectiveCenters = badCenterBefore,
-                    AfterIneffectiveCenters = badCenterAfter,
-                    Summary = BuildSummary(beforeRate, afterRate, weakBefore, weakAfter, badCenterBefore, badCenterAfter)
-                });
-            }
-
-            if (result.Targets.Count == 0 && before.Targets.Count > 0 && after.Targets.Count > 0) {
-                var b = before.Targets[0];
-                var a = after.Targets[0];
-                result.Targets.Add(new ReportComparisonTargetResult {
-                    TargetName = $"{b.TargetName} → {a.TargetName}",
-                    BeforeFrames = b.FrameCount,
-                    AfterFrames = a.FrameCount,
-                    BeforeDriftRateArcSecPerMinute = b.Analysis.DriftRate.TotalArcSecPerMinute,
-                    AfterDriftRateArcSecPerMinute = a.Analysis.DriftRate.TotalArcSecPerMinute,
-                    BeforeWeakDithers = b.Analysis.Dithers.Count(d => d.Assessment == "Weak"),
-                    AfterWeakDithers = a.Analysis.Dithers.Count(d => d.Assessment == "Weak"),
-                    BeforeIneffectiveCenters = b.Analysis.Centers.Count(c => c.Assessment == "Ineffective"),
-                    AfterIneffectiveCenters = a.Analysis.Centers.Count(c => c.Assessment == "Ineffective"),
-                    Summary = "No matching target names; compared the first listed target in each report."
-                });
-            }
-
+            var beforeStats = BuildStats(before);
+            var afterStats = BuildStats(after);
+            result.ScopeSummary = BuildScopeSummary(beforeStats, afterStats);
+            result.Metrics.Add(BuildMetric(
+                "Average dither RA movement",
+                beforeStats.AverageAbsDitherRaArcSec,
+                afterStats.AverageAbsDitherRaArcSec,
+                "\"",
+                higherIsBetter: true,
+                "More RA separation on average",
+                "Less RA separation on average"));
+            result.Metrics.Add(BuildMetric(
+                "Average dither Dec movement",
+                beforeStats.AverageAbsDitherDecArcSec,
+                afterStats.AverageAbsDitherDecArcSec,
+                "\"",
+                higherIsBetter: true,
+                "More Dec separation on average",
+                "Less Dec separation on average"));
+            result.Metrics.Add(BuildMetric(
+                "Dither RA/Dec balance",
+                beforeStats.DitherAxisBalancePercent,
+                afterStats.DitherAxisBalancePercent,
+                "%",
+                higherIsBetter: true,
+                "More balanced between axes",
+                "Less balanced between axes"));
+            result.Metrics.Add(BuildMetric(
+                "Weak dither rate",
+                beforeStats.WeakDitherRatePercent,
+                afterStats.WeakDitherRatePercent,
+                "%",
+                higherIsBetter: false,
+                "Fewer weak dithers",
+                "More weak dithers"));
+            result.Metrics.Add(BuildMetric(
+                "Average center improvement",
+                beforeStats.AverageCenterImprovementPercent,
+                afterStats.AverageCenterImprovementPercent,
+                "%",
+                higherIsBetter: true,
+                "Center-after-drift improved more on average",
+                "Center-after-drift improved less on average"));
+            result.Metrics.Add(BuildMetric(
+                "Ineffective center rate",
+                beforeStats.IneffectiveCenterRatePercent,
+                afterStats.IneffectiveCenterRatePercent,
+                "%",
+                higherIsBetter: false,
+                "Fewer ineffective centers",
+                "More ineffective centers"));
+            result.OverallSummary = BuildOverallSummary(result.Metrics);
             return result;
         }
 
-        private static string BuildSummary(
-                double beforeRate,
-                double afterRate,
-                int weakBefore,
-                int weakAfter,
-                int badCenterBefore,
-                int badCenterAfter) {
-            var parts = new List<string>();
-            var rateDelta = afterRate - beforeRate;
-            if (Math.Abs(rateDelta) > 0.05)
-                parts.Add(rateDelta < 0 ? "drift rate improved" : "drift rate worsened");
-            else
-                parts.Add("drift rate similar");
+        private static ComparisonStats BuildStats(SeeDriftReportPayload report) {
+            var targets = report.Targets ?? new List<SeeDriftReportTargetPayload>();
+            var dithers = targets
+                .SelectMany(t => t.Analysis.Dithers ?? new List<DitherEventAnalysis>())
+                .Where(d => !d.IsSuspect)
+                .ToList();
+            var centers = targets
+                .SelectMany(t => t.Analysis.Centers ?? new List<CenterEventAnalysis>())
+                .ToList();
+            var avgRa = AverageOrZero(dithers.Select(d => Math.Abs(d.DeltaRaArcSec)));
+            var avgDec = AverageOrZero(dithers.Select(d => Math.Abs(d.DeltaDecArcSec)));
+            var largerAxis = Math.Max(avgRa, avgDec);
+            var balance = largerAxis > 0.001
+                ? 100.0 * Math.Min(avgRa, avgDec) / largerAxis
+                : 0;
+            return new ComparisonStats {
+                TargetCount = targets.Count,
+                FrameCount = targets.Sum(t => t.FrameCount),
+                AssessedDitherCount = dithers.Count,
+                SuspectDitherCount = targets.Sum(t => t.Analysis.SuspectDitherCount),
+                CenterCount = centers.Count,
+                AverageAbsDitherRaArcSec = avgRa,
+                AverageAbsDitherDecArcSec = avgDec,
+                DitherAxisBalancePercent = balance,
+                WeakDitherRatePercent = Percent(dithers.Count(d => d.Assessment == "Weak"), dithers.Count),
+                AverageCenterImprovementPercent = AverageOrZero(centers.Select(c => c.ImprovementPercent)),
+                IneffectiveCenterRatePercent = Percent(centers.Count(c => c.Assessment == "Ineffective"), centers.Count)
+            };
+        }
 
-            if (weakAfter < weakBefore)
-                parts.Add("fewer weak dithers");
-            else if (weakAfter > weakBefore)
-                parts.Add("more weak dithers");
+        private static ReportComparisonMetricResult BuildMetric(
+                string metric,
+                double before,
+                double after,
+                string suffix,
+                bool higherIsBetter,
+                string improvedText,
+                string worsenedText) {
+            var delta = after - before;
+            var threshold = suffix == "%" ? 2.0 : 0.2;
+            if (Math.Abs(delta) < threshold) {
+                return new ReportComparisonMetricResult {
+                    Metric = metric,
+                    BeforeValue = FormatValue(before, suffix),
+                    AfterValue = FormatValue(after, suffix),
+                    Direction = "similar",
+                    Read = "Similar"
+                };
+            }
 
-            if (badCenterAfter < badCenterBefore)
-                parts.Add("center recovery improved");
-            else if (badCenterAfter > badCenterBefore)
-                parts.Add("center recovery worsened");
+            var improved = higherIsBetter ? delta > 0 : delta < 0;
+            return new ReportComparisonMetricResult {
+                Metric = metric,
+                BeforeValue = FormatValue(before, suffix),
+                AfterValue = FormatValue(after, suffix),
+                Direction = improved ? "better" : "worse",
+                Read = improved ? improvedText : worsenedText
+            };
+        }
 
-            return string.Join("; ", parts);
+        private static string BuildScopeSummary(ComparisonStats before, ComparisonStats after) {
+            return FormattableString.Invariant(
+                $"Whole-report averages: {before.TargetCount} target(s), {before.FrameCount} frame(s), {before.AssessedDitherCount} assessed dither(s), {before.CenterCount} center event(s) before; {after.TargetCount} target(s), {after.FrameCount} frame(s), {after.AssessedDitherCount} assessed dither(s), {after.CenterCount} center event(s) after. Suspect dither intervals excluded: {before.SuspectDitherCount} before, {after.SuspectDitherCount} after.");
+        }
+
+        private static string BuildOverallSummary(IReadOnlyList<ReportComparisonMetricResult> metrics) {
+            var better = metrics.Count(m => m.Direction == "better");
+            var worse = metrics.Count(m => m.Direction == "worse");
+            if (better > worse)
+                return $"Overall read: better on average ({better} improved, {worse} worsened).";
+            if (worse > better)
+                return $"Overall read: worse on average ({better} improved, {worse} worsened).";
+            return $"Overall read: mixed or similar on average ({better} improved, {worse} worsened).";
+        }
+
+        private static double AverageOrZero(IEnumerable<double> values) {
+            var list = values.Where(v => !double.IsNaN(v) && !double.IsInfinity(v)).ToList();
+            return list.Count == 0 ? 0 : list.Average();
+        }
+
+        private static double Percent(int count, int total) {
+            return total <= 0 ? 0 : 100.0 * count / total;
         }
 
         private static string BuildHtml(ReportComparisonResult result) {
             var sb = new StringBuilder();
             sb.AppendLine("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>");
+            sb.AppendLine($"<meta name=\"seedrift-report-kind\" content=\"comparison\"/><meta name=\"seedrift-generator-version\" content=\"{Escape(CurrentPluginVersion())}\"/><meta name=\"seedrift-supported-schema\" content=\"{SupportedReportSchemaVersion}\"/>");
             sb.AppendLine("<title>SeeDrift comparison</title><script src=\"https://cdn.tailwindcss.com\"></script></head>");
             sb.AppendLine("<body class=\"bg-slate-950 text-slate-200\"><main class=\"mx-auto max-w-5xl px-4 py-8\">");
             sb.AppendLine("<h1 class=\"text-xl font-semibold text-white\">SeeDrift before/after comparison</h1>");
             sb.AppendLine($"<p class=\"mt-2 break-all text-xs text-slate-400\">Before: {Escape(result.BeforePath)}</p>");
             sb.AppendLine($"<p class=\"mt-1 break-all text-xs text-slate-400\">After: {Escape(result.AfterPath)}</p>");
+            sb.AppendLine($"<p class=\"mt-2 text-xs text-slate-500\">Report versions: before v{Escape(result.BeforePluginVersion)} / schema {result.BeforeSchemaVersion}; after v{Escape(result.AfterPluginVersion)} / schema {result.AfterSchemaVersion}. Compatible schemas can compare across plugin versions.</p>");
+            sb.AppendLine($"<div class=\"mt-5 rounded-lg border border-sky-900/50 bg-sky-950/30 p-4\"><p class=\"font-semibold text-sky-100\">{Escape(result.OverallSummary)}</p><p class=\"mt-2 text-xs text-slate-400\">{Escape(result.ScopeSummary)}</p></div>");
             sb.AppendLine("<div class=\"mt-6 overflow-x-auto rounded-lg border border-slate-700\"><table class=\"min-w-full divide-y divide-slate-700 text-left text-sm\">");
-            sb.AppendLine("<thead class=\"bg-slate-900 text-sky-300\"><tr><th class=\"px-3 py-2\">Target</th><th class=\"px-3 py-2\">Frames</th><th class=\"px-3 py-2\">Drift rate</th><th class=\"px-3 py-2\">Weak dithers</th><th class=\"px-3 py-2\">Ineffective centers</th><th class=\"px-3 py-2\">Read</th></tr></thead>");
+            sb.AppendLine("<thead class=\"bg-slate-900 text-sky-300\"><tr><th class=\"px-3 py-2\">Metric</th><th class=\"px-3 py-2\">Before</th><th class=\"px-3 py-2\">After</th><th class=\"px-3 py-2\">Read</th></tr></thead>");
             sb.AppendLine("<tbody class=\"divide-y divide-slate-800 bg-slate-950/40\">");
-            foreach (var r in result.Targets) {
+            foreach (var r in result.Metrics) {
                 sb.AppendLine("<tr>");
-                sb.AppendLine($"<td class=\"px-3 py-2 text-slate-100\">{Escape(r.TargetName)}</td>");
-                sb.AppendLine($"<td class=\"px-3 py-2\">{r.BeforeFrames} → {r.AfterFrames}</td>");
-                sb.AppendLine($"<td class=\"px-3 py-2\">{Fmt(r.BeforeDriftRateArcSecPerMinute)}″/min → {Fmt(r.AfterDriftRateArcSecPerMinute)}″/min</td>");
-                sb.AppendLine($"<td class=\"px-3 py-2\">{r.BeforeWeakDithers} → {r.AfterWeakDithers}</td>");
-                sb.AppendLine($"<td class=\"px-3 py-2\">{r.BeforeIneffectiveCenters} → {r.AfterIneffectiveCenters}</td>");
-                sb.AppendLine($"<td class=\"px-3 py-2 text-slate-300\">{Escape(r.Summary)}</td>");
+                sb.AppendLine($"<td class=\"px-3 py-2 text-slate-100\">{Escape(r.Metric)}</td>");
+                sb.AppendLine($"<td class=\"px-3 py-2\">{Escape(r.BeforeValue)}</td>");
+                sb.AppendLine($"<td class=\"px-3 py-2\">{Escape(r.AfterValue)}</td>");
+                sb.AppendLine($"<td class=\"px-3 py-2 text-slate-300\">{Escape(r.Read)}</td>");
                 sb.AppendLine("</tr>");
             }
             sb.AppendLine("</tbody></table></div>");
-            sb.AppendLine("<p class=\"mt-4 text-xs text-slate-500\">Comparison uses embedded SeeDrift report data. No FITS files are scanned and no plate solving is run.</p>");
+            sb.AppendLine("<p class=\"mt-4 text-xs text-slate-500\">Comparison uses embedded SeeDrift report data across the whole report. It does not require matching target names or session order. No FITS files are scanned and no plate solving is run.</p>");
             sb.AppendLine("</main></body></html>");
             return sb.ToString();
         }
 
-        private static string Fmt(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+        private static string FormatValue(double value, string suffix) {
+            var number = value.ToString("0.###", CultureInfo.InvariantCulture);
+            return suffix == "\"" ? number + "″" : number + suffix;
+        }
+
+        private static string CurrentPluginVersion() =>
+            typeof(ReportComparisonService).Assembly.GetName().Version?.ToString() ?? "";
+
+        private static string FileVersionStamp() =>
+            CurrentPluginVersion().Replace('.', '_');
 
         private static string Escape(string s) =>
             s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
+
+        private sealed class ComparisonStats {
+            public int TargetCount { get; init; }
+            public int FrameCount { get; init; }
+            public int AssessedDitherCount { get; init; }
+            public int SuspectDitherCount { get; init; }
+            public int CenterCount { get; init; }
+            public double AverageAbsDitherRaArcSec { get; init; }
+            public double AverageAbsDitherDecArcSec { get; init; }
+            public double DitherAxisBalancePercent { get; init; }
+            public double WeakDitherRatePercent { get; init; }
+            public double AverageCenterImprovementPercent { get; init; }
+            public double IneffectiveCenterRatePercent { get; init; }
+        }
     }
 }

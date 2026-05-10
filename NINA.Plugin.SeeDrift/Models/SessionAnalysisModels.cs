@@ -18,6 +18,8 @@ namespace NINA.Plugin.SeeDrift.Models {
         public double? EquivalentPixels { get; init; }
         public double? LoggedGuiderDx { get; init; }
         public double? LoggedGuiderDy { get; init; }
+        public bool IsSuspect { get; init; }
+        public string SuspectReason { get; init; } = "";
         public string Assessment { get; init; } = "";
         public string Detail { get; init; } = "";
     }
@@ -68,6 +70,9 @@ namespace NINA.Plugin.SeeDrift.Models {
         public List<CenterEventAnalysis> Centers { get; init; } = new();
         public List<QualityTimelineSegment> Timeline { get; init; } = new();
         public List<SessionRecommendation> Recommendations { get; init; } = new();
+        public int SuspectDitherCount { get; set; }
+        public double SuspectDitherDiscountedAbsRaArcSec { get; set; }
+        public double SuspectDitherDiscountedAbsDecArcSec { get; set; }
     }
 
     public sealed class SeeDriftReportPayload {
@@ -99,19 +104,20 @@ namespace NINA.Plugin.SeeDrift.Models {
         public string BeforePath { get; init; } = "";
         public string AfterPath { get; init; } = "";
         public string OutputPath { get; set; } = "";
-        public List<ReportComparisonTargetResult> Targets { get; init; } = new();
+        public string OverallSummary { get; set; } = "";
+        public string ScopeSummary { get; set; } = "";
+        public string BeforePluginVersion { get; init; } = "";
+        public string AfterPluginVersion { get; init; } = "";
+        public int BeforeSchemaVersion { get; init; }
+        public int AfterSchemaVersion { get; init; }
+        public List<ReportComparisonMetricResult> Metrics { get; init; } = new();
     }
 
-    public sealed class ReportComparisonTargetResult {
-        public string TargetName { get; init; } = "";
-        public int BeforeFrames { get; init; }
-        public int AfterFrames { get; init; }
-        public double BeforeDriftRateArcSecPerMinute { get; init; }
-        public double AfterDriftRateArcSecPerMinute { get; init; }
-        public int BeforeWeakDithers { get; init; }
-        public int AfterWeakDithers { get; init; }
-        public int BeforeIneffectiveCenters { get; init; }
-        public int AfterIneffectiveCenters { get; init; }
-        public string Summary { get; init; } = "";
+    public sealed class ReportComparisonMetricResult {
+        public string Metric { get; init; } = "";
+        public string BeforeValue { get; init; } = "";
+        public string AfterValue { get; init; } = "";
+        public string Direction { get; init; } = "";
+        public string Read { get; init; } = "";
     }
 }
