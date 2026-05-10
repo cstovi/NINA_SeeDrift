@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.14] — 2026-05-10
+
+### Changed
+
+- **Report library:** The delete control is labeled **Delete selected**, with tooltip and confirmation text stating explicitly that **one** highlighted `.html` file is removed per action (refresh never deletes). Choosing nothing shows a short hint instead of doing nothing silently.
+
 ## [0.8.13] — 2026-05-10
 
 ### Added

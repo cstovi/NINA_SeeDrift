@@ -197,7 +197,13 @@
                           ToolTip="Saved SeeDrift reports from AppData\Local\NINA\SeeDrift\Reports."/>
                 <Button Grid.Column="1" Content="Before" Command="{Binding UseSavedReportAsBeforeCommand}" Padding="10,4" MinWidth="72" Margin="0,0,6,0"/>
                 <Button Grid.Column="2" Content="After" Command="{Binding UseSavedReportAsAfterCommand}" Padding="10,4" MinWidth="72" Margin="0,0,6,0"/>
-                <Button Grid.Column="3" Content="Delete" Command="{Binding DeleteSelectedSavedReportCommand}" Padding="10,4" MinWidth="72" Margin="0,0,6,0"/>
+                <Button Grid.Column="3"
+                        Content="Delete selected"
+                        Command="{Binding DeleteSelectedSavedReportCommand}"
+                        Padding="10,4"
+                        MinWidth="102"
+                        Margin="0,0,6,0"
+                        ToolTip="Removes only the report currently highlighted in the dropdown (one .html file per confirmation). Refresh rescans the folder and never deletes files."/>
                 <Button Grid.Column="4" Content="Refresh" Command="{Binding RefreshSavedReportsCommand}" Padding="10,4" MinWidth="88"/>
             </Grid>
 

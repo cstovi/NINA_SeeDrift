@@ -360,12 +360,19 @@ namespace NINA.Plugin.SeeDrift {
         }
 
         private void DeleteSelectedSavedReport() {
-            if (SelectedSavedReport == null)
+            if (SelectedSavedReport == null) {
+                MessageBox.Show(
+                    "Choose one report in the dropdown first. Delete removes only that single file—not the whole library.",
+                    "SeeDrift — Delete report",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
                 return;
+            }
+
             var path = SelectedSavedReport.Path;
             var name = SelectedSavedReport.FileName;
             var confirm = MessageBox.Show(
-                $"Delete this report file from disk?\n\n{name}\n\nThis cannot be undone.",
+                $"Delete only this one report file from disk?\n\n{name}\n\nOther saved reports are left untouched. This cannot be undone.",
                 "SeeDrift — Delete report",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
