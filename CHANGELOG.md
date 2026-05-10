@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.9] — 2026-05-10
+
+### Changed
+
+- **Drift risk thresholds:** The advisory Low / Moderate / High card now separates a per-exposure **star-shape hint** from a short-window **walking-noise hint**. When FITS plate scale and exposure duration are available, thresholds are pixel-aware; directionally consistent drift can raise the warning level.
+
 ## [0.8.8] — 2026-05-10
 
 ### Changed

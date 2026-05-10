@@ -708,8 +708,22 @@ namespace NINA.Plugin.SeeDrift.Services {
                     $"      <p class=\"mt-1 text-sm {tone.Item3}\">{risk.NaturalDriftArcSecPerMinute:0.##}″/min natural drift{Escape(px)} · {risk.DirectionConsistency:P0} directional</p>");
                 sb.AppendLine(
                     $"      <p class=\"mt-1 text-xs text-slate-400\">Net drift without logged dither/center intervals: {risk.NetNaturalDriftArcSec:0.#}″ across {risk.IntervalCount} interval{(risk.IntervalCount == 1 ? "" : "s")}.</p>");
+                if (risk.EstimatedDriftPerExposureArcSec.HasValue) {
+                    var perSubPx = risk.EstimatedDriftPerExposurePixels.HasValue
+                        ? FormattableString.Invariant($" · ≈ {risk.EstimatedDriftPerExposurePixels.Value:0.##} px")
+                        : "";
+                    sb.AppendLine(
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Star-shape hint: estimated {risk.EstimatedDriftPerExposureArcSec.Value:0.#}″ drift during a typical exposure{Escape(perSubPx)}.</p>");
+                }
+                if (risk.WorstWindowDriftArcSec.HasValue && risk.WorstWindowFrameCount > 0) {
+                    var windowPx = risk.WorstWindowDriftPixels.HasValue
+                        ? FormattableString.Invariant($" · ≈ {risk.WorstWindowDriftPixels.Value:0.##} px")
+                        : "";
+                    sb.AppendLine(
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Walking-noise hint: worst short-window drift was {risk.WorstWindowDriftArcSec.Value:0.#}″ over {risk.WorstWindowFrameCount} frame{(risk.WorstWindowFrameCount == 1 ? "" : "s")}{Escape(windowPx)}.</p>");
+                }
             }
-            sb.AppendLine($"      <p class=\"mt-1 text-xs text-slate-500\">{Escape(detail)} “High” suggests conditions may favour walking noise; confirm with star shape and stacked results.</p>");
+            sb.AppendLine($"      <p class=\"mt-1 text-xs text-slate-500\">{Escape(detail)} Risk is advisory: it estimates possible star-shape softening during individual exposures and correlated walking-noise patterns across several frames.</p>");
             sb.AppendLine("    </div>");
             return sb.ToString();
         }

@@ -102,6 +102,20 @@ namespace NINA.Plugin.SeeDrift.Utility {
             return arcSecPerPx > 0;
         }
 
+        public static bool TryReadExposureSeconds(Dictionary<string, string> cards, out double exposureSeconds) {
+            exposureSeconds = 0;
+            foreach (var key in new[] { "EXPTIME", "EXPOSURE", "EXP_TIME", "EXPOSURETIME" }) {
+                if (!cards.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
+                    continue;
+                raw = raw.Trim().Trim('\'', '"');
+                if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) && parsed > 0) {
+                    exposureSeconds = parsed;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /// <summary>
         /// Reads Alt/Az orientation keywords needed for parallactic angle calculation.
         /// Returns false if any required keyword is missing or unparseable.

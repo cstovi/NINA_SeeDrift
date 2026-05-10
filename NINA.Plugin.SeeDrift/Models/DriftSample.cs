@@ -22,6 +22,9 @@ namespace NINA.Plugin.SeeDrift.Models {
         /// <summary>Nominal arcsec/px from FITS (<c>XPIXSZ</c> + <c>FOCALLEN</c>) when readable; used for pixel-equivalent totals in HTML.</summary>
         public double? NominalPlateScaleArcSecPerPx { get; init; }
 
+        /// <summary>Exposure duration in seconds from FITS (<c>EXPTIME</c> / related keywords) when readable.</summary>
+        public double? ExposureDurationSeconds { get; init; }
+
         public bool IsPixelPath => CumulativePixelX.HasValue && CumulativePixelY.HasValue;
 
         /// <summary>

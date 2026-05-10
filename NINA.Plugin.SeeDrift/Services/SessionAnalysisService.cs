@@ -121,7 +121,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 };
             }
 
-            var intervals = new List<(double Dx, double Dy, double Step, double Minutes)>();
+            var intervals = new List<(int EdgeIndex, double Dx, double Dy, double Step, double Minutes)>();
             for (var i = 1; i < ordered.Count; i++) {
                 var markers = ordered[i].EdgeSequencerMarkers ?? new List<SequencerEdgeMarker>();
                 if (markers.Any())
@@ -136,7 +136,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     continue;
 
                 var minutes = Math.Max(0.001, (ordered[i].ExposureStartUtc - ordered[i - 1].ExposureStartUtc).TotalMinutes);
-                intervals.Add((dx, dy, step, minutes));
+                intervals.Add((i, dx, dy, step, minutes));
             }
 
             if (intervals.Count < 2) {
@@ -156,10 +156,22 @@ namespace NINA.Plugin.SeeDrift.Services {
             var rate = duration > 0 ? path / duration : 0;
             var consistency = path > 0 ? Math.Clamp(net / path, 0.0, 1.0) : 0.0;
             double? pxRate = null;
-            if (TryMedianPlateScale(ordered, out var scale) && scale > 0)
+            var hasScale = TryMedianPlateScale(ordered, out var scale) && scale > 0;
+            if (hasScale)
                 pxRate = rate / scale;
+            var medianExposureSeconds = MedianExposureSeconds(ordered);
+            var driftPerExposure = medianExposureSeconds.HasValue
+                ? rate * (medianExposureSeconds.Value / 60.0)
+                : (double?)null;
+            var driftPerExposurePx = driftPerExposure.HasValue && hasScale
+                ? driftPerExposure.Value / scale
+                : (double?)null;
+            var (windowFrames, windowDrift) = WorstShortWindowDrift(intervals);
+            var windowPx = windowDrift.HasValue && hasScale
+                ? windowDrift.Value / scale
+                : (double?)null;
 
-            var (status, tone) = ClassifyDriftRisk(rate, consistency, pxRate);
+            var (status, tone) = ClassifyDriftRisk(driftPerExposure, driftPerExposurePx, windowDrift, windowPx, consistency);
             return new DriftRiskSummary {
                 Status = status,
                 Tone = tone,
@@ -169,21 +181,126 @@ namespace NINA.Plugin.SeeDrift.Services {
                 NaturalDriftPixelsPerMinute = pxRate,
                 NetNaturalDriftArcSec = net,
                 DirectionConsistency = consistency,
+                EstimatedDriftPerExposureArcSec = driftPerExposure,
+                EstimatedDriftPerExposurePixels = driftPerExposurePx,
+                WorstWindowDriftArcSec = windowDrift,
+                WorstWindowDriftPixels = windowPx,
+                WorstWindowFrameCount = windowFrames,
                 Detail = FormattableString.Invariant(
                     $"Advisory only: {intervals.Count} intervals without logged dither/center commands; {rate:0.##}\"/min natural drift and {consistency:P0} direction consistency.")
             };
         }
 
-        private static (string Status, string Tone) ClassifyDriftRisk(double arcSecPerMinute, double consistency, double? pixelsPerMinute) {
-            var px = pixelsPerMinute ?? double.NaN;
-            var rateLooksHigh = arcSecPerMinute >= 2.0 || (!double.IsNaN(px) && px >= 0.5);
-            var rateLooksModest = arcSecPerMinute >= 0.8 || (!double.IsNaN(px) && px >= 0.2);
+        private static (string Status, string Tone) ClassifyDriftRisk(
+                double? perExposureArcSec,
+                double? perExposurePixels,
+                double? windowArcSec,
+                double? windowPixels,
+                double consistency) {
+            var level = 0;
+            if (perExposurePixels.HasValue) {
+                if (perExposurePixels.Value >= 1.0)
+                    level = Math.Max(level, 2);
+                else if (perExposurePixels.Value >= 0.5)
+                    level = Math.Max(level, 1);
+            } else if (perExposureArcSec.HasValue) {
+                if (perExposureArcSec.Value >= 4.0)
+                    level = Math.Max(level, 2);
+                else if (perExposureArcSec.Value >= 2.0)
+                    level = Math.Max(level, 1);
+            }
 
-            if (rateLooksHigh && consistency >= 0.7)
+            if (windowPixels.HasValue) {
+                if (windowPixels.Value >= 5.0)
+                    level = Math.Max(level, 2);
+                else if (windowPixels.Value >= 1.0)
+                    level = Math.Max(level, 1);
+            } else if (windowArcSec.HasValue) {
+                if (windowArcSec.Value >= 20.0)
+                    level = Math.Max(level, 2);
+                else if (windowArcSec.Value >= 4.0)
+                    level = Math.Max(level, 1);
+            }
+
+            if (level == 1 && consistency >= 0.75)
+                level = 2;
+            else if (level == 0 && consistency >= 0.85)
+                level = 1;
+
+            if (level >= 2)
                 return ("High", "warn");
-            if (rateLooksModest || consistency >= 0.75)
+            if (level == 1)
                 return ("Moderate", "ok");
             return ("Low", "good");
+        }
+
+        private static double? MedianExposureSeconds(IReadOnlyList<DriftSample> ordered) {
+            var values = ordered
+                .Select(s => s.ExposureDurationSeconds)
+                .Where(v => v.HasValue && v.Value > 0)
+                .Select(v => v!.Value)
+                .OrderBy(v => v)
+                .ToList();
+            return values.Count == 0 ? null : values[(values.Count - 1) / 2];
+        }
+
+        private static (int FrameCount, double? DriftArcSec) WorstShortWindowDrift(
+                IReadOnlyList<(int EdgeIndex, double Dx, double Dy, double Step, double Minutes)> intervals) {
+            if (intervals.Count == 0)
+                return (0, null);
+            var preferredFrames = new[] { 5, 10, 15 };
+            var bestFrames = 0;
+            double? best = null;
+            foreach (var frames in preferredFrames) {
+                var edgeCount = frames - 1;
+                if (intervals.Count < edgeCount)
+                    continue;
+                for (var i = 0; i <= intervals.Count - edgeCount; i++) {
+                    var window = intervals.Skip(i).Take(edgeCount).ToList();
+                    if (!IsConsecutive(window))
+                        continue;
+                    var dx = window.Sum(w => w.Dx);
+                    var dy = window.Sum(w => w.Dy);
+                    var drift = Math.Sqrt(dx * dx + dy * dy);
+                    if (!best.HasValue || drift > best.Value) {
+                        best = drift;
+                        bestFrames = frames;
+                    }
+                }
+            }
+            if (best.HasValue)
+                return (bestFrames, best);
+
+            var longest = LongestConsecutiveRun(intervals);
+            if (longest.Count == 0)
+                return (0, null);
+            var ldx = longest.Sum(w => w.Dx);
+            var ldy = longest.Sum(w => w.Dy);
+            return (longest.Count + 1, Math.Sqrt(ldx * ldx + ldy * ldy));
+        }
+
+        private static bool IsConsecutive(IReadOnlyList<(int EdgeIndex, double Dx, double Dy, double Step, double Minutes)> window) {
+            for (var i = 1; i < window.Count; i++) {
+                if (window[i].EdgeIndex != window[i - 1].EdgeIndex + 1)
+                    return false;
+            }
+            return true;
+        }
+
+        private static List<(int EdgeIndex, double Dx, double Dy, double Step, double Minutes)> LongestConsecutiveRun(
+                IReadOnlyList<(int EdgeIndex, double Dx, double Dy, double Step, double Minutes)> intervals) {
+            var best = new List<(int EdgeIndex, double Dx, double Dy, double Step, double Minutes)>();
+            var cur = new List<(int EdgeIndex, double Dx, double Dy, double Step, double Minutes)>();
+            foreach (var interval in intervals) {
+                if (cur.Count == 0 || interval.EdgeIndex == cur[^1].EdgeIndex + 1) {
+                    cur.Add(interval);
+                } else {
+                    if (cur.Count > best.Count)
+                        best = cur;
+                    cur = new List<(int EdgeIndex, double Dx, double Dy, double Step, double Minutes)> { interval };
+                }
+            }
+            return cur.Count > best.Count ? cur : best;
         }
 
         private static IEnumerable<DitherEventAnalysis> BuildDitherAnalyses(IReadOnlyList<DriftSample> ordered) {
@@ -343,9 +460,15 @@ namespace NINA.Plugin.SeeDrift.Services {
             var emitted = false;
             if (analysis.DriftRisk.Tone == "warn") {
                 emitted = true;
+                var window = analysis.DriftRisk.WorstWindowDriftArcSec.HasValue && analysis.DriftRisk.WorstWindowFrameCount > 0
+                    ? FormattableString.Invariant($"; worst short-window drift {analysis.DriftRisk.WorstWindowDriftArcSec.Value:0.#}\" over {analysis.DriftRisk.WorstWindowFrameCount} frames")
+                    : "";
+                var star = analysis.DriftRisk.EstimatedDriftPerExposureArcSec.HasValue
+                    ? FormattableString.Invariant($"; estimated per-exposure drift {analysis.DriftRisk.EstimatedDriftPerExposureArcSec.Value:0.#}\"")
+                    : "";
                 yield return new SessionRecommendation {
                     Level = "warn",
-                    Text = FormattableString.Invariant($"Natural drift may be consistent enough to raise walking-noise risk ({analysis.DriftRisk.NaturalDriftArcSecPerMinute:0.##}\"/min, {analysis.DriftRisk.DirectionConsistency:P0} directional). Stronger or more varied dithers may help break the pattern.")
+                    Text = FormattableString.Invariant($"Natural drift may be consistent enough to raise walking-noise risk ({analysis.DriftRisk.NaturalDriftArcSecPerMinute:0.##}\"/min, {analysis.DriftRisk.DirectionConsistency:P0} directional{window}{star}). Stronger or more varied dithers may help break the pattern.")
                 };
             }
 

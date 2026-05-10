@@ -376,8 +376,13 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var entry = windowed[idx];
                 var label = entry.TargetLabel;
                 double? nomScale = null;
-                if (TryResolveHeaderCards(entry, out var hdrCards) && FitsCoordinates.TryReadPlateScale(hdrCards, out var sPx))
-                    nomScale = sPx;
+                double? exposureSeconds = null;
+                if (TryResolveHeaderCards(entry, out var hdrCards)) {
+                    if (FitsCoordinates.TryReadPlateScale(hdrCards, out var sPx))
+                        nomScale = sPx;
+                    if (FitsCoordinates.TryReadExposureSeconds(hdrCards, out var expSec))
+                        exposureSeconds = expSec;
+                }
                 AccumulateFromParsed(
                     sc.Value.RaHours,
                     sc.Value.DecDeg,
@@ -388,6 +393,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     null,
                     null,
                     nomScale,
+                    exposureSeconds,
                     out var sample);
                 built.Add(sample);
             }
@@ -604,6 +610,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             double? cumulativePixelX,
             double? cumulativePixelY,
             double? nominalPlateScaleArcSecPerPx,
+            double? exposureDurationSeconds,
             out DriftSample sample) {
 
             if (st.RefRaHours == null || st.RefDecDeg == null) {
@@ -628,7 +635,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 RawDecDeg = decDeg,
                 CumulativePixelX = cumulativePixelX,
                 CumulativePixelY = cumulativePixelY,
-                NominalPlateScaleArcSecPerPx = nominalPlateScaleArcSecPerPx
+                NominalPlateScaleArcSecPerPx = nominalPlateScaleArcSecPerPx,
+                ExposureDurationSeconds = exposureDurationSeconds
             };
         }
 

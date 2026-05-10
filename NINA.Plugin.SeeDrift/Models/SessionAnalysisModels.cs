@@ -58,6 +58,11 @@ namespace NINA.Plugin.SeeDrift.Models {
         public double? NaturalDriftPixelsPerMinute { get; init; }
         public double NetNaturalDriftArcSec { get; init; }
         public double DirectionConsistency { get; init; }
+        public double? EstimatedDriftPerExposureArcSec { get; init; }
+        public double? EstimatedDriftPerExposurePixels { get; init; }
+        public double? WorstWindowDriftArcSec { get; init; }
+        public double? WorstWindowDriftPixels { get; init; }
+        public int WorstWindowFrameCount { get; init; }
         public string Detail { get; init; } = "";
     }
 
