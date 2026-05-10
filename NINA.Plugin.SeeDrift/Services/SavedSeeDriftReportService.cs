@@ -26,6 +26,10 @@ namespace NINA.Plugin.SeeDrift.Services {
             "<script\\s+type=\"application/json\"\\s+id=\"seedrift-report-data\"[^>]*>(.*?)</script>",
             RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
 
+        private static readonly Regex RxSessionDateFromFileName = new(
+            "_sess(\\d{8})",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         public static IReadOnlyList<SavedSeeDriftReport> LoadReports() {
             var reports = new List<SavedSeeDriftReport>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -35,12 +39,13 @@ namespace NINA.Plugin.SeeDrift.Services {
                 foreach (var path in Directory.EnumerateFiles(folder, "*.html", SearchOption.TopDirectoryOnly)) {
                     if (!seen.Add(path))
                         continue;
-                    if (!TryReadReportInfo(path, out var kind, out var version, out var targetCount, out var frameCount))
+                    if (!TryReadReportInfo(path, out var kind, out var version, out var sessionDate, out var targetCount, out var frameCount))
                         continue;
                     reports.Add(new SavedSeeDriftReport {
                         Path = path,
                         Kind = kind,
                         Version = version,
+                        SessionDate = sessionDate,
                         TargetCount = targetCount,
                         FrameCount = frameCount,
                         LastWriteLocal = File.GetLastWriteTime(path)
@@ -54,9 +59,16 @@ namespace NINA.Plugin.SeeDrift.Services {
                 .ToList();
         }
 
-        private static bool TryReadReportInfo(string path, out string kind, out string version, out int targetCount, out int frameCount) {
+        private static bool TryReadReportInfo(
+                string path,
+                out string kind,
+                out string version,
+                out string sessionDate,
+                out int targetCount,
+                out int frameCount) {
             kind = "";
             version = "";
+            sessionDate = "";
             targetCount = 0;
             frameCount = 0;
             try {
@@ -69,7 +81,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                     : "night";
                 var versionMatch = RxVersion.Match(html);
                 version = versionMatch.Success ? versionMatch.Groups[1].Value.Trim() : "";
-                TryReadPayloadCounts(html, out targetCount, out frameCount);
+                TryReadPayloadSummary(html, out sessionDate, out targetCount, out frameCount);
+                if (string.IsNullOrWhiteSpace(sessionDate))
+                    sessionDate = TrySessionDateFromFileName(path);
                 return kind.Equals("night", StringComparison.OrdinalIgnoreCase)
                     || kind.Equals("comparison", StringComparison.OrdinalIgnoreCase);
             } catch {
@@ -77,7 +91,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
         }
 
-        private static void TryReadPayloadCounts(string html, out int targetCount, out int frameCount) {
+        private static void TryReadPayloadSummary(string html, out string sessionDate, out int targetCount, out int frameCount) {
+            sessionDate = "";
             targetCount = 0;
             frameCount = 0;
             try {
@@ -89,12 +104,23 @@ namespace NINA.Plugin.SeeDrift.Services {
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (payload?.Targets == null)
                     return;
+                sessionDate = payload.SessionDate ?? "";
                 targetCount = payload.Targets.Count;
                 frameCount = payload.Targets.Sum(t => t.FrameCount);
             } catch {
+                sessionDate = "";
                 targetCount = 0;
                 frameCount = 0;
             }
+        }
+
+        private static string TrySessionDateFromFileName(string path) {
+            var name = Path.GetFileNameWithoutExtension(path) ?? "";
+            var match = RxSessionDateFromFileName.Match(name);
+            if (!match.Success)
+                return "";
+            var raw = match.Groups[1].Value;
+            return $"{raw[..4]}-{raw.Substring(4, 2)}-{raw.Substring(6, 2)}";
         }
     }
 }

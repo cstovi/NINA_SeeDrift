@@ -6,9 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.8] — 2026-05-10
+
 ### Changed
 
 - **Dropdown labels:** Recent log and saved report pickers now use compact target/frame/image counts instead of long target-name lists.
+- **Saved report picker:** Saved reports now display the imaging session date from the embedded report payload, instead of the date/time the HTML was generated.
 
 ## [0.8.7] — 2026-05-10
 
