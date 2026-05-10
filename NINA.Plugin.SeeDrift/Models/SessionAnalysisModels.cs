@@ -49,6 +49,18 @@ namespace NINA.Plugin.SeeDrift.Models {
         public string Detail { get; init; } = "";
     }
 
+    public sealed class DriftRiskSummary {
+        public string Status { get; init; } = "";
+        public string Tone { get; init; } = "";
+        public int IntervalCount { get; init; }
+        public double DurationMinutes { get; init; }
+        public double NaturalDriftArcSecPerMinute { get; init; }
+        public double? NaturalDriftPixelsPerMinute { get; init; }
+        public double NetNaturalDriftArcSec { get; init; }
+        public double DirectionConsistency { get; init; }
+        public string Detail { get; init; } = "";
+    }
+
     public sealed class QualityTimelineSegment {
         public DateTime StartUtc { get; init; }
         public DateTime EndUtc { get; init; }
@@ -66,6 +78,7 @@ namespace NINA.Plugin.SeeDrift.Models {
         public string TargetName { get; init; } = "";
         public int FrameCount { get; init; }
         public DriftRateSummary DriftRate { get; init; } = new();
+        public DriftRiskSummary DriftRisk { get; init; } = new();
         public List<DitherEventAnalysis> Dithers { get; init; } = new();
         public List<CenterEventAnalysis> Centers { get; init; } = new();
         public List<QualityTimelineSegment> Timeline { get; init; } = new();

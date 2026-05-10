@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.7] — 2026-05-10
+
+### Added
+
+- **Drift / walking-noise risk:** Night HTML now shows an advisory color status box per target. It separates natural drift intervals from logged dither/center commands and reports **Low**, **Moderate**, or **High** using drift rate and direction consistency. The wording avoids claiming a hard “bad” threshold.
+
 ## [0.8.6] — 2026-05-10
 
 ### Changed

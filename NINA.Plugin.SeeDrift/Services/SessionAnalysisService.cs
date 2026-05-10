@@ -15,7 +15,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             var analysis = new TargetAnalysis {
                 TargetName = string.IsNullOrWhiteSpace(targetName) ? "Unknown" : targetName.Trim(),
                 FrameCount = ordered.Count,
-                DriftRate = BuildDriftRate(ordered)
+                DriftRate = BuildDriftRate(ordered),
+                DriftRisk = BuildDriftRisk(ordered)
             };
 
             analysis.Dithers.AddRange(BuildDitherAnalyses(ordered));
@@ -109,6 +110,80 @@ namespace NINA.Plugin.SeeDrift.Services {
                 Detail = FormattableString.Invariant(
                     $"{ordered.Count} frames over {minutes:0.#} min; net drift rate {totalMin:0.###}\"/min.")
             };
+        }
+
+        private static DriftRiskSummary BuildDriftRisk(IReadOnlyList<DriftSample> ordered) {
+            if (ordered.Count < 3) {
+                return new DriftRiskSummary {
+                    Status = "Not enough data",
+                    Tone = "info",
+                    Detail = "Need at least three solved frames before judging drift consistency."
+                };
+            }
+
+            var intervals = new List<(double Dx, double Dy, double Step, double Minutes)>();
+            for (var i = 1; i < ordered.Count; i++) {
+                var markers = ordered[i].EdgeSequencerMarkers ?? new List<SequencerEdgeMarker>();
+                if (markers.Any())
+                    continue;
+
+                GetAnchoredPoint(ordered, ordered[i - 1], out var x0, out var y0);
+                GetAnchoredPoint(ordered, ordered[i], out var x1, out var y1);
+                var dx = x1 - x0;
+                var dy = y1 - y0;
+                var step = Math.Sqrt(dx * dx + dy * dy);
+                if (step < 0.001)
+                    continue;
+
+                var minutes = Math.Max(0.001, (ordered[i].ExposureStartUtc - ordered[i - 1].ExposureStartUtc).TotalMinutes);
+                intervals.Add((dx, dy, step, minutes));
+            }
+
+            if (intervals.Count < 2) {
+                return new DriftRiskSummary {
+                    Status = "Not enough drift-only intervals",
+                    Tone = "info",
+                    IntervalCount = intervals.Count,
+                    Detail = "Most measured movement is attached to logged dither or center events, so SeeDrift is not separating a natural drift trend here."
+                };
+            }
+
+            var path = intervals.Sum(i => i.Step);
+            var netDx = intervals.Sum(i => i.Dx);
+            var netDy = intervals.Sum(i => i.Dy);
+            var net = Math.Sqrt(netDx * netDx + netDy * netDy);
+            var duration = intervals.Sum(i => i.Minutes);
+            var rate = duration > 0 ? path / duration : 0;
+            var consistency = path > 0 ? Math.Clamp(net / path, 0.0, 1.0) : 0.0;
+            double? pxRate = null;
+            if (TryMedianPlateScale(ordered, out var scale) && scale > 0)
+                pxRate = rate / scale;
+
+            var (status, tone) = ClassifyDriftRisk(rate, consistency, pxRate);
+            return new DriftRiskSummary {
+                Status = status,
+                Tone = tone,
+                IntervalCount = intervals.Count,
+                DurationMinutes = duration,
+                NaturalDriftArcSecPerMinute = rate,
+                NaturalDriftPixelsPerMinute = pxRate,
+                NetNaturalDriftArcSec = net,
+                DirectionConsistency = consistency,
+                Detail = FormattableString.Invariant(
+                    $"Advisory only: {intervals.Count} intervals without logged dither/center commands; {rate:0.##}\"/min natural drift and {consistency:P0} direction consistency.")
+            };
+        }
+
+        private static (string Status, string Tone) ClassifyDriftRisk(double arcSecPerMinute, double consistency, double? pixelsPerMinute) {
+            var px = pixelsPerMinute ?? double.NaN;
+            var rateLooksHigh = arcSecPerMinute >= 2.0 || (!double.IsNaN(px) && px >= 0.5);
+            var rateLooksModest = arcSecPerMinute >= 0.8 || (!double.IsNaN(px) && px >= 0.2);
+
+            if (rateLooksHigh && consistency >= 0.7)
+                return ("High", "warn");
+            if (rateLooksModest || consistency >= 0.75)
+                return ("Moderate", "ok");
+            return ("Low", "good");
         }
 
         private static IEnumerable<DitherEventAnalysis> BuildDitherAnalyses(IReadOnlyList<DriftSample> ordered) {
@@ -266,6 +341,14 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             var emitted = false;
+            if (analysis.DriftRisk.Tone == "warn") {
+                emitted = true;
+                yield return new SessionRecommendation {
+                    Level = "warn",
+                    Text = FormattableString.Invariant($"Natural drift looks consistent enough to raise walking-noise risk ({analysis.DriftRisk.NaturalDriftArcSecPerMinute:0.##}\"/min, {analysis.DriftRisk.DirectionConsistency:P0} directional). Stronger or more varied dithers may help break the pattern.")
+                };
+            }
+
             if (analysis.DriftRate.TotalArcSecPerMinute > 1.0) {
                 emitted = true;
                 yield return new SessionRecommendation {

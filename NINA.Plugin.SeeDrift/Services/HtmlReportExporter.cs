@@ -616,6 +616,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         private static string FormatAnalysisSummaryHtml(TargetAnalysis analysis) {
             var sb = new StringBuilder();
+            sb.Append(FormatDriftRiskHtml(analysis.DriftRisk));
             sb.AppendLine("    <div class=\"mt-4 grid gap-3 sm:grid-cols-3\">");
             sb.AppendLine("      <div class=\"rounded-lg border border-slate-700 bg-slate-900/40 p-3\">");
             sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-sky-400\">Drift rate</p>");
@@ -675,6 +676,41 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine("    </div>");
             }
 
+            return sb.ToString();
+        }
+
+        private static string FormatDriftRiskHtml(DriftRiskSummary risk) {
+            if (string.IsNullOrWhiteSpace(risk.Status))
+                return "";
+
+            var tone = risk.Tone == "good"
+                ? ("border-emerald-500/40", "bg-emerald-500/10", "text-emerald-200", "Low")
+                : risk.Tone == "warn"
+                    ? ("border-amber-500/50", "bg-amber-500/10", "text-amber-200", "High")
+                    : risk.Tone == "ok"
+                        ? ("border-sky-500/40", "bg-sky-500/10", "text-sky-200", "Moderate")
+                        : ("border-slate-600", "bg-slate-900/40", "text-slate-300", risk.Status);
+            var px = risk.NaturalDriftPixelsPerMinute.HasValue
+                ? FormattableString.Invariant($" · ≈ {risk.NaturalDriftPixelsPerMinute.Value:0.##} px/min")
+                : "";
+            var detail = string.IsNullOrWhiteSpace(risk.Detail)
+                ? "Advisory only. This is a walking-noise risk hint, not a hard image-quality verdict."
+                : risk.Detail;
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"    <div class=\"mt-4 rounded-lg border {tone.Item1} {tone.Item2} p-3\">");
+            sb.AppendLine("      <div class=\"flex flex-wrap items-center justify-between gap-2\">");
+            sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-slate-300\">Drift / walking-noise risk</p>");
+            sb.AppendLine($"        <span class=\"rounded-full border {tone.Item1} px-2 py-0.5 text-xs font-semibold {tone.Item3}\">{Escape(tone.Item4)}</span>");
+            sb.AppendLine("      </div>");
+            if (risk.IntervalCount > 0) {
+                sb.AppendLine(
+                    $"      <p class=\"mt-1 text-sm {tone.Item3}\">{risk.NaturalDriftArcSecPerMinute:0.##}″/min natural drift{Escape(px)} · {risk.DirectionConsistency:P0} directional</p>");
+                sb.AppendLine(
+                    $"      <p class=\"mt-1 text-xs text-slate-400\">Net drift without logged dither/center intervals: {risk.NetNaturalDriftArcSec:0.#}″ across {risk.IntervalCount} interval{(risk.IntervalCount == 1 ? "" : "s")}.</p>");
+            }
+            sb.AppendLine($"      <p class=\"mt-1 text-xs text-slate-500\">{Escape(detail)} “High” means conditions may favour walking noise; confirm with star shape and stacked results.</p>");
+            sb.AppendLine("    </div>");
             return sb.ToString();
         }
 
