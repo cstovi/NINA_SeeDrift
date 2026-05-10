@@ -98,6 +98,7 @@ namespace NINA.Plugin.SeeDrift.Models {
         public string PluginVersion { get; init; } = "";
         public string SessionDate { get; init; } = "";
         public DateTime GeneratedLocal { get; init; }
+        public SeestarDeviceInfo SeestarDevice { get; init; } = SeestarDeviceInfo.Unknown;
         public List<SeeDriftReportTargetPayload> Targets { get; init; } = new();
     }
 
@@ -128,6 +129,9 @@ namespace NINA.Plugin.SeeDrift.Models {
         public string AfterPluginVersion { get; init; } = "";
         public int BeforeSchemaVersion { get; init; }
         public int AfterSchemaVersion { get; init; }
+        public SeestarDeviceInfo BeforeSeestarDevice { get; init; } = SeestarDeviceInfo.Unknown;
+        public SeestarDeviceInfo AfterSeestarDevice { get; init; } = SeestarDeviceInfo.Unknown;
+        public string DeviceComparisonAdvisory { get; set; } = "";
         public List<ReportComparisonMetricResult> Metrics { get; init; } = new();
     }
 

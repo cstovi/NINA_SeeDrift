@@ -87,11 +87,13 @@ namespace NINA.Plugin.SeeDrift.Services {
             var min = Math.Max(1, minExposuresPerTarget);
             var sessionLogDay = SessionReportDates.ResolveSessionCalendarDay(targets);
             var sessionLogLabel = sessionLogDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var seestarDevice = ResolveReportDevice(targets);
             var sb = new StringBuilder();
             sb.AppendLine("<!DOCTYPE html>");
             sb.AppendLine("<html lang=\"en\" class=\"h-full\">");
             sb.AppendLine("<head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>");
             sb.AppendLine($"<meta name=\"seedrift-report-kind\" content=\"night\"/><meta name=\"seedrift-generator-version\" content=\"{Escape(CurrentPluginVersion())}\"/><meta name=\"seedrift-report-schema\" content=\"1\"/>");
+            sb.AppendLine($"<meta name=\"seedrift-seestar-device\" content=\"{Escape(seestarDevice.DisplayName)}\"/>");
             sb.AppendLine($"<title>SeeDrift — Session Log {sessionLogLabel}</title>");
             sb.AppendLine($"<script src=\"{CdnTailwind}\"></script>");
             sb.AppendLine($"<script src=\"{CdnHammer}\"></script>");
@@ -117,6 +119,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 $"      <p class=\"mt-2 text-sm text-slate-400\">Generated {Escape(DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))} <span class=\"text-slate-500\">(local)</span></p>");
             sb.AppendLine(
                 $"      <p class=\"mt-1 text-xs text-slate-500\">Report version v{Escape(CurrentPluginVersion())} · schema 1</p>");
+            sb.AppendLine(
+                $"      <p class=\"mt-1 text-xs text-slate-500\">Scope: <span class=\"text-slate-300\">{Escape(seestarDevice.DisplayName)}</span></p>");
             sb.Append(FormatPageHeaderLogsHtml(targets));
             sb.AppendLine(
                 "      <p class=\"mt-3 text-xs text-slate-600\">Reset drift chart zoom: <strong>double-click</strong> the chart, or press <kbd class=\"rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 font-mono text-[10px] text-slate-300\">R</kbd> or <kbd class=\"rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5 font-mono text-[10px] text-slate-300\">Esc</kbd> (when not typing in a field).</p>");
@@ -769,6 +773,20 @@ namespace NINA.Plugin.SeeDrift.Services {
                 string sessionLogLabel) {
             var payload = SessionAnalysisService.BuildReportPayload(targets, minExposuresPerTarget, sessionLogLabel);
             return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
+        }
+
+        private static SeestarDeviceInfo ResolveReportDevice(IReadOnlyList<DriftTrackingService.CompletedTarget> targets) {
+            var devices = targets
+                .Select(t => t.SeestarDevice)
+                .Where(d => d is { IsKnown: true } && !string.IsNullOrWhiteSpace(d.DisplayName))
+                .Select(d => d.DisplayName.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (devices.Count == 0)
+                return SeestarDeviceInfo.Unknown;
+            if (devices.Count > 1 || devices.Any(d => d.Equals(SeestarDeviceInfo.Mixed.DisplayName, StringComparison.OrdinalIgnoreCase)))
+                return SeestarDeviceInfo.Mixed;
+            return SeestarDeviceInfo.FromId(devices[0]);
         }
 
         private static string FormatMovementTotalsLine(IReadOnlyList<DriftSample> group) {

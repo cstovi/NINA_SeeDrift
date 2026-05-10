@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.10] — 2026-05-10
+
+### Added
+
+- **Seestar identity:** Recent-log and saved-report dropdowns now show the connected Seestar model/serial when NINA logged a line such as `Discovered Alpaca Device Seestar S30_0ac17a9b Telescope`.
+- **Scope-aware reports:** Night reports embed and display the detected Seestar identity, include it in report filenames when known, and comparison reports warn when before/after reports came from different Seestar devices.
+
 ## [0.8.9] — 2026-05-10
 
 ### Changed

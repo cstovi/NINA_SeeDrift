@@ -36,7 +36,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             var payload = new SeeDriftReportPayload {
                 PluginVersion = typeof(SessionAnalysisService).Assembly.GetName().Version?.ToString() ?? "",
                 SessionDate = sessionDateLabel,
-                GeneratedLocal = DateTime.Now
+                GeneratedLocal = DateTime.Now,
+                SeestarDevice = ResolveReportDevice(batches)
             };
 
             var min = Math.Max(1, minExposuresPerTarget);
@@ -67,6 +68,20 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             return payload;
+        }
+
+        private static SeestarDeviceInfo ResolveReportDevice(IReadOnlyList<DriftTrackingService.CompletedTarget> batches) {
+            var devices = batches
+                .Select(b => b.SeestarDevice)
+                .Where(d => d is { IsKnown: true } && !string.IsNullOrWhiteSpace(d.DisplayName))
+                .Select(d => d.DisplayName.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (devices.Count == 0)
+                return SeestarDeviceInfo.Unknown;
+            if (devices.Count > 1 || devices.Any(d => d.Equals(SeestarDeviceInfo.Mixed.DisplayName, StringComparison.OrdinalIgnoreCase)))
+                return SeestarDeviceInfo.Mixed;
+            return SeestarDeviceInfo.FromId(devices[0]);
         }
 
         private static List<(string Name, List<DriftSample> Samples)> SplitByTarget(IReadOnlyList<DriftSample> samples) {

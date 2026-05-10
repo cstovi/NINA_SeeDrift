@@ -32,6 +32,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         private static RecentNinaLogSession BuildSummary(string logPath, DateTime localStart) {
+            var device = SeestarDeviceInfoService.FromLogFiles(new[] { logPath });
             if (!NinaLogCorrelator.TryCollectSavedImagePathsFromLogs(
                     new[] { logPath },
                     null,
@@ -48,6 +49,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     LogPath = logPath,
                     LocalStart = localStart,
                     Scope = "NINA log",
+                    SeestarDevice = device,
                     ImageCount = 0,
                     TargetCount = 0,
                     Duration = TimeSpan.Zero
@@ -68,6 +70,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 LogPath = logPath,
                 LocalStart = localStart,
                 Scope = FormatScope(targets),
+                SeestarDevice = device,
                 ImageCount = entries.Count,
                 TargetCount = targets.Count,
                 Duration = duration
@@ -79,6 +82,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 LogPath = logPath,
                 LocalStart = localStart,
                 Scope = "NINA log",
+                SeestarDevice = SeestarDeviceInfoService.FromLogFiles(new[] { logPath }),
                 ImageCount = 0,
                 TargetCount = 0,
                 Duration = TimeSpan.Zero

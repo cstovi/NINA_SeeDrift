@@ -35,7 +35,9 @@ namespace NINA.Plugin.SeeDrift.Services {
             var result = Compare(beforePath, afterPath, before, after);
             var folder = SeeDriftPaths.ResolveReportFolder();
             Directory.CreateDirectory(folder);
-            outputPath = Path.Combine(folder, $"SeeDrift_v{FileVersionStamp()}_compare_{DateTime.Now:yyyyMMdd_HHmmss}.html");
+            var deviceToken = ComparisonDeviceToken(before.SeestarDevice, after.SeestarDevice);
+            var devicePart = string.IsNullOrWhiteSpace(deviceToken) ? "" : $"_{deviceToken}";
+            outputPath = Path.Combine(folder, $"SeeDrift_v{FileVersionStamp()}_compare{devicePart}_{DateTime.Now:yyyyMMdd_HHmmss}.html");
             result.OutputPath = outputPath;
             File.WriteAllText(outputPath, BuildHtml(result), Encoding.UTF8);
             return true;
@@ -90,7 +92,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 BeforePluginVersion = before.PluginVersion,
                 AfterPluginVersion = after.PluginVersion,
                 BeforeSchemaVersion = before.SchemaVersion,
-                AfterSchemaVersion = after.SchemaVersion
+                AfterSchemaVersion = after.SchemaVersion,
+                BeforeSeestarDevice = before.SeestarDevice ?? SeestarDeviceInfo.Unknown,
+                AfterSeestarDevice = after.SeestarDevice ?? SeestarDeviceInfo.Unknown,
+                DeviceComparisonAdvisory = BuildDeviceComparisonAdvisory(before.SeestarDevice, after.SeestarDevice)
             };
 
             var beforeStats = BuildStats(before);
@@ -213,6 +218,16 @@ namespace NINA.Plugin.SeeDrift.Services {
                 $"Whole-report averages: {before.TargetCount} target(s), {before.FrameCount} frame(s), {before.AssessedDitherCount} assessed dither(s), {before.CenterCount} center event(s) before; {after.TargetCount} target(s), {after.FrameCount} frame(s), {after.AssessedDitherCount} assessed dither(s), {after.CenterCount} center event(s) after. Suspect dither intervals excluded: {before.SuspectDitherCount} before, {after.SuspectDitherCount} after.");
         }
 
+        private static string BuildDeviceComparisonAdvisory(SeestarDeviceInfo? before, SeestarDeviceInfo? after) {
+            before ??= SeestarDeviceInfo.Unknown;
+            after ??= SeestarDeviceInfo.Unknown;
+            if (before.IsKnown && after.IsKnown
+                && !string.Equals(before.DisplayName, after.DisplayName, StringComparison.OrdinalIgnoreCase)) {
+                return "Different Seestar devices detected; compare arcsecond and pixel-scale-sensitive metrics cautiously.";
+            }
+            return "";
+        }
+
         private static string BuildOverallSummary(IReadOnlyList<ReportComparisonMetricResult> metrics) {
             var better = metrics.Count(m => m.Direction == "better");
             var worse = metrics.Count(m => m.Direction == "worse");
@@ -242,6 +257,10 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine($"<p class=\"mt-2 break-all text-xs text-slate-400\">Before: {Escape(result.BeforePath)}</p>");
             sb.AppendLine($"<p class=\"mt-1 break-all text-xs text-slate-400\">After: {Escape(result.AfterPath)}</p>");
             sb.AppendLine($"<p class=\"mt-2 text-xs text-slate-500\">Report versions: before v{Escape(result.BeforePluginVersion)} / schema {result.BeforeSchemaVersion}; after v{Escape(result.AfterPluginVersion)} / schema {result.AfterSchemaVersion}. Compatible schemas can compare across plugin versions.</p>");
+            sb.AppendLine($"<p class=\"mt-1 text-xs text-slate-500\">Scopes: before <span class=\"text-slate-300\">{Escape(DeviceDisplay(result.BeforeSeestarDevice))}</span>; after <span class=\"text-slate-300\">{Escape(DeviceDisplay(result.AfterSeestarDevice))}</span>.</p>");
+            if (!string.IsNullOrWhiteSpace(result.DeviceComparisonAdvisory)) {
+                sb.AppendLine($"<div class=\"mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100\">{Escape(result.DeviceComparisonAdvisory)}</div>");
+            }
             sb.AppendLine($"<div class=\"mt-5 rounded-lg border border-sky-900/50 bg-sky-950/30 p-4\"><p class=\"font-semibold text-sky-100\">{Escape(result.OverallSummary)}</p><p class=\"mt-2 text-xs text-slate-400\">{Escape(result.ScopeSummary)}</p></div>");
             sb.AppendLine("<div class=\"mt-6 overflow-x-auto rounded-lg border border-slate-700\"><table class=\"min-w-full divide-y divide-slate-700 text-left text-sm\">");
             sb.AppendLine("<thead class=\"bg-slate-900 text-sky-300\"><tr><th class=\"px-3 py-2\">Metric</th><th class=\"px-3 py-2\">Before</th><th class=\"px-3 py-2\">After</th><th class=\"px-3 py-2\">Read</th></tr></thead>");
@@ -270,6 +289,20 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         private static string FileVersionStamp() =>
             CurrentPluginVersion().Replace('.', '_');
+
+        private static string DeviceDisplay(SeestarDeviceInfo? device) =>
+            string.IsNullOrWhiteSpace(device?.DisplayName) ? "Unknown scope" : device.DisplayName.Trim();
+
+        private static string ComparisonDeviceToken(SeestarDeviceInfo? before, SeestarDeviceInfo? after) {
+            before ??= SeestarDeviceInfo.Unknown;
+            after ??= SeestarDeviceInfo.Unknown;
+            if (!before.IsKnown && !after.IsKnown)
+                return "";
+            if (before.IsKnown && after.IsKnown
+                && string.Equals(before.FileNameToken, after.FileNameToken, StringComparison.OrdinalIgnoreCase))
+                return before.FileNameToken;
+            return "mixed_scopes";
+        }
 
         private static string Escape(string s) =>
             s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");

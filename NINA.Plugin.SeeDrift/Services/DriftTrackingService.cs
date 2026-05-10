@@ -33,6 +33,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             /// </summary>
             public IReadOnlyList<string> SourceLogPaths { get; init; } = Array.Empty<string>();
 
+            public SeestarDeviceInfo SeestarDevice { get; init; } = SeestarDeviceInfo.Unknown;
+
             /// <summary>
             /// When plate solving was skipped because FITS OBJECT counts could not reach minimum exposures, the largest
             /// LIGHT frame count seen on any single target (from headers before solve).
@@ -275,6 +277,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                         Name = "",
                         Samples = Array.Empty<DriftSample>(),
                         SourceLogPaths = sourceLogsForBatch,
+                        SeestarDevice = SeestarDeviceInfoService.FromLogFiles(sourceLogsForBatch),
                         PresolveMaxLightsPerBestTarget = maxLightsAnyTarget,
                         RunDuration = runStopwatch.Elapsed
                     });
@@ -436,6 +439,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     Name = targetName,
                     Samples = built,
                     SourceLogPaths = sourceLogsForBatch,
+                    SeestarDevice = SeestarDeviceInfoService.FromLogFiles(sourceLogsForBatch),
                     RunDuration = runStopwatch.Elapsed
                 });
                 if (!TryWriteNightReport(out nightSavedPath, out nightSaveError)) {
@@ -523,7 +527,9 @@ namespace NINA.Plugin.SeeDrift.Services {
         private static string FormatNightReportHtmlFileName(IReadOnlyList<CompletedTarget> targets) {
             var ran = DateTime.Now.ToString("yyyyMMdd");
             var sess = ResolveSessionDateStamp(targets);
-            return $"SeeDrift_v{FileVersionStamp()}_ran{ran}_sess{sess}.html";
+            var device = ResolveDeviceFileNameToken(targets);
+            var devicePart = string.IsNullOrWhiteSpace(device) ? "" : $"_{device}";
+            return $"SeeDrift_v{FileVersionStamp()}{devicePart}_ran{ran}_sess{sess}.html";
         }
 
         private static string FileVersionStamp() {
@@ -534,6 +540,20 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <summary>Local <c>YYYYMMDD</c> for the imaging session (same rule as HTML header — log filename date first).</summary>
         private static string ResolveSessionDateStamp(IReadOnlyList<CompletedTarget> targets) =>
             SessionReportDates.ResolveSessionCalendarDay(targets).ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+
+        private static string ResolveDeviceFileNameToken(IReadOnlyList<CompletedTarget> targets) {
+            var devices = targets
+                .Select(t => t.SeestarDevice)
+                .Where(d => d is { IsKnown: true } && !string.IsNullOrWhiteSpace(d.FileNameToken))
+                .Select(d => d.FileNameToken.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (devices.Count == 0)
+                return "";
+            if (devices.Count > 1 || devices.Any(d => d.Equals(SeestarDeviceInfo.Mixed.FileNameToken, StringComparison.OrdinalIgnoreCase)))
+                return SeestarDeviceInfo.Mixed.FileNameToken;
+            return devices[0];
+        }
 
         /// <summary>Largest number of plate-solved samples on a single FITS OBJECT in this run.</summary>
         private static int MaxSolvedSamplesPerBestTarget(IReadOnlyList<DriftSample> built) {
