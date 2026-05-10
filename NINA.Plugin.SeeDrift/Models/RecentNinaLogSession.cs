@@ -13,8 +13,7 @@ namespace NINA.Plugin.SeeDrift.Models {
         public string DisplayLabel {
             get {
                 var duration = FormatDuration(Duration);
-                var scope = string.IsNullOrWhiteSpace(Scope) ? "NINA log" : Scope.Trim();
-                return $"{LocalStart:yyyy-MM-dd HH:mm} — {scope} — {TargetCount} target{(TargetCount == 1 ? "" : "s")}, {ImageCount} image{(ImageCount == 1 ? "" : "s")}, {duration}";
+                return $"{LocalStart:yyyy-MM-dd HH:mm} — {TargetCount} target{(TargetCount == 1 ? "" : "s")}, {ImageCount} image{(ImageCount == 1 ? "" : "s")}, {duration}";
             }
         }
 

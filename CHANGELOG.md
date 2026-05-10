@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Dropdown labels:** Recent log and saved report pickers now use compact target/frame/image counts instead of long target-name lists.
+
 ## [0.8.7] — 2026-05-10
 
 ### Added
