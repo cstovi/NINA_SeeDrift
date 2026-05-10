@@ -254,7 +254,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 level = 1;
 
             if (level >= 2)
-                return ("High", "warn");
+                return ("Investigate", "warn");
             if (level == 1)
                 return ("Moderate", "ok");
             return ("Low", "good");

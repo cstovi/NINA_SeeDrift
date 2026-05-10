@@ -690,7 +690,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var tone = risk.Tone == "good"
                 ? ("border-emerald-500/40", "bg-emerald-500/10", "text-emerald-200", "Low")
                 : risk.Tone == "warn"
-                    ? ("border-amber-500/50", "bg-amber-500/10", "text-amber-200", "High")
+                    ? ("border-amber-500/50", "bg-amber-500/10", "text-amber-200", risk.Status)
                     : risk.Tone == "ok"
                         ? ("border-sky-500/40", "bg-sky-500/10", "text-sky-200", "Moderate")
                         : ("border-slate-600", "bg-slate-900/40", "text-slate-300", risk.Status);

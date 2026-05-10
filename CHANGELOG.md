@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.19] — 2026-05-10
+
+### Changed
+
+- **Drift / walking-noise risk:** The strongest advisory tier label is now **Investigate** instead of **High**, to reflect that the metric is heuristic and depends on many imaging variables.
+
 ## [0.8.18] — 2026-05-10
 
 ### Changed
