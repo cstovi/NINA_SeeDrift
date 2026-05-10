@@ -496,7 +496,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (lines.Count == 0)
                 return "";
 
-            const string intro = "Exposures with logged dithers between them.<br/>";
+            const string intro = "<br />Exposures with logged dithers between them.<br/>";
             var totalArc = FormattableString.Invariant(
                 $"Total — Σ|ΔRA| {sumAbsRa:0.###}″ · Σ|ΔDec| {sumAbsDec:0.###}″");
             if (anyPxSegment)
