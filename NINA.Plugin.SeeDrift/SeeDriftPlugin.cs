@@ -59,6 +59,7 @@ namespace NINA.Plugin.SeeDrift {
         public ICommand RunCompareReportsCommand { get; }
         public ICommand OpenCompareReportCommand { get; }
         public ICommand RefreshSavedReportsCommand { get; }
+        public ICommand DeleteSelectedSavedReportCommand { get; }
         public ICommand UseSavedReportAsBeforeCommand { get; }
         public ICommand UseSavedReportAsAfterCommand { get; }
 
@@ -95,6 +96,7 @@ namespace NINA.Plugin.SeeDrift {
             RunCompareReportsCommand = new RelayCommand(_ => RunCompareReports());
             OpenCompareReportCommand = new RelayCommand(_ => OpenCompareReport());
             RefreshSavedReportsCommand = new RelayCommand(_ => RefreshSavedReports());
+            DeleteSelectedSavedReportCommand = new RelayCommand(_ => DeleteSelectedSavedReport());
             UseSavedReportAsBeforeCommand = new RelayCommand(_ => UseSelectedSavedReport(before: true));
             UseSavedReportAsAfterCommand = new RelayCommand(_ => UseSelectedSavedReport(before: false));
 
@@ -355,6 +357,38 @@ namespace NINA.Plugin.SeeDrift {
                 CompareBeforeReportPath = SelectedSavedReport.Path;
             else
                 CompareAfterReportPath = SelectedSavedReport.Path;
+        }
+
+        private void DeleteSelectedSavedReport() {
+            if (SelectedSavedReport == null)
+                return;
+            var path = SelectedSavedReport.Path;
+            var name = SelectedSavedReport.FileName;
+            var confirm = MessageBox.Show(
+                $"Delete this report file from disk?\n\n{name}\n\nThis cannot be undone.",
+                "SeeDrift — Delete report",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+            if (confirm != MessageBoxResult.Yes)
+                return;
+            if (!SavedSeeDriftReportService.TryDeleteFromLibrary(path, out var error)) {
+                MessageBox.Show(
+                    error,
+                    "SeeDrift — Delete report",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            if (string.Equals(path, CompareBeforeReportPath, StringComparison.OrdinalIgnoreCase))
+                CompareBeforeReportPath = "";
+            if (string.Equals(path, CompareAfterReportPath, StringComparison.OrdinalIgnoreCase))
+                CompareAfterReportPath = "";
+            if (string.Equals(path, _nightReportLinkPath?.Trim(), StringComparison.OrdinalIgnoreCase))
+                ClearNightReportLink();
+
+            RefreshSavedReports();
         }
 
         internal void ClearNightReportLink() {

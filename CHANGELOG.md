@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.13] — 2026-05-10
+
+### Added
+
+- **Report library:** **Delete** removes the selected saved HTML report from **`%LocalAppData%\NINA\SeeDrift\Reports`** after confirmation (only files in that folder). Compare **Before** / **After** paths and the last **Open** night-report link are cleared if they pointed at the deleted file.
+
 ## [0.8.12] — 2026-05-10
 
 ### Fixed

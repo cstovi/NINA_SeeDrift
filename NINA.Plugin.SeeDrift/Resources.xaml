@@ -197,7 +197,8 @@
                           ToolTip="Saved SeeDrift reports from AppData\Local\NINA\SeeDrift\Reports."/>
                 <Button Grid.Column="1" Content="Before" Command="{Binding UseSavedReportAsBeforeCommand}" Padding="10,4" MinWidth="72" Margin="0,0,6,0"/>
                 <Button Grid.Column="2" Content="After" Command="{Binding UseSavedReportAsAfterCommand}" Padding="10,4" MinWidth="72" Margin="0,0,6,0"/>
-                <Button Grid.Column="3" Content="Refresh" Command="{Binding RefreshSavedReportsCommand}" Padding="10,4" MinWidth="88"/>
+                <Button Grid.Column="3" Content="Delete" Command="{Binding DeleteSelectedSavedReportCommand}" Padding="10,4" MinWidth="72" Margin="0,0,6,0"/>
+                <Button Grid.Column="4" Content="Refresh" Command="{Binding RefreshSavedReportsCommand}" Padding="10,4" MinWidth="88"/>
             </Grid>
 
             <TextBlock Text="Or browse/paste report paths manually:"

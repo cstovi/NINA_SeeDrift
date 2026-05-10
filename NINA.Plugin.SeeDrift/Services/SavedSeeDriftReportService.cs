@@ -30,6 +30,44 @@ namespace NINA.Plugin.SeeDrift.Services {
             "_sess(\\d{8})",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary>
+        /// Deletes a report file under <see cref="SeeDriftPaths.ReportLibrary"/> only (prefix + .html check).
+        /// </summary>
+        public static bool TryDeleteFromLibrary(string absolutePath, out string error) {
+            error = "";
+            try {
+                if (string.IsNullOrWhiteSpace(absolutePath)) {
+                    error = "No file path.";
+                    return false;
+                }
+
+                var libraryRoot = Path.GetFullPath(SeeDriftPaths.ReportLibrary);
+                var full = Path.GetFullPath(absolutePath.Trim());
+                var sep = Path.DirectorySeparatorChar;
+                var prefix = libraryRoot.TrimEnd(sep, Path.AltDirectorySeparatorChar) + sep;
+                if (!full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) {
+                    error = "Only files inside the SeeDrift report library folder can be deleted here.";
+                    return false;
+                }
+
+                if (!full.EndsWith(".html", StringComparison.OrdinalIgnoreCase)) {
+                    error = "Only .html report files can be deleted.";
+                    return false;
+                }
+
+                if (!File.Exists(full)) {
+                    error = "That file no longer exists.";
+                    return false;
+                }
+
+                File.Delete(full);
+                return true;
+            } catch (Exception ex) {
+                error = ex.Message;
+                return false;
+            }
+        }
+
         public static IReadOnlyList<SavedSeeDriftReport> LoadReports() {
             var reports = new List<SavedSeeDriftReport>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
