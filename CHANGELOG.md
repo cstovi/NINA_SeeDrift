@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.12] — 2026-05-10
+
+### Fixed
+
+- **Seestar identity:** Scope detection now recognizes **`Successfully connected Camera`** log lines that include **`Seestar … Telephoto Camera`** (Alpaca telephoto camera path), so reports are no longer labeled **Unknown scope** when NINA never logged the Alpaca telescope discovery line.
+
 ## [0.8.11] — 2026-05-10
 
 ### Changed
