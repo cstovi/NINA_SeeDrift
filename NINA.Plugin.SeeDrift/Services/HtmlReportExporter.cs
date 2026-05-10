@@ -178,13 +178,13 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"    <div class=\"seedrift-chart-box mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-2\">");
                     sb.AppendLine($"      <canvas id=\"{canvasId}\"></canvas>");
                     sb.AppendLine("    </div>");
+                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center — placed along the segment between frames. Hover path for file name; hover △/□ for log detail.</p>");
                     sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{Escape(FormatMovementTotalsLine(grp))}</p>");
                     var ditherSegHtml = FormatDitherIntervalMovementHtml(grp);
                     if (!string.IsNullOrEmpty(ditherSegHtml))
                         sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{ditherSegHtml}</p>");
                     sb.Append(FormatAnalysisSummaryHtml(analysis));
                     sb.Append(FormatTimelineHtml(analysis));
-                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center — placed along the segment between frames. Hover path for file name; hover △/□ for log detail.</p>");
 
                     var ptsJson = FormatScatterPointsJsonAnchored(grp);
                     var edgeJson = FormatEdgeMidpointMarkersJson(grp);
