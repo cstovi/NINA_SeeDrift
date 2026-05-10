@@ -301,7 +301,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     $"(best target: {maxLightsAnyTarget}); plate solving was skipped. " +
                     "Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
                     $"{presolveNightPath}";
-                _plugin.NotifyNightReportSaved(presolveNightPath!, completeDetail, postDiscordAfterSave);
+                _plugin.NotifyNightReportSaved(presolveNightPath!, completeDetail, postDiscordAfterSave, sourceLogsForBatch);
                 Report(completeDetail, 100, 100);
                 SeeDriftLog.Info($"SeeDrift: run finished without plate solve in {dur} — HTML → {presolveNightPath}");
                 return true;
@@ -463,12 +463,12 @@ namespace NINA.Plugin.SeeDrift.Services {
                     $"Complete — night report saved in {elapsedReadable}. No target in this run had at least {minExpTarget} solved exposure(s) for any FITS target " +
                     $"(best target: {maxSolvedPerTarget}). Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
                     $"{nightSavedPath}";
-                _plugin.NotifyNightReportSaved(nightSavedPath!, msgSkip, postDiscordAfterSave);
+                _plugin.NotifyNightReportSaved(nightSavedPath!, msgSkip, postDiscordAfterSave, sourceLogsForBatch);
                 Report(msgSkip, 100, 100);
             } else {
                 var msgOk =
                     $"Complete — night report saved ({built.Count} frames, {elapsedReadable}): {nightSavedPath}";
-                _plugin.NotifyNightReportSaved(nightSavedPath!, msgOk, postDiscordAfterSave);
+                _plugin.NotifyNightReportSaved(nightSavedPath!, msgOk, postDiscordAfterSave, sourceLogsForBatch);
                 Report(msgOk, 100, 100);
             }
 

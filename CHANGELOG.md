@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.16] — 2026-05-10
+
+### Fixed
+
+- **Previous session panel:** Completion status, progress, and **Open** now apply only when the log path matches that run — either the report on disk for the selection or the last save whose contributing NINA log(s) include the selected file. Switching the dropdown no longer leaves another session’s “Complete — …” line or **Open** link attached to a different night HTML (e.g. Stop vs previous-session mix-ups).
+
+### Changed
+
+- **Recent logs dropdown:** Tooltip clarifies **Unknown scope** (no matching Seestar discovery / telephoto camera lines in that `.log` scan).
+
 ## [0.8.15] — 2026-05-10
 
 ### Added

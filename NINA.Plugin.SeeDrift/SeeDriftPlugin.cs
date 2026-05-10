@@ -116,6 +116,18 @@ namespace NINA.Plugin.SeeDrift {
                 RaisePropertyChanged(nameof(SelectedRecentLogSession));
                 SyncSettingsFromProperties();
                 ScheduleRefreshResolvedReportForSelectedLog();
+                var newNorm = NormalizeLogPath(value);
+                var matchesCompletion = newNorm != null
+                    && (_nightReportCompletionSourceLogsNormalized?.Contains(newNorm) ?? false);
+                if (!matchesCompletion && !_testReportBusy) {
+                    _testReportProgressValue = 0;
+                    _testReportProgressMaximum = 1;
+                    RaisePropertyChanged(nameof(TestReportProgressValue));
+                    RaisePropertyChanged(nameof(TestReportProgressMaximum));
+                }
+
+                RaisePropertyChanged(nameof(TestReportStatusDisplayText));
+                RaisePropertyChanged(nameof(TestReportChromeVisibility));
             }
         }
 
@@ -262,6 +274,10 @@ namespace NINA.Plugin.SeeDrift {
         private bool _testReportBusy;
         private string _testReportStatusText = "";
         private string? _nightReportLinkPath;
+
+        /// <summary>NINA log paths that contributed to the last saved night report / completion line (normalized). Scoped to current selection.</summary>
+        private HashSet<string>? _nightReportCompletionSourceLogsNormalized;
+
         private string? _resolvedNightReportPath;
         private string _resolvedNightReportSummary = "";
         private string _selectedLogNoReportHint = "";
@@ -284,27 +300,82 @@ namespace NINA.Plugin.SeeDrift {
 
         public bool TestReportIndeterminate => _testReportIndeterminate;
 
-        /// <summary>Shows the progress row while a previous session report runs, and keeps it visible after completion until the next run.</summary>
+        /// <summary>Shows the progress row while a previous session report runs, or content scoped to the **currently selected** log.</summary>
         public Visibility TestReportChromeVisibility =>
-            _testReportBusy
-            || !string.IsNullOrWhiteSpace(_testReportStatusText)
-            || !string.IsNullOrWhiteSpace(_nightReportLinkPath)
-            || !string.IsNullOrWhiteSpace(_resolvedNightReportPath)
-            || (_resolvedLookupDone
+            ShouldShowPreviousSessionReportPanel() ? Visibility.Visible : Visibility.Collapsed;
+
+        private bool ShouldShowPreviousSessionReportPanel() {
+            if (_testReportBusy)
+                return true;
+            if (!string.IsNullOrWhiteSpace(_testReportStatusText) && CurrentLogMatchesLastNightReportCompletion())
+                return true;
+            if (!string.IsNullOrWhiteSpace(_resolvedNightReportPath))
+                return true;
+            return _resolvedLookupDone
                 && !string.IsNullOrWhiteSpace(TestReportLogFilePath)
-                && !string.IsNullOrWhiteSpace(_selectedLogNoReportHint))
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+                && !string.IsNullOrWhiteSpace(_selectedLogNoReportHint);
+        }
 
-        /// <summary>Prefer on-disk report matched to the selected log; else the path from the last completed run (for status trimming).</summary>
-        private string? EffectiveNightReportOpenPath =>
-            !string.IsNullOrWhiteSpace(_resolvedNightReportPath)
-                ? _resolvedNightReportPath.Trim()
-                : string.IsNullOrWhiteSpace(_nightReportLinkPath) ? null : _nightReportLinkPath.Trim();
+        /// <summary>
+        /// Prefer on-disk report for the selected log; otherwise the last completed run file only if that run used this same log path.
+        /// </summary>
+        private string? EffectiveNightReportOpenPath {
+            get {
+                if (!string.IsNullOrWhiteSpace(_resolvedNightReportPath))
+                    return _resolvedNightReportPath.Trim();
+                if (string.IsNullOrWhiteSpace(_nightReportLinkPath))
+                    return null;
+                if (!CurrentLogMatchesLastNightReportCompletion())
+                    return null;
+                return _nightReportLinkPath.Trim();
+            }
+        }
 
-        /// <summary>Status line with file path stripped when <see cref="NightReportLinkChromeVisibility"/> shows the open link (options UI only).</summary>
-        public string TestReportStatusDisplayText =>
-            FormatStatusForPanel(_testReportStatusText, EffectiveNightReportOpenPath ?? _nightReportLinkPath);
+        /// <summary>Status line scoped to the selected log — completion text only when it refers to the log path in the path box.</summary>
+        public string TestReportStatusDisplayText => FormatPreviousSessionStatusDisplayText();
+
+        private string FormatPreviousSessionStatusDisplayText() {
+            var trimPath = EffectiveNightReportOpenPath ?? _nightReportLinkPath;
+            if (_testReportBusy)
+                return FormatStatusForPanel(_testReportStatusText, trimPath);
+            if (string.IsNullOrWhiteSpace(_testReportStatusText))
+                return "";
+            if (!CurrentLogMatchesLastNightReportCompletion())
+                return "";
+            return FormatStatusForPanel(_testReportStatusText, trimPath);
+        }
+
+        /// <summary>True when the path box matches a log that contributed to the last SeeDrift night HTML save this session.</summary>
+        private bool CurrentLogMatchesLastNightReportCompletion() {
+            var cur = NormalizeLogPath(TestReportLogFilePath);
+            if (string.IsNullOrEmpty(cur) || _nightReportCompletionSourceLogsNormalized == null
+                || _nightReportCompletionSourceLogsNormalized.Count == 0)
+                return false;
+            return _nightReportCompletionSourceLogsNormalized.Contains(cur);
+        }
+
+        private static string? NormalizeLogPath(string? p) {
+            if (string.IsNullOrWhiteSpace(p))
+                return null;
+            try {
+                return Path.GetFullPath(p.Trim());
+            } catch {
+                return p.Trim();
+            }
+        }
+
+        private static HashSet<string>? NormalizeLogPathSet(IReadOnlyList<string>? paths) {
+            if (paths == null || paths.Count == 0)
+                return null;
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in paths) {
+                var n = NormalizeLogPath(p);
+                if (!string.IsNullOrEmpty(n))
+                    set.Add(n);
+            }
+
+            return set.Count > 0 ? set : null;
+        }
 
         /// <summary>Visible when the selected log has a resolvable night HTML on disk or the last run left an open path.</summary>
         public Visibility NightReportLinkChromeVisibility =>
@@ -507,8 +578,8 @@ namespace NINA.Plugin.SeeDrift {
 
         internal void ClearNightReportLink() {
             void Apply() {
-                if (_nightReportLinkPath == null) return;
                 _nightReportLinkPath = null;
+                _nightReportCompletionSourceLogsNormalized = null;
                 RaisePropertyChanged(nameof(NightReportLinkChromeVisibility));
                 RaisePropertyChanged(nameof(NightReportLinkFileName));
                 RaisePropertyChanged(nameof(NightReportLinkPathHint));
@@ -526,10 +597,15 @@ namespace NINA.Plugin.SeeDrift {
                 app.Dispatcher.Invoke(Apply);
         }
 
-        internal void NotifyNightReportSaved(string absolutePath, string completeStatusLine, bool postDiscordIfConfigured) {
+        internal void NotifyNightReportSaved(
+                string absolutePath,
+                string completeStatusLine,
+                bool postDiscordIfConfigured,
+                IReadOnlyList<string>? completionSourceLogPaths = null) {
             void Apply() {
                 _nightReportLinkPath = absolutePath;
                 _testReportStatusText = completeStatusLine;
+                _nightReportCompletionSourceLogsNormalized = NormalizeLogPathSet(completionSourceLogPaths);
                 RaisePropertyChanged(nameof(NightReportLinkChromeVisibility));
                 RaisePropertyChanged(nameof(NightReportLinkFileName));
                 RaisePropertyChanged(nameof(NightReportLinkPathHint));
