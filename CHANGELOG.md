@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.17] — 2026-05-10
+
+### Fixed
+
+- **Seestar identity:** Scope detection now recognizes ASCOM **`Disconnecting from … Seestar … Telephoto Camera`** lines when connect/discovery was absent (e.g. hardware already connected when the session started).
+
 ## [0.8.16] — 2026-05-10
 
 ### Fixed

@@ -103,7 +103,7 @@
                           VerticalAlignment="Center"
                           Margin="0,0,8,0"
                           MinWidth="320"
-                          ToolTip="Recent NINA logs from the last 14 days. Selecting one fills the log path below. Unknown scope means SeeDrift did not find a Seestar Alpaca discovery or Telephoto Camera connect line in that log file — it does not affect solving."/>
+                          ToolTip="Recent NINA logs from the last 14 days. Selecting one fills the log path below. Unknown scope means SeeDrift did not find Alpaca telescope discovery, Telephoto Camera connect, or Telephoto disconnect (Disconnecting from … Seestar … Telephoto Camera) in that log — it does not affect solving."/>
                 <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshRecentLogSessionsCommand}" Padding="10,4" MinWidth="88"/>
             </Grid>
 

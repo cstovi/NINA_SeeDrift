@@ -17,6 +17,13 @@ namespace NINA.Plugin.SeeDrift.Services {
             @"Successfully\s+connected\s+Camera\.[^\n]*?\bSeestar\s+([A-Za-z0-9]+_[A-Za-z0-9]+)\s+Telephoto\s+Camera\b",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary>
+        /// ASCOM disconnect (AscomDevice); session may lack connect lines if already connected at startup.
+        /// </summary>
+        private static readonly Regex RxSeestarTelephotoCameraDisconnect = new(
+            @"Disconnecting\s+from[^\n]*?\bSeestar\s+([A-Za-z0-9]+_[A-Za-z0-9]+)\s+Telephoto\s+Camera\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         public static SeestarDeviceInfo FromLogFiles(IEnumerable<string>? logPaths) {
             var devices = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
             if (logPaths != null) {
@@ -32,6 +39,12 @@ namespace NINA.Plugin.SeeDrift.Services {
                             }
 
                             match = RxSeestarTelephotoCameraConnect.Match(line);
+                            if (match.Success) {
+                                devices.Add(match.Groups[1].Value.Trim());
+                                continue;
+                            }
+
+                            match = RxSeestarTelephotoCameraDisconnect.Match(line);
                             if (match.Success)
                                 devices.Add(match.Groups[1].Value.Trim());
                         }
