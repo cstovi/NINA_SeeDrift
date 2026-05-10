@@ -278,7 +278,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     "Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
                     $"{presolveNightPath}";
                 _plugin.NotifyNightReportSaved(presolveNightPath!, completeDetail, postDiscordAfterSave);
-                Report(completeDetail, 1, 1);
+                Report(completeDetail, 100, 100);
                 SeeDriftLog.Info($"SeeDrift: run finished without plate solve in {dur} — HTML → {presolveNightPath}");
                 return true;
             }
@@ -289,7 +289,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 Source = "SeeDrift",
                 Status = $"Plate solving {windowed.Count} lights…",
                 Progress = 0,
-                MaxProgress = windowed.Count
+                MaxProgress = 100
             });
 
             var parallelismCfg = Math.Clamp(
@@ -331,11 +331,12 @@ namespace NINA.Plugin.SeeDrift.Services {
                         }
 
                         var done = Interlocked.Increment(ref completed);
+                        var pct = (int)Math.Clamp((100 * done + windowed.Count / 2) / windowed.Count, 0, 100);
                         progress?.Report(new ApplicationStatus {
                             Source = "SeeDrift",
                             Status = $"Solving {done}/{windowed.Count} — {Path.GetFileName(entry.Path)}",
-                            Progress = done,
-                            MaxProgress = windowed.Count
+                            Progress = pct,
+                            MaxProgress = 100
                         });
                     }).ConfigureAwait(false);
             } finally {
@@ -383,8 +384,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                     $"SeeDrift: skipping NINA log correlation — no target has ≥{minExpTarget} solved frames (best target={maxSolvedPerTarget}).");
                 Report(
                     $"Skipping sequencer log correlation — best target has only {maxSolvedPerTarget} solved frame(s) (need ≥{minExpTarget}). Writing HTML…",
-                    built.Count,
-                    Math.Max(built.Count, 1));
+                    100,
+                    100);
                 JumpDetector.AnnotateJumps(built);
                 JumpCount = JumpDetector.CountJumps(built);
                 LogCorrelatedCount = 0;
@@ -394,7 +395,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 LogTraceDitherTriggerCount = 0;
                 LogTraceCenterTriggerCount = 0;
             } else {
-                Report("Correlating sequencer lines and writing HTML…", built.Count, Math.Max(built.Count, 1));
+                Report("Correlating sequencer lines and writing HTML…", 100, 100);
                 ApplyJumpAndLogAnnotation(built, logFilesToRead);
             }
 
@@ -420,9 +421,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (nightSaveError != null) {
                 Report(
                     $"Stopped — could not save night HTML: {nightSaveError}. " +
-                    "Check Plugins → SeeDrift → Night report folder (empty = Documents\\SeeDrift). See %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log.",
-                    built.Count,
-                    built.Count);
+                    "Check Plugins → SeeDrift → Night report folder (empty = Documents\\SeeDrift). See %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log.");
                 SeeDriftLog.Error($"SeeDrift: night HTML save failed after successful solve — {nightSaveError}");
                 return false;
             }
@@ -434,12 +433,12 @@ namespace NINA.Plugin.SeeDrift.Services {
                     $"(best target: {maxSolvedPerTarget}). Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
                     $"{nightSavedPath}";
                 _plugin.NotifyNightReportSaved(nightSavedPath!, msgSkip, postDiscordAfterSave);
-                Report(msgSkip, built.Count, built.Count);
+                Report(msgSkip, 100, 100);
             } else {
                 var msgOk =
                     $"Complete — night report saved ({built.Count} frames, {elapsedReadable}): {nightSavedPath}";
                 _plugin.NotifyNightReportSaved(nightSavedPath!, msgOk, postDiscordAfterSave);
-                Report(msgOk, built.Count, built.Count);
+                Report(msgOk, 100, 100);
             }
 
             SeeDriftLog.Info($"SeeDrift: batch complete — {built.Count} solved frames in {elapsedReadable} → {nightSavedPath}");
