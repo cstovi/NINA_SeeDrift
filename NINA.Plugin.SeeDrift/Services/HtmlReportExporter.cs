@@ -591,11 +591,18 @@ namespace NINA.Plugin.SeeDrift.Services {
                     $"        <span class=\"{cls}\" style=\"width:{pct.ToString("0.###", CultureInfo.InvariantCulture)}%\" title=\"{Escape(seg.Label)}: {Escape(seg.Detail)}\"></span>");
             }
             sb.AppendLine("      </div>");
-            var counts = analysis.Timeline
-                .GroupBy(s => s.Label)
-                .Select(g => $"{Escape(g.Key)} {g.Count()}")
-                .ToList();
-            sb.AppendLine($"      <p class=\"mt-2 text-xs text-slate-500\">{string.Join(" · ", counts)}</p>");
+            sb.AppendLine("      <div class=\"mt-2 flex flex-wrap gap-2 text-xs\">");
+            foreach (var g in analysis.Timeline.GroupBy(s => s.Label)) {
+                var tone = g.First().Tone;
+                var cls = tone == "good"
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                    : tone == "warn"
+                        ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
+                        : "border-sky-500/40 bg-sky-500/10 text-sky-200";
+                sb.AppendLine(
+                    $"        <span class=\"rounded-full border px-2 py-0.5 {cls}\">{Escape(g.Key)} {g.Count()}</span>");
+            }
+            sb.AppendLine("      </div>");
             sb.AppendLine("    </div>");
             return sb.ToString();
         }
