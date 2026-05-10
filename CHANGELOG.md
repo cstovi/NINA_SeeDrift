@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.20] — 2026-05-10
+
+### Changed
+
+- **Drift / walking-noise risk:** The strongest advisory tier label is now **Caution** (was **Investigate** in 0.8.19, **High** before that) — familiar advisory wording that does not assert a certain outcome.
+
 ## [0.8.19] — 2026-05-10
 
 ### Changed
