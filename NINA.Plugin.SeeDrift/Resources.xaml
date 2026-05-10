@@ -104,6 +104,24 @@
             <TextBlock Text="Pick a saved NINA .log file from a prior session. SeeDrift plate-solves every LIGHT frame listed on “Saved image to …” lines in that file — fast, no date window. Same drift + sequencer correlation as Stop."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
+            <TextBlock Text="{Binding RecentLogSessionsStatusText, Mode=OneWay}"
+                       Foreground="#94a3b8" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,4"/>
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ComboBox Grid.Column="0"
+                          ItemsSource="{Binding RecentLogSessions}"
+                          SelectedItem="{Binding SelectedRecentLogSession, Mode=TwoWay}"
+                          DisplayMemberPath="DisplayLabel"
+                          VerticalAlignment="Center"
+                          Margin="0,0,8,0"
+                          MinWidth="320"
+                          ToolTip="Recent NINA logs from the last 14 days. Selecting one fills the log path below."/>
+                <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshRecentLogSessionsCommand}" Padding="10,4" MinWidth="88"/>
+            </Grid>
+
             <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>

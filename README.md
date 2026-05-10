@@ -36,7 +36,7 @@ Set **Options → Imaging → image file path** in NINA so saved lights land whe
 
 ### Previous session Log (options panel)
 
-Under **Plugins → SeeDrift**, **Browse** to a **NINA `.log`** file (or paste its path), then **Run previous session report**. The entire log file is used. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving). When the run finishes successfully, **Open** appears as an underlined **file name** you can click to launch the night HTML.
+Under **Plugins → SeeDrift**, choose one of the recent NINA logs from the last 14 days, or **Browse** to any **NINA `.log`** file (or paste its path), then **Run previous session report**. The recent list summarizes each log by scope, target count, usable image count, and duration; the entire selected log file is used for the report. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving). When the run finishes successfully, **Open** appears as an underlined **file name** you can click to launch the night HTML.
 
 Successful runs show **wall-clock time** (log read through plate solves and HTML save) in the **night HTML** batch line and in the **completion** line (**NINA status bar** after **Stop**; **Previous session report status** in the plugin panel).
 

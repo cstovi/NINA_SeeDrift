@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.4] — 2026-05-10
+
+### Added
+
+- **Previous session Log:** Added a recent-log picker that scans the last 14 days of NINA logs and summarizes each log by scope, target count, usable image count, and duration. Selecting a row fills the existing log path; Browse/paste remains available for older or custom logs.
+
 ## [0.8.3] — 2026-05-10
 
 ### Changed

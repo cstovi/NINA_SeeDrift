@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
@@ -17,6 +18,7 @@ using NINA.Core.Utility;
 using NINA.Image.Interfaces;
 using NINA.Plugin;
 using NINA.Plugin.Interfaces;
+using NINA.Plugin.SeeDrift.Models;
 using NINA.Plugin.SeeDrift.Services;
 using NINA.Plugin.SeeDrift.Utility;
 using NINA.PlateSolving.Interfaces;
@@ -50,6 +52,7 @@ namespace NINA.Plugin.SeeDrift {
 
         public ICommand RunTestReportCommand { get; }
         public ICommand BrowseTestReportLogCommand { get; }
+        public ICommand RefreshRecentLogSessionsCommand { get; }
         public ICommand OpenNightReportCommand { get; }
         public ICommand BrowseCompareBeforeReportCommand { get; }
         public ICommand BrowseCompareAfterReportCommand { get; }
@@ -83,11 +86,14 @@ namespace NINA.Plugin.SeeDrift {
 
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
             BrowseTestReportLogCommand = new RelayCommand(_ => BrowseTestReportLog());
+            RefreshRecentLogSessionsCommand = new RelayCommand(_ => { _ = RefreshRecentLogSessionsAsync(); });
             OpenNightReportCommand = new RelayCommand(_ => OpenNightReport());
             BrowseCompareBeforeReportCommand = new RelayCommand(_ => BrowseCompareReport(before: true));
             BrowseCompareAfterReportCommand = new RelayCommand(_ => BrowseCompareReport(before: false));
             RunCompareReportsCommand = new RelayCommand(_ => RunCompareReports());
             OpenCompareReportCommand = new RelayCommand(_ => OpenCompareReport());
+
+            _ = RefreshRecentLogSessionsAsync();
         }
 
         /// <summary>Last-used NINA log path for previous session report (persisted).</summary>
@@ -97,7 +103,56 @@ namespace NINA.Plugin.SeeDrift {
                 if (value == _testReportLogFilePath) return;
                 _testReportLogFilePath = value ?? "";
                 RaisePropertyChanged();
+                RaisePropertyChanged(nameof(SelectedRecentLogSession));
                 SyncSettingsFromProperties();
+            }
+        }
+
+        public ObservableCollection<RecentNinaLogSession> RecentLogSessions { get; } = new();
+
+        public RecentNinaLogSession? SelectedRecentLogSession {
+            get => RecentLogSessions.FirstOrDefault(s =>
+                string.Equals(s.LogPath, TestReportLogFilePath, StringComparison.OrdinalIgnoreCase));
+            set {
+                if (value == null)
+                    return;
+                TestReportLogFilePath = value.LogPath;
+                RaisePropertyChanged();
+            }
+        }
+
+        private string _recentLogSessionsStatusText = "Scanning recent NINA logs…";
+        public string RecentLogSessionsStatusText {
+            get => _recentLogSessionsStatusText;
+            private set {
+                if (value == _recentLogSessionsStatusText) return;
+                _recentLogSessionsStatusText = value;
+                RaisePropertyChanged();
+            }
+        }
+
+        private async Task RefreshRecentLogSessionsAsync() {
+            RecentLogSessionsStatusText = "Scanning recent NINA logs…";
+            try {
+                var sessions = await Task.Run(RecentNinaLogSessionService.LoadRecentSessions).ConfigureAwait(false);
+                await Application.Current!.Dispatcher.InvokeAsync(() => {
+                    RecentLogSessions.Clear();
+                    foreach (var session in sessions)
+                        RecentLogSessions.Add(session);
+
+                    if (string.IsNullOrWhiteSpace(TestReportLogFilePath) && RecentLogSessions.Count > 0)
+                        TestReportLogFilePath = RecentLogSessions[0].LogPath;
+
+                    RaisePropertyChanged(nameof(SelectedRecentLogSession));
+                    RecentLogSessionsStatusText = sessions.Count == 0
+                        ? "No NINA logs found from the last 14 days."
+                        : $"Recent NINA logs — last 14 days ({sessions.Count}).";
+                });
+            } catch (Exception ex) {
+                SeeDriftLog.Warning($"SeeDrift: recent log session scan failed — {ex.Message}");
+                await Application.Current!.Dispatcher.InvokeAsync(() => {
+                    RecentLogSessionsStatusText = $"Recent log scan failed — {ex.Message}";
+                });
             }
         }
 
