@@ -99,6 +99,13 @@ namespace NINA.Plugin.SeeDrift.Models {
         public string SessionDate { get; init; } = "";
         public DateTime GeneratedLocal { get; init; }
         public SeestarDeviceInfo SeestarDevice { get; init; } = SeestarDeviceInfo.Unknown;
+
+        /// <summary>NINA log file path(s) that contributed to this export (previous session = one log; Stop may list several).</summary>
+        public List<string> SourceLogPaths { get; init; } = new();
+
+        /// <summary>Sum of batch processing wall times (plate solve, correlation, HTML write) included in this report.</summary>
+        public double RunProcessingSeconds { get; init; }
+
         public List<SeeDriftReportTargetPayload> Targets { get; init; } = new();
     }
 

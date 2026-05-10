@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Application = System.Windows.Application;
 using Microsoft.Win32;
 using NINA.Core.Model;
@@ -102,6 +103,7 @@ namespace NINA.Plugin.SeeDrift {
 
             _ = RefreshRecentLogSessionsAsync();
             RefreshSavedReports();
+            ScheduleRefreshResolvedReportForSelectedLog();
         }
 
         /// <summary>Last-used NINA log path for previous session report (persisted).</summary>
@@ -113,6 +115,7 @@ namespace NINA.Plugin.SeeDrift {
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(SelectedRecentLogSession));
                 SyncSettingsFromProperties();
+                ScheduleRefreshResolvedReportForSelectedLog();
             }
         }
 
@@ -155,6 +158,7 @@ namespace NINA.Plugin.SeeDrift {
                     RecentLogSessionsStatusText = sessions.Count == 0
                         ? "No NINA logs found from the last 14 days."
                         : $"Recent NINA logs — last 14 days ({sessions.Count}).";
+                    ScheduleRefreshResolvedReportForSelectedLog();
                 });
             } catch (Exception ex) {
                 SeeDriftLog.Warning($"SeeDrift: recent log session scan failed — {ex.Message}");
@@ -258,6 +262,11 @@ namespace NINA.Plugin.SeeDrift {
         private bool _testReportBusy;
         private string _testReportStatusText = "";
         private string? _nightReportLinkPath;
+        private string? _resolvedNightReportPath;
+        private string _resolvedNightReportSummary = "";
+        private string _selectedLogNoReportHint = "";
+        private bool _resolvedLookupDone;
+        private DispatcherTimer? _resolveDebounceTimer;
         private string _compareReportStatusText = "";
         private string? _compareReportLinkPath;
         private double _testReportProgressValue;
@@ -277,23 +286,54 @@ namespace NINA.Plugin.SeeDrift {
 
         /// <summary>Shows the progress row while a previous session report runs, and keeps it visible after completion until the next run.</summary>
         public Visibility TestReportChromeVisibility =>
-            _testReportBusy || !string.IsNullOrWhiteSpace(_testReportStatusText) || !string.IsNullOrWhiteSpace(_nightReportLinkPath)
+            _testReportBusy
+            || !string.IsNullOrWhiteSpace(_testReportStatusText)
+            || !string.IsNullOrWhiteSpace(_nightReportLinkPath)
+            || !string.IsNullOrWhiteSpace(_resolvedNightReportPath)
+            || (_resolvedLookupDone
+                && !string.IsNullOrWhiteSpace(TestReportLogFilePath)
+                && !string.IsNullOrWhiteSpace(_selectedLogNoReportHint))
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
-        /// <summary>Status line with file path stripped when <see cref="NightReportLinkChromeVisibility"/> shows the open link (options UI only).</summary>
-        public string TestReportStatusDisplayText => FormatStatusForPanel(_testReportStatusText, _nightReportLinkPath);
+        /// <summary>Prefer on-disk report matched to the selected log; else the path from the last completed run (for status trimming).</summary>
+        private string? EffectiveNightReportOpenPath =>
+            !string.IsNullOrWhiteSpace(_resolvedNightReportPath)
+                ? _resolvedNightReportPath.Trim()
+                : string.IsNullOrWhiteSpace(_nightReportLinkPath) ? null : _nightReportLinkPath.Trim();
 
-        /// <summary>Visible when the last completed run wrote a night HTML file path we can open.</summary>
+        /// <summary>Status line with file path stripped when <see cref="NightReportLinkChromeVisibility"/> shows the open link (options UI only).</summary>
+        public string TestReportStatusDisplayText =>
+            FormatStatusForPanel(_testReportStatusText, EffectiveNightReportOpenPath ?? _nightReportLinkPath);
+
+        /// <summary>Visible when the selected log has a resolvable night HTML on disk or the last run left an open path.</summary>
         public Visibility NightReportLinkChromeVisibility =>
-            string.IsNullOrWhiteSpace(_nightReportLinkPath) ? Visibility.Collapsed : Visibility.Visible;
+            string.IsNullOrWhiteSpace(EffectiveNightReportOpenPath) ? Visibility.Collapsed : Visibility.Visible;
 
         /// <summary>File name only (for the open link label).</summary>
         public string NightReportLinkFileName =>
-            string.IsNullOrWhiteSpace(_nightReportLinkPath) ? "" : Path.GetFileName(_nightReportLinkPath.Trim());
+            string.IsNullOrWhiteSpace(EffectiveNightReportOpenPath)
+                ? ""
+                : Path.GetFileName(EffectiveNightReportOpenPath.Trim());
 
         /// <summary>Full path for the open-link tooltip.</summary>
-        public string NightReportLinkPathHint => _nightReportLinkPath ?? "";
+        public string NightReportLinkPathHint => EffectiveNightReportOpenPath ?? "";
+
+        /// <summary>Summary for the report file matched to the current log path (frames, processing time).</summary>
+        public string SelectedLogSavedReportSummaryText => _resolvedNightReportSummary;
+
+        public Visibility SelectedLogSavedReportSummaryVisibility =>
+            string.IsNullOrWhiteSpace(_resolvedNightReportSummary) ? Visibility.Collapsed : Visibility.Visible;
+
+        public string SelectedLogNoReportHintText => _selectedLogNoReportHint;
+
+        public Visibility SelectedLogNoReportHintVisibility =>
+            _resolvedLookupDone
+            && string.IsNullOrWhiteSpace(_resolvedNightReportPath)
+            && !string.IsNullOrWhiteSpace(TestReportLogFilePath)
+            && !string.IsNullOrWhiteSpace(_selectedLogNoReportHint)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
 
         public string CompareReportStatusText => _compareReportStatusText;
 
@@ -350,6 +390,72 @@ namespace NINA.Plugin.SeeDrift {
             }
         }
 
+        private void ScheduleRefreshResolvedReportForSelectedLog() {
+            var app = Application.Current;
+            if (app?.Dispatcher == null) {
+                RefreshResolvedReportForSelectedLog();
+                return;
+            }
+
+            if (!app.Dispatcher.CheckAccess()) {
+                app.Dispatcher.Invoke(ScheduleRefreshResolvedReportForSelectedLog);
+                return;
+            }
+
+            if (_resolveDebounceTimer == null) {
+                _resolveDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+                _resolveDebounceTimer.Tick += (_, _) => {
+                    _resolveDebounceTimer!.Stop();
+                    RefreshResolvedReportForSelectedLog();
+                };
+            }
+
+            _resolveDebounceTimer.Stop();
+            _resolveDebounceTimer.Start();
+        }
+
+        private void RefreshResolvedReportForSelectedLog() {
+            _resolvedNightReportPath = null;
+            _resolvedNightReportSummary = "";
+            _selectedLogNoReportHint = "";
+            _resolvedLookupDone = false;
+            RaiseResolvedReportUiProperties();
+
+            if (string.IsNullOrWhiteSpace(TestReportLogFilePath)) {
+                _resolvedLookupDone = true;
+                RaiseResolvedReportUiProperties();
+                return;
+            }
+
+            try {
+                var logPath = TestReportLogFilePath.Trim();
+                if (ReportLibraryLookup.TryFindNightReportForNinaLog(logPath, out var reportPath, out var summary)) {
+                    _resolvedNightReportPath = reportPath;
+                    _resolvedNightReportSummary = summary;
+                } else {
+                    _selectedLogNoReportHint =
+                        "No saved SeeDrift HTML in the report library lists this log yet. Run \"Run previous session report\" or check %LocalAppData%\\NINA\\SeeDrift\\Reports.";
+                }
+            } catch (Exception ex) {
+                _selectedLogNoReportHint = $"Could not scan report library — {ex.Message}";
+            }
+
+            _resolvedLookupDone = true;
+            RaiseResolvedReportUiProperties();
+        }
+
+        private void RaiseResolvedReportUiProperties() {
+            RaisePropertyChanged(nameof(TestReportChromeVisibility));
+            RaisePropertyChanged(nameof(NightReportLinkChromeVisibility));
+            RaisePropertyChanged(nameof(NightReportLinkFileName));
+            RaisePropertyChanged(nameof(NightReportLinkPathHint));
+            RaisePropertyChanged(nameof(TestReportStatusDisplayText));
+            RaisePropertyChanged(nameof(SelectedLogSavedReportSummaryText));
+            RaisePropertyChanged(nameof(SelectedLogSavedReportSummaryVisibility));
+            RaisePropertyChanged(nameof(SelectedLogNoReportHintText));
+            RaisePropertyChanged(nameof(SelectedLogNoReportHintVisibility));
+        }
+
         private void UseSelectedSavedReport(bool before) {
             if (SelectedSavedReport == null)
                 return;
@@ -396,6 +502,7 @@ namespace NINA.Plugin.SeeDrift {
                 ClearNightReportLink();
 
             RefreshSavedReports();
+            RefreshResolvedReportForSelectedLog();
         }
 
         internal void ClearNightReportLink() {
@@ -407,6 +514,7 @@ namespace NINA.Plugin.SeeDrift {
                 RaisePropertyChanged(nameof(NightReportLinkPathHint));
                 RaisePropertyChanged(nameof(TestReportStatusDisplayText));
                 RaisePropertyChanged(nameof(TestReportChromeVisibility));
+                RaiseResolvedReportUiProperties();
             }
 
             var app = Application.Current;
@@ -429,6 +537,7 @@ namespace NINA.Plugin.SeeDrift {
                 RaisePropertyChanged(nameof(TestReportStatusDisplayText));
                 RaisePropertyChanged(nameof(TestReportChromeVisibility));
                 RefreshSavedReports();
+                RefreshResolvedReportForSelectedLog();
             }
 
             var app = Application.Current;
@@ -456,9 +565,9 @@ namespace NINA.Plugin.SeeDrift {
 
         private void OpenNightReport() {
             try {
-                if (string.IsNullOrWhiteSpace(_nightReportLinkPath))
+                var p = EffectiveNightReportOpenPath;
+                if (string.IsNullOrWhiteSpace(p))
                     return;
-                var p = _nightReportLinkPath.Trim();
                 if (!File.Exists(p)) {
                     MessageBox.Show(
                         $"File no longer exists:\n{p}",

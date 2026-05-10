@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.15] — 2026-05-10
+
+### Added
+
+- **Previous session report:** Night HTML embeds **NINA source log path(s)** and total **processing time** in the JSON payload. The options panel resolves the **newest** matching report in **`%LocalAppData%\NINA\SeeDrift\Reports`** for the selected log path and shows **Open** plus a short summary (frames, processing time) when you change the recent-log dropdown or path—without re-running the job. Reports generated before this metadata may still match via header text.
+
 ## [0.8.14] — 2026-05-10
 
 ### Changed

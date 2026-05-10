@@ -130,6 +130,12 @@
                 <StackPanel>
                     <TextBlock Text="Previous session report status" FontWeight="SemiBold" Foreground="#94a3b8" FontSize="10" Margin="0,0,0,6"/>
                     <TextBlock Text="{Binding TestReportStatusDisplayText, Mode=OneWay}" Foreground="#7dd3fc" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,0,0,4"/>
+                    <TextBlock Text="{Binding SelectedLogSavedReportSummaryText, Mode=OneWay}"
+                               Foreground="#94a3b8" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"
+                               Visibility="{Binding SelectedLogSavedReportSummaryVisibility, Mode=OneWay}"/>
+                    <TextBlock Text="{Binding SelectedLogNoReportHintText, Mode=OneWay}"
+                               Foreground="#fbbf24" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"
+                               Visibility="{Binding SelectedLogNoReportHintVisibility, Mode=OneWay}"/>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8"
                                 Visibility="{Binding NightReportLinkChromeVisibility, Mode=OneWay}">
                         <TextBlock Text="Open " Foreground="#94a3b8" FontSize="12" VerticalAlignment="Center"/>

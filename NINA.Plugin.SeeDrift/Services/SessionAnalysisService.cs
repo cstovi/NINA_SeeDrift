@@ -33,11 +33,22 @@ namespace NINA.Plugin.SeeDrift.Services {
                 IReadOnlyList<DriftTrackingService.CompletedTarget> batches,
                 int minExposuresPerTarget,
                 string sessionDateLabel) {
+            var sourceLogs = batches
+                .SelectMany(b => b.SourceLogPaths ?? Array.Empty<string>())
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => p.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var runProcessingSeconds = batches.Sum(b => b.RunDuration.TotalSeconds);
+
             var payload = new SeeDriftReportPayload {
                 PluginVersion = typeof(SessionAnalysisService).Assembly.GetName().Version?.ToString() ?? "",
                 SessionDate = sessionDateLabel,
                 GeneratedLocal = DateTime.Now,
-                SeestarDevice = ResolveReportDevice(batches)
+                SeestarDevice = ResolveReportDevice(batches),
+                SourceLogPaths = sourceLogs,
+                RunProcessingSeconds = runProcessingSeconds
             };
 
             var min = Math.Max(1, minExposuresPerTarget);
