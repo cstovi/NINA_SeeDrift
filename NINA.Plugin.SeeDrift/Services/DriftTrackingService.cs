@@ -332,6 +332,61 @@ namespace NINA.Plugin.SeeDrift.Services {
             var coords = new SolvedCoords?[windowed.Count];
             var completed = 0;
 
+            var frameTargetIdx = new int[windowed.Count];
+            var targetKeyToIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < windowed.Count; i++) {
+                var key = NormalizeTargetLabelForGrouping(windowed[i].TargetLabel);
+                if (!targetKeyToIndex.TryGetValue(key, out var ti)) {
+                    ti = targetKeyToIndex.Count;
+                    targetKeyToIndex[key] = ti;
+                }
+
+                frameTargetIdx[i] = ti;
+            }
+
+            var targetCount = targetKeyToIndex.Count;
+            var totalsPerTarget = new int[targetCount];
+            for (var i = 0; i < windowed.Count; i++)
+                totalsPerTarget[frameTargetIdx[i]]++;
+
+            var finishedPerTarget = new int[targetCount];
+            var successPerTarget = new int[targetCount];
+            var boundsLock = new object();
+            var hopelessFlag = 0;
+            var hopelessLogOnce = 0;
+
+            void RegisterSolveAttemptOutcome(int ti, bool solved, string pathForProgress) {
+                lock (boundsLock) {
+                    finishedPerTarget[ti]++;
+                    if (solved)
+                        successPerTarget[ti]++;
+                    var maxPotentialSuccessesOnAnyTarget = 0;
+                    for (var k = 0; k < targetCount; k++) {
+                        var upperBound = successPerTarget[k] + (totalsPerTarget[k] - finishedPerTarget[k]);
+                        if (upperBound > maxPotentialSuccessesOnAnyTarget)
+                            maxPotentialSuccessesOnAnyTarget = upperBound;
+                    }
+
+                    if (maxPotentialSuccessesOnAnyTarget < minExpTarget) {
+                        Volatile.Write(ref hopelessFlag, 1);
+                        if (Interlocked.Exchange(ref hopelessLogOnce, 1) == 0) {
+                            SeeDriftLog.Info(
+                                $"SeeDrift: skipping remaining plate solves — no FITS OBJECT can still reach ≥{minExpTarget} successful solves " +
+                                $"(best-case successes on any single target ≤{maxPotentialSuccessesOnAnyTarget}).");
+                        }
+                    }
+                }
+
+                var done = Interlocked.Increment(ref completed);
+                var pct = (int)Math.Clamp((100 * done + windowed.Count / 2) / windowed.Count, 0, 100);
+                progress?.Report(new ApplicationStatus {
+                    Source = "SeeDrift",
+                    Status = $"Solving {done}/{windowed.Count} — {Path.GetFileName(pathForProgress)}",
+                    Progress = pct,
+                    MaxProgress = 100
+                });
+            }
+
             var pool = new BlockingCollection<IImageSolver>();
             var ownedSolvers = new List<IImageSolver>(poolSize);
             for (var p = 0; p < poolSize; p++) {
@@ -347,21 +402,28 @@ namespace NINA.Plugin.SeeDrift.Services {
                     async (idx, ct) => {
                         ct.ThrowIfCancellationRequested();
                         var entry = windowed[idx];
+                        var ti = frameTargetIdx[idx];
+
+                        if (Volatile.Read(ref hopelessFlag) != 0) {
+                            coords[idx] = null;
+                            RegisterSolveAttemptOutcome(ti, false, entry.Path);
+                            return;
+                        }
+
                         var solver = pool.Take(ct);
                         try {
-                            coords[idx] = await TrySolveOneAsync(entry, solver, ct).ConfigureAwait(false);
+                            try {
+                                coords[idx] = await TrySolveOneAsync(entry, solver, ct).ConfigureAwait(false);
+                            } catch (OperationCanceledException) {
+                                coords[idx] = null;
+                                RegisterSolveAttemptOutcome(ti, false, entry.Path);
+                                throw;
+                            }
+
+                            RegisterSolveAttemptOutcome(ti, coords[idx].HasValue, entry.Path);
                         } finally {
                             pool.Add(solver);
                         }
-
-                        var done = Interlocked.Increment(ref completed);
-                        var pct = (int)Math.Clamp((100 * done + windowed.Count / 2) / windowed.Count, 0, 100);
-                        progress?.Report(new ApplicationStatus {
-                            Source = "SeeDrift",
-                            Status = $"Solving {done}/{windowed.Count} — {Path.GetFileName(entry.Path)}",
-                            Progress = pct,
-                            MaxProgress = 100
-                        });
                     }).ConfigureAwait(false);
             } finally {
                 foreach (var s in ownedSolvers) {
@@ -560,9 +622,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (built == null || built.Count == 0)
                 return 0;
             return built
-                .GroupBy(
-                    s => string.IsNullOrWhiteSpace(s.TargetName) ? "Unknown" : s.TargetName.Trim(),
-                    StringComparer.OrdinalIgnoreCase)
+                .GroupBy(s => NormalizeTargetLabelForGrouping(s.TargetName), StringComparer.OrdinalIgnoreCase)
                 .Max(g => g.Count());
         }
 
@@ -571,11 +631,12 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (entries == null || entries.Count == 0)
                 return 0;
             return entries
-                .GroupBy(
-                    e => string.IsNullOrWhiteSpace(e.TargetLabel) ? "Unknown" : e.TargetLabel.Trim(),
-                    StringComparer.OrdinalIgnoreCase)
+                .GroupBy(e => NormalizeTargetLabelForGrouping(e.TargetLabel), StringComparer.OrdinalIgnoreCase)
                 .Max(g => g.Count());
         }
+
+        private static string NormalizeTargetLabelForGrouping(string? label) =>
+            string.IsNullOrWhiteSpace(label) ? "Unknown" : label.Trim();
 
         private static bool TryResolveHeaderCards(FitsReplayEntry entry, out Dictionary<string, string> cards) {
             if (entry.PrimaryHeaderCards != null) {

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.18] — 2026-05-10
+
+### Changed
+
+- **Plate solving:** When **Minimum exposures per target** cannot be reached **even if every not-yet-solved frame succeeded**, remaining plate solves for that run are skipped (typical case: many failures on one target). LIGHT-frame counts were already checked before solving; this addresses wasted time when solves fail.
+
 ## [0.8.17] — 2026-05-10
 
 ### Fixed
