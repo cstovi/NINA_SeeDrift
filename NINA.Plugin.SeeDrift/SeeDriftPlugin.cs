@@ -61,7 +61,6 @@ namespace NINA.Plugin.SeeDrift {
         public ICommand RefreshSavedReportsCommand { get; }
         public ICommand UseSavedReportAsBeforeCommand { get; }
         public ICommand UseSavedReportAsAfterCommand { get; }
-        public ICommand OpenReportLibraryCommand { get; }
 
         [ImportingConstructor]
         public SeeDriftPlugin(
@@ -98,7 +97,6 @@ namespace NINA.Plugin.SeeDrift {
             RefreshSavedReportsCommand = new RelayCommand(_ => RefreshSavedReports());
             UseSavedReportAsBeforeCommand = new RelayCommand(_ => UseSelectedSavedReport(before: true));
             UseSavedReportAsAfterCommand = new RelayCommand(_ => UseSelectedSavedReport(before: false));
-            OpenReportLibraryCommand = new RelayCommand(_ => OpenReportLibrary());
 
             _ = RefreshRecentLogSessionsAsync();
             RefreshSavedReports();
@@ -357,20 +355,6 @@ namespace NINA.Plugin.SeeDrift {
                 CompareBeforeReportPath = SelectedSavedReport.Path;
             else
                 CompareAfterReportPath = SelectedSavedReport.Path;
-        }
-
-        private void OpenReportLibrary() {
-            try {
-                var folder = SeeDriftPaths.ResolveReportFolder();
-                Directory.CreateDirectory(folder);
-                Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
-            } catch (Exception ex) {
-                MessageBox.Show(
-                    $"Could not open report folder:\n{ex.Message}",
-                    "SeeDrift",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-            }
         }
 
         internal void ClearNightReportLink() {
