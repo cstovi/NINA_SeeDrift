@@ -18,8 +18,8 @@ using NINA.Plugin.SeeDrift.Utility;
 namespace NINA.Plugin.SeeDrift.Services {
 
     /// <summary>
-    /// Plate-solves LIGHT files referenced by NINA “Saved image to …” log lines (SeeDrift Start→Stop scans logs under
-    /// <c>%LocalAppData%\NINA\Logs</c>; previous session report uses a log file you choose) and writes the rolling night HTML report.
+    /// Plate-solves LIGHT files referenced by NINA “Saved image to …” log lines (SeeDrift Start→Stop reads matching logs under
+    /// <c>%LocalAppData%\NINA\Logs</c> for the arm/disarm window; previous session report uses a log file you choose) and writes the rolling night HTML report.
     /// </summary>
     public sealed class DriftTrackingService : IDisposable {
 
@@ -27,7 +27,10 @@ namespace NINA.Plugin.SeeDrift.Services {
             public string Name { get; init; } = "";
             public IReadOnlyList<DriftSample> Samples { get; init; } = Array.Empty<DriftSample>();
 
-            /// <summary>NINA log file path(s) read for this batch (Stop = folder listing; previous session report = chosen file).</summary>
+            /// <summary>
+            /// NINA log file path(s) that contributed saved-image lines for this batch (Stop = contributing logs in the arm/disarm window;
+            /// previous session report = the single file you chose).
+            /// </summary>
             public IReadOnlyList<string> SourceLogPaths { get; init; } = Array.Empty<string>();
 
             /// <summary>
@@ -98,7 +101,20 @@ namespace NINA.Plugin.SeeDrift.Services {
             await Application.Current!.Dispatcher.InvokeAsync(() => { IsArmed = false; });
 
             try {
-                var logFiles = NinaLogCorrelator.GetAllNinaLogFiles();
+                var allLogs = NinaLogCorrelator.GetAllNinaLogFiles();
+                var filtered = NinaLogCorrelator.FilterLogFilesForStopWindow(allLogs, startUtc, disarmUtc);
+                IReadOnlyList<string> logFiles;
+                if (filtered.Count > 0) {
+                    logFiles = filtered;
+                    if (filtered.Count < allLogs.Count)
+                        SeeDriftLog.Info($"SeeDrift: Stop log pre-filter {allLogs.Count} → {filtered.Count} file(s) by arm/disarm local dates.");
+                } else if (allLogs.Count > 0) {
+                    logFiles = allLogs;
+                    SeeDriftLog.Warning("SeeDrift: no NINA logs matched arm/disarm date filter — scanning all log files (fallback).");
+                } else {
+                    logFiles = allLogs;
+                }
+
                 await RunBatchFromLogsAsync(
                         logFiles,
                         startUtc,
@@ -213,11 +229,16 @@ namespace NINA.Plugin.SeeDrift.Services {
                     windowStartUtc,
                     windowEndUtc,
                     out var orderedSaves,
-                    out var filesOpenedOk)) {
+                    out var filesOpenedOk,
+                    out var contributingLogPaths)) {
                 SeeDriftLog.Warning("SeeDrift: could not open any of the listed log file(s).");
                 Report("Stopped — could not read the log file (path wrong, missing, or blocked).");
                 return false;
             }
+
+            var sourceLogsForBatch = (IReadOnlyList<string>)(contributingLogPaths.Count > 0
+                ? contributingLogPaths
+                : logFilesToRead);
 
             if (orderedSaves.Count < 2) {
                 SeeDriftLog.Warning(
@@ -253,7 +274,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     CompletedTargets.Add(new CompletedTarget {
                         Name = "",
                         Samples = Array.Empty<DriftSample>(),
-                        SourceLogPaths = logFilesToRead,
+                        SourceLogPaths = sourceLogsForBatch,
                         PresolveMaxLightsPerBestTarget = maxLightsAnyTarget,
                         RunDuration = runStopwatch.Elapsed
                     });
@@ -396,7 +417,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 LogTraceCenterTriggerCount = 0;
             } else {
                 Report("Correlating sequencer lines and writing HTML…", 100, 100);
-                ApplyJumpAndLogAnnotation(built, logFilesToRead);
+                ApplyJumpAndLogAnnotation(built, sourceLogsForBatch);
             }
 
             var targetName = HtmlReportExporter.SummarizeTargetsForBatch(built);
@@ -408,7 +429,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 CompletedTargets.Add(new CompletedTarget {
                     Name = targetName,
                     Samples = built,
-                    SourceLogPaths = logFilesToRead,
+                    SourceLogPaths = sourceLogsForBatch,
                     RunDuration = runStopwatch.Elapsed
                 });
                 if (!TryWriteNightReport(out nightSavedPath, out nightSaveError)) {

@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Documentation layout:** Shared See\* docs (**`gitship.mdc`**, **`NINA_IMAGE_PATH_ENUMERATION.md`**, **`NINA_plugin_guide.md`** including session-scoped exports) now live only in the workspace sibling folder **`../NINA_shared/`** (same parent as this repo). The nested **`NINA_SeeDrift/NINA_shared/`** copy was removed; `.cursor/rules/gitship.mdc` points agents at **`../NINA_shared/`**.
 
+## [0.7.35] — 2026-05-10
+
+### Changed
+
+- **Stop / night HTML:** **SeeDrift Stop** pre-filters NINA logs by **local calendar dates** derived from the log filename (`yyyyMMdd-HHmmss-…`) around the arm→disarm window (plus one day before the earlier date) so the whole `%LocalAppData%\NINA\Logs` folder is not scanned when unnecessary. If no files match that filter, SeeDrift falls back to scanning **all** logs and logs a warning.
+- **Night HTML header:** **NINA log files on this page** lists only logs that contributed at least one in-window **Saved image to …** line for that batch (and **Previous session report** still lists the file you picked). Sequencer correlation parses that same contributing set instead of every log that was opened.
+
 ## [0.7.34] — 2026-05-10
 
 ### Fixed

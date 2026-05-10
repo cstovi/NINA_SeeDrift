@@ -29,6 +29,62 @@ namespace NINA.Plugin.SeeDrift.Utility {
             }
         }
 
+        /// <summary>NINA 3.x log file name prefix <c>yyyyMMdd-HHmmss-</c> (local clock when the log was created).</summary>
+        private static readonly Regex RxLogFileNameStart = new Regex(
+            @"^(\d{8})-(\d{6})-",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        /// <summary>
+        /// Parses the leading date/time from a NINA log file name as <b>local</b> time (filename convention).
+        /// </summary>
+        internal static bool TryParseNinaLogFileNameLocalStart(string logFilePath, out DateTime localStart) {
+            localStart = default;
+            var name = Path.GetFileName(logFilePath);
+            var m = RxLogFileNameStart.Match(name);
+            if (!m.Success)
+                return false;
+            var ymd = m.Groups[1].Value;
+            var hms = m.Groups[2].Value;
+            if (!DateTime.TryParseExact(
+                    $"{ymd} {hms}",
+                    "yyyyMMdd HHmmss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeLocal,
+                    out var dt))
+                return false;
+            localStart = DateTime.SpecifyKind(dt, DateTimeKind.Local);
+            return true;
+        }
+
+        /// <summary>
+        /// Keeps log files whose name-derived local date is between one day before the earlier arm/disarm local date
+        /// and the later local date (inclusive), so same-night sessions and log rotation across midnight are covered.
+        /// Returns an empty list if nothing matched (caller should fall back to the full list).
+        /// </summary>
+        internal static IReadOnlyList<string> FilterLogFilesForStopWindow(
+                IReadOnlyList<string> logFilePaths,
+                DateTime armUtc,
+                DateTime disarmUtc) {
+            var armL = (armUtc.Kind == DateTimeKind.Utc ? armUtc : armUtc.ToUniversalTime()).ToLocalTime();
+            var disL = (disarmUtc.Kind == DateTimeKind.Utc ? disarmUtc : disarmUtc.ToUniversalTime()).ToLocalTime();
+            var d0 = armL.Date <= disL.Date ? armL.Date : disL.Date;
+            var d1 = armL.Date >= disL.Date ? armL.Date : disL.Date;
+            var low = d0.AddDays(-1);
+            var high = d1;
+
+            var picked = new List<string>();
+            foreach (var p in logFilePaths) {
+                if (string.IsNullOrWhiteSpace(p))
+                    continue;
+                if (!TryParseNinaLogFileNameLocalStart(p, out var localStart))
+                    continue;
+                if (localStart.Date >= low && localStart.Date <= high)
+                    picked.Add(p);
+            }
+
+            return picked;
+        }
+
         /// <summary>Center-after-drift trigger fired (NINA sequencer).</summary>
         private static readonly Regex RxTriggerCenter = new Regex(
             @"Starting\s+Trigger:.*CenterAfterDrift", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -116,15 +172,21 @@ namespace NINA.Plugin.SeeDrift.Utility {
         /// <paramref name="windowStartUtc"/>…<paramref name="windowEndUtc"/> inclusive (UTC).
         /// Results are sorted by log time; duplicate paths keep the earliest line.
         /// </summary>
+        /// <param name="contributingLogPaths">
+        /// Distinct log files that contributed at least one kept “Saved image to …” line (sorted, for HTML + correlation).
+        /// </param>
         internal static bool TryCollectSavedImagePathsFromLogs(
                 IEnumerable<string> logFilePaths,
                 DateTime? windowStartUtc,
                 DateTime? windowEndUtc,
                 out List<(string path, DateTime lineUtc)> orderedUniquePaths,
-                out List<string> filesOpenedOk) {
+                out List<string> filesOpenedOk,
+                out List<string> contributingLogPaths) {
 
             orderedUniquePaths = new List<(string path, DateTime lineUtc)>();
             filesOpenedOk = new List<string>();
+            contributingLogPaths = new List<string>();
+            var contributingSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             static DateTime AsUtc(DateTime t) =>
                 t.Kind == DateTimeKind.Utc ? t : t.ToUniversalTime();
@@ -167,11 +229,14 @@ namespace NINA.Plugin.SeeDrift.Utility {
                             continue;
 
                         rawEvents.Add((ts, rawPath));
+                        contributingSet.Add(logPath.Trim());
                     }
                 } catch {
                     // skip unreadable log
                 }
             }
+
+            contributingLogPaths.AddRange(contributingSet.OrderBy(p => p, StringComparer.OrdinalIgnoreCase));
 
             rawEvents.Sort((x, y) => x.utc.CompareTo(y.utc));
 

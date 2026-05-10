@@ -670,7 +670,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (paths.Count == 1) {
                 sb.AppendLine($"        <p class=\"mt-1 break-all text-slate-400\">{Escape(paths[0])}</p>");
             } else {
-                sb.AppendLine($"        <p class=\"mt-1 text-xs text-slate-500\">{paths.Count} files — union of each <strong class=\"font-medium text-slate-400\">run</strong> below (<strong class=\"font-medium text-slate-400\">Stop</strong> scans every <span class=\"font-mono\">.log</span> under NINA Logs at once; <strong class=\"font-medium text-slate-400\">Previous session report</strong> uses one file you choose).</p>");
+                sb.AppendLine($"        <p class=\"mt-1 text-xs text-slate-500\">{paths.Count} files — NINA logs that contributed <span class=\"font-mono\">Saved image to …</span> lines for each <strong class=\"font-medium text-slate-400\">run</strong> below (<strong class=\"font-medium text-slate-400\">Stop</strong>: arm/disarm window + matching log names; <strong class=\"font-medium text-slate-400\">Previous session report</strong>: the file you chose).</p>");
                 sb.AppendLine("        <ul class=\"mt-2 max-h-48 list-disc space-y-1 overflow-y-auto pl-5 text-slate-400\">");
                 const int max = 16;
                 foreach (var p in paths.Take(max))
