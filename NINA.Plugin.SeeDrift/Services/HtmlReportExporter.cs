@@ -178,6 +178,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"      <canvas id=\"{canvasId}\"></canvas>");
                     sb.AppendLine("    </div>");
                     sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{Escape(FormatMovementTotalsLine(grp))}</p>");
+                    var ditherSegHtml = FormatDitherIntervalMovementHtml(grp);
+                    if (!string.IsNullOrEmpty(ditherSegHtml))
+                        sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{ditherSegHtml}</p>");
                     sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Axes use the <strong>same</strong> arcsecond span on ΔRA and ΔDec (whichever axis needs more room sets the span; both are centered on the data). The chart is <strong>square</strong> so one arcsecond horizontally matches one vertically.</p>");
                     sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center — placed along the segment between frames. Hover path for file name; hover △/□ for log detail.</p>");
 
@@ -442,6 +445,54 @@ namespace NINA.Plugin.SeeDrift.Services {
             medianArcSecPerPx = list[list.Count / 2];
             return true;
         }
+
+        /// <summary>
+        /// HTML body (already safe: numeric formatting only; <see cref="Escape"/> not required for content).
+        /// Lists plate-solved segment ΔRA/ΔDec for each frame pair whose logs include a dither trigger on that edge.
+        /// </summary>
+        private static string FormatDitherIntervalMovementHtml(IReadOnlyList<DriftSample> group) {
+            if (group.Count < 2)
+                return "";
+            var lines = new List<string>();
+            var pixelPath = group.All(s => s.IsPixelPath);
+
+            for (var i = 1; i < group.Count; i++) {
+                var markers = group[i].EdgeSequencerMarkers;
+                if (markers == null || !markers.Any(m => m.IsDither))
+                    continue;
+
+                GetAnchoredPlotPoint(group, i - 1, out var x0, out var y0);
+                GetAnchoredPlotPoint(group, i, out var x1, out var y1);
+                var dRa = x1 - x0;
+                var dDec = y1 - y0;
+                var prev = group[i - 1];
+                var cur = group[i];
+                var label = FormattableString.Invariant(
+                    $"Frames {prev.FrameIndex + 1}→{cur.FrameIndex + 1}");
+                var arc = FormattableString.Invariant($"ΔRA {FmtSignedArcSec(dRa)}″ · ΔDec {FmtSignedArcSec(dDec)}″");
+                var parts = new List<string> { $"{label}: {arc}" };
+
+                if (pixelPath
+                    && prev.CumulativePixelX is double px0 && prev.CumulativePixelY is double py0
+                    && cur.CumulativePixelX is double px1 && cur.CumulativePixelY is double py1) {
+                    var adx = Math.Abs(px1 - px0);
+                    var ady = Math.Abs(py1 - py0);
+                    parts.Add(FormattableString.Invariant($"detector |Δx| {adx:0.##} px · |Δy| {ady:0.##} px"));
+                }
+
+                lines.Add("· " + string.Join(" · ", parts));
+            }
+
+            if (lines.Count == 0)
+                return "";
+
+            const string intro =
+                "Per interval with a logged dither between exposures (same plate-solved Δ vs first frame as the chart; signed segment delta frame-to-frame):<br/>";
+            return intro + string.Join("<br/>", lines);
+        }
+
+        private static string FmtSignedArcSec(double v) =>
+            string.Format(CultureInfo.InvariantCulture, "{0:+0.###;-0.###;0}", v);
 
         private static string FormatMovementTotalsLine(IReadOnlyList<DriftSample> group) {
             if (group.Count < 2)
