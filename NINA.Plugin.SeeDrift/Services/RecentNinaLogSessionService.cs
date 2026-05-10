@@ -28,7 +28,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sessions.Add(BuildSummary(log.Path, log.Start));
             }
 
-            return sessions;
+            return sessions
+                .Where(s => s.TargetCount > 0)
+                .ToList();
         }
 
         private static RecentNinaLogSession BuildSummary(string logPath, DateTime localStart) {

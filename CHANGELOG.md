@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.11] — 2026-05-10
+
+### Changed
+
+- **Recent log picker:** Logs with zero detected targets are now hidden from the session dropdown so startup-only or non-imaging logs do not clutter the picker. Browse/paste still accepts any log path.
+
 ## [0.8.10] — 2026-05-10
 
 ### Added
