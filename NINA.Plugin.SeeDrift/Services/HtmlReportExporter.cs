@@ -502,7 +502,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (anyPxSegment)
                 totalArc += FormattableString.Invariant(
                     $" · detector Σ|Δx| {sumAbsPx:0.##} px · Σ|Δy| {sumAbsPy:0.##} px");
-            return intro + string.Join("<br/>", lines) + "<br/>" + totalArc;
+            return "<strong class=\"font-semibold\">" + totalArc + "</strong><br/>" + intro
+                + string.Join("<br/>", lines);
         }
 
         private static string FmtSignedArcSec(double v) =>
@@ -605,9 +606,9 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             sb.AppendLine("    <div class=\"mt-8\">");
-            sb.AppendLine("      <h4 class=\"text-sm font-semibold uppercase tracking-wide text-sky-400\">Sequencer events (NINA logs)</h4>");
 
             if (rows.Count == 0) {
+                sb.AppendLine("      <h4 class=\"text-sm font-semibold uppercase tracking-wide text-sky-400\">Sequencer events (NINA logs)</h4>");
                 sb.AppendLine("      <div class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/40 p-4\">");
                 sb.AppendLine($"        <p class=\"text-sm text-slate-300\">No correlated dither or center-after-drift events between consecutive frames for target <span class=\"text-sky-300\">{Escape(sectionTargetName)}</span>.</p>");
                 sb.AppendLine("        <p class=\"mt-2 text-xs leading-relaxed text-slate-500\">SeeDrift reads the same NINA log(s) used for this run. Events attach only to intervals between two lights of the same target.</p>");
@@ -616,27 +617,34 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return;
             }
 
-            sb.AppendLine("      <p class=\"mt-2 text-xs text-slate-500\">Between-frame triggers for this target (same-target consecutive frames only).</p>");
-            sb.AppendLine("      <div class=\"mt-3 overflow-x-auto rounded-lg border border-slate-700\">");
-            sb.AppendLine("        <table class=\"seedrift-seq-table min-w-full table-fixed divide-y divide-slate-700 text-left text-xs\">");
-            sb.AppendLine("          <thead class=\"bg-slate-900/80 text-sky-300\"><tr>");
-            sb.AppendLine("            <th class=\"w-[22%] px-3 py-2 font-medium\">From frame</th>");
-            sb.AppendLine("            <th class=\"w-[22%] px-3 py-2 font-medium\">To frame</th>");
-            sb.AppendLine("            <th class=\"w-[14%] whitespace-nowrap px-3 py-2 font-medium\">Kind</th>");
-            sb.AppendLine("            <th class=\"w-[42%] px-3 py-2 font-medium\">Detail</th>");
-            sb.AppendLine("          </tr></thead>");
-            sb.AppendLine("          <tbody class=\"divide-y divide-slate-800 bg-slate-950/40 text-slate-300\">");
+            sb.AppendLine("      <details class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/30\">");
+            sb.AppendLine(
+                $"        <summary class=\"cursor-pointer px-3 py-2.5 text-sm font-semibold uppercase tracking-wide text-sky-400 marker:text-sky-400 hover:bg-slate-900/50\">"
+                + $"Sequencer events (NINA logs) — {rows.Count} row{(rows.Count == 1 ? "" : "s")} (click to expand)</summary>");
+            sb.AppendLine("        <div class=\"border-t border-slate-700\">");
+            sb.AppendLine("          <p class=\"px-3 pt-3 text-xs text-slate-500\">Between-frame triggers for this target (same-target consecutive frames only).</p>");
+            sb.AppendLine("          <div class=\"mt-2 overflow-x-auto px-3 pb-3\">");
+            sb.AppendLine("            <table class=\"seedrift-seq-table min-w-full table-fixed divide-y divide-slate-700 text-left text-xs\">");
+            sb.AppendLine("              <thead class=\"bg-slate-900/80 text-sky-300\"><tr>");
+            sb.AppendLine("                <th class=\"w-[22%] px-3 py-2 font-medium\">From frame</th>");
+            sb.AppendLine("                <th class=\"w-[22%] px-3 py-2 font-medium\">To frame</th>");
+            sb.AppendLine("                <th class=\"w-[14%] whitespace-nowrap px-3 py-2 font-medium\">Kind</th>");
+            sb.AppendLine("                <th class=\"w-[42%] px-3 py-2 font-medium\">Detail</th>");
+            sb.AppendLine("              </tr></thead>");
+            sb.AppendLine("              <tbody class=\"divide-y divide-slate-800 bg-slate-950/40 text-slate-300\">");
             foreach (var r in rows) {
-                sb.AppendLine("          <tr class=\"align-top\">");
-                sb.AppendLine($"            <td class=\"break-all px-3 py-2 font-mono text-[11px] leading-snug\">{Escape(r.fromFn)}</td>");
-                sb.AppendLine($"            <td class=\"break-all px-3 py-2 font-mono text-[11px] leading-snug\">{Escape(r.toFn)}</td>");
-                sb.AppendLine($"            <td class=\"whitespace-normal px-3 py-2 align-top\">{Escape(r.kind)}</td>");
-                sb.AppendLine($"            <td class=\"break-words px-3 py-2 text-[11px] leading-snug text-slate-400\">{Escape(r.detail)}</td>");
-                sb.AppendLine("          </tr>");
+                sb.AppendLine("              <tr class=\"align-top\">");
+                sb.AppendLine($"                <td class=\"break-all px-3 py-2 font-mono text-[11px] leading-snug\">{Escape(r.fromFn)}</td>");
+                sb.AppendLine($"                <td class=\"break-all px-3 py-2 font-mono text-[11px] leading-snug\">{Escape(r.toFn)}</td>");
+                sb.AppendLine($"                <td class=\"whitespace-normal px-3 py-2 align-top\">{Escape(r.kind)}</td>");
+                sb.AppendLine($"                <td class=\"break-words px-3 py-2 text-[11px] leading-snug text-slate-400\">{Escape(r.detail)}</td>");
+                sb.AppendLine("              </tr>");
             }
-            sb.AppendLine("          </tbody>");
-            sb.AppendLine("        </table>");
-            sb.AppendLine("      </div>");
+            sb.AppendLine("              </tbody>");
+            sb.AppendLine("            </table>");
+            sb.AppendLine("          </div>");
+            sb.AppendLine("        </div>");
+            sb.AppendLine("      </details>");
             sb.AppendLine("    </div>");
         }
 
