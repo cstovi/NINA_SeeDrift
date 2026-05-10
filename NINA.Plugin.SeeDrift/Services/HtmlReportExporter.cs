@@ -929,7 +929,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var frames = $"{sampleCount} frame{(sampleCount == 1 ? "" : "s")}";
             if (runDuration.TotalMilliseconds < 0.5)
                 return frames;
-            return $"{frames} · Wall time {RunDurationFormatter.ToReadable(runDuration)}";
+            return $"{frames} · Processing time {RunDurationFormatter.ToReadable(runDuration)}";
         }
 
         /// <summary>First/last exposure start from solved frames (DATE-OBS / log timing), shown in local wall time.</summary>

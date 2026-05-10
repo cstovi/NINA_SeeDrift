@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.6] — 2026-05-10
+
+### Changed
+
+- **Night HTML:** Renamed the run-duration label from **Wall time** to **Processing time** for clearer wording.
+
 ## [0.8.5] — 2026-05-10
 
 ### Added
@@ -96,7 +102,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **Run duration:** Each successful **Stop** or **Previous session report** records wall time from log read through HTML save. Shown in the **night HTML** batch line (**Wall time …**) and in **completion status** (NINA status bar for Stop; plugin status panel for previous session).
+- **Run duration:** Each successful **Stop** or **Previous session report** records processing time from log read through HTML save. Shown in the **night HTML** batch line and in **completion status** (NINA status bar for Stop; plugin status panel for previous session).
 
 ### Changed
 

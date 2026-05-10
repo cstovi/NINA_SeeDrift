@@ -39,7 +39,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             /// </summary>
             public int? PresolveMaxLightsPerBestTarget { get; init; }
 
-            /// <summary>Wall time for this run (log read, plate solves, correlation, HTML write).</summary>
+            /// <summary>Processing time for this run (log read, plate solves, correlation, HTML write).</summary>
             public TimeSpan RunDuration { get; init; }
         }
 

@@ -4,7 +4,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
     internal static class RunDurationFormatter {
 
-        /// <summary>Short wall-clock span for status lines and HTML (e.g. <c>3m 12s</c>, <c>45.2s</c>).</summary>
+        /// <summary>Short processing-time span for status lines and HTML (e.g. <c>3m 12s</c>, <c>45.2s</c>).</summary>
         internal static string ToReadable(TimeSpan elapsed) {
             if (elapsed < TimeSpan.Zero)
                 elapsed = TimeSpan.Zero;
