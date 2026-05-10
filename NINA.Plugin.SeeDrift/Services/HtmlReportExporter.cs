@@ -694,7 +694,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 ? FormattableString.Invariant($" · ≈ {risk.NaturalDriftPixelsPerMinute.Value:0.##} px/min")
                 : "";
             var detail = string.IsNullOrWhiteSpace(risk.Detail)
-                ? "Advisory only. This is a walking-noise risk hint, not a hard image-quality verdict."
+                ? "Advisory only. This is a walking-noise risk hint, not an image-quality verdict."
                 : risk.Detail;
 
             var sb = new StringBuilder();
@@ -709,7 +709,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine(
                     $"      <p class=\"mt-1 text-xs text-slate-400\">Net drift without logged dither/center intervals: {risk.NetNaturalDriftArcSec:0.#}″ across {risk.IntervalCount} interval{(risk.IntervalCount == 1 ? "" : "s")}.</p>");
             }
-            sb.AppendLine($"      <p class=\"mt-1 text-xs text-slate-500\">{Escape(detail)} “High” means conditions may favour walking noise; confirm with star shape and stacked results.</p>");
+            sb.AppendLine($"      <p class=\"mt-1 text-xs text-slate-500\">{Escape(detail)} “High” suggests conditions may favour walking noise; confirm with star shape and stacked results.</p>");
             sb.AppendLine("    </div>");
             return sb.ToString();
         }

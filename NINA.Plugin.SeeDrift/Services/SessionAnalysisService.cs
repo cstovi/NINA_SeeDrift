@@ -345,7 +345,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 emitted = true;
                 yield return new SessionRecommendation {
                     Level = "warn",
-                    Text = FormattableString.Invariant($"Natural drift looks consistent enough to raise walking-noise risk ({analysis.DriftRisk.NaturalDriftArcSecPerMinute:0.##}\"/min, {analysis.DriftRisk.DirectionConsistency:P0} directional). Stronger or more varied dithers may help break the pattern.")
+                    Text = FormattableString.Invariant($"Natural drift may be consistent enough to raise walking-noise risk ({analysis.DriftRisk.NaturalDriftArcSecPerMinute:0.##}\"/min, {analysis.DriftRisk.DirectionConsistency:P0} directional). Stronger or more varied dithers may help break the pattern.")
                 };
             }
 
@@ -371,7 +371,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 emitted = true;
                 yield return new SessionRecommendation {
                     Level = "warn",
-                    Text = "At least half of logged dithers measured weak movement; increase dither size or check guider dither response."
+                    Text = "At least half of logged dithers measured low movement; consider increasing dither size or checking guider dither response."
                 };
             }
 
@@ -380,7 +380,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 emitted = true;
                 yield return new SessionRecommendation {
                     Level = "info",
-                    Text = "Some dithers repeated the same direction; randomization may not be spreading walking noise as much as expected."
+                    Text = "Some dithers repeated the same direction; randomization may be spreading walking-noise patterns less than expected."
                 };
             }
 
@@ -389,7 +389,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 emitted = true;
                 yield return new SessionRecommendation {
                     Level = "warn",
-                    Text = "Most center-after-drift events did not reduce residual drift much; threshold may be too low, or recenters may not settle before the next exposure."
+                    Text = "Most center-after-drift events showed limited residual-drift reduction; threshold may be too low, or recenters may not settle before the next exposure."
                 };
             } else if (analysis.Centers.Count == 0) {
                 emitted = true;
