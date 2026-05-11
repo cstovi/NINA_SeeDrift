@@ -933,7 +933,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 emitted = true;
                 yield return new SessionRecommendation {
                     Level = "warn",
-                    Text = FormattableString.Invariant($"Baseline drift is {analysis.DriftRate.TotalArcSecPerMinute:0.##}\"/min; compare altitude, tripod stability, wind, and polar/framing setup between sessions.")
+                    Text = FormattableString.Invariant($"Baseline drift is {analysis.DriftRate.TotalArcSecPerMinute:0.##}\"/min; compare altitude, stability, wind, and polar/framing setup between sessions.")
                 };
             }
 

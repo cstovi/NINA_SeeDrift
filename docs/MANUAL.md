@@ -65,7 +65,7 @@ New reports embed a structured JSON data block in the HTML. This is what **Compa
 
 ### Session settings used (run-wide panel)
 
-Near the top of each night HTML, above the per-target sections, a **Session settings used** card surfaces the NINA + Seestar values that actually drove this run. Values come from log lines that the correlator already reads, so the panel never opens additional files. Rows that have no observations are omitted (no empty zeros).
+Near the top of each night HTML, above the per-target sections, a **Session settings used** card surfaces the NINA + Seestar values that actually drove this run. Values come from log lines that the correlator already reads, so the panel never opens additional files. Rows that have no observations are omitted (no empty zeros). The card is **collapsed by default** — click the header to expand it. The same panel inside **Compare saved reports** stays expanded inline so before / after rows are visible at a glance.
 
 | Row | Source line | What it represents |
 |---|---|---|

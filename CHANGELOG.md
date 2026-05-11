@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Session settings used** card in the night HTML is now **collapsed by default** (click the header to expand). The card behavior in **Compare saved reports** is unchanged — the comparison HTML still renders the settings table inline.
+- **Drift recommendation wording:** the high-drift recommendation no longer assumes a tripod-mounted setup. The hint now reads *"…compare altitude, stability, wind, and polar/framing setup between sessions."* (was *"tripod stability"*). Same trigger threshold and tone — text only.
+
 ## [0.8.25] — 2026-05-11
 
 ### Added

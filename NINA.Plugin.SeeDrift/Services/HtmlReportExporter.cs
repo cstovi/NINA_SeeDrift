@@ -1154,17 +1154,19 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             var sb = new StringBuilder();
             sb.AppendLine("<section class=\"mb-10\">");
-            sb.AppendLine("  <div class=\"rounded-lg border border-slate-800 bg-slate-900/40 p-4\">");
-            sb.AppendLine("    <div class=\"flex items-baseline justify-between gap-3\">");
-            sb.AppendLine("      <h2 class=\"text-base font-semibold text-sky-200\">Session settings used</h2>");
+            sb.AppendLine("  <details class=\"rounded-lg border border-slate-800 bg-slate-900/40\">");
+            sb.AppendLine("    <summary class=\"flex cursor-pointer items-baseline justify-between gap-3 p-4 marker:text-sky-300 hover:bg-slate-900/60\">");
+            sb.AppendLine("      <h2 class=\"text-base font-semibold text-sky-200\">Session settings used <span class=\"ml-2 text-[11px] font-normal normal-case text-slate-400\">(click to expand)</span></h2>");
             sb.AppendLine("      <span class=\"text-[10px] uppercase tracking-wide text-slate-500\">observed from NINA logs</span>");
-            sb.AppendLine("    </div>");
-            sb.AppendLine("    <p class=\"mt-1 text-xs text-slate-500\">Values reflect how NINA was configured during this run. Effectiveness of each event is in the per-target panels below. RA/Dec guide rate is a Seestar Alpaca setting and only visible here as observed dither pulse durations.</p>");
-            sb.AppendLine("    <dl class=\"mt-3 grid gap-3 sm:grid-cols-2\">");
+            sb.AppendLine("    </summary>");
+            sb.AppendLine("    <div class=\"border-t border-slate-800 px-4 pb-4 pt-3\">");
+            sb.AppendLine("      <p class=\"text-xs text-slate-500\">Values reflect how NINA was configured during this run. Effectiveness of each event is in the per-target panels below. RA/Dec guide rate is a Seestar Alpaca setting and only visible here as observed dither pulse durations.</p>");
+            sb.AppendLine("      <dl class=\"mt-3 grid gap-3 sm:grid-cols-2\">");
             foreach (var row in rows)
                 sb.AppendLine(row);
-            sb.AppendLine("    </dl>");
-            sb.AppendLine("  </div>");
+            sb.AppendLine("      </dl>");
+            sb.AppendLine("    </div>");
+            sb.AppendLine("  </details>");
             sb.AppendLine("</section>");
             return sb.ToString();
         }
