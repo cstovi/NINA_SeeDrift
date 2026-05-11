@@ -23,6 +23,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             analysis.SuspectDitherCount = analysis.Dithers.Count(d => d.IsSuspect);
             analysis.SuspectDitherDiscountedAbsRaArcSec = analysis.Dithers.Where(d => d.IsSuspect).Sum(d => Math.Abs(d.DeltaRaArcSec));
             analysis.SuspectDitherDiscountedAbsDecArcSec = analysis.Dithers.Where(d => d.IsSuspect).Sum(d => Math.Abs(d.DeltaDecArcSec));
+            FillAssessedDitherIntervalStats(analysis);
             analysis.Centers.AddRange(BuildCenterAnalyses(ordered));
             analysis.Timeline.AddRange(BuildTimeline(ordered, analysis));
             analysis.Recommendations.AddRange(BuildRecommendations(analysis));
@@ -358,9 +359,19 @@ namespace NINA.Plugin.SeeDrift.Services {
                     level = Math.Max(level, 1);
             }
 
-            if (level == 1 && consistency >= 0.75)
+            // Consistency-only escalation is gated by a magnitude floor so a low but directional drift
+            // (visually tame on the path plot) cannot push the advisory to "Caution" on its own.
+            // Promote 1→2 requires moderate per-exposure motion; 0→1 requires a smaller floor.
+            var moderateFloor = perExposurePixels.HasValue
+                ? perExposurePixels.Value >= 0.25
+                : perExposureArcSec.HasValue && perExposureArcSec.Value >= 1.0;
+            var smallFloor = perExposurePixels.HasValue
+                ? perExposurePixels.Value >= 0.15
+                : perExposureArcSec.HasValue && perExposureArcSec.Value >= 0.6;
+
+            if (level == 1 && consistency >= 0.75 && moderateFloor)
                 level = 2;
-            else if (level == 0 && consistency >= 0.85)
+            else if (level == 0 && consistency >= 0.85 && smallFloor)
                 level = 1;
 
             if (level >= 2)
@@ -368,6 +379,23 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (level == 1)
                 return ("Moderate", "ok");
             return ("Low", "good");
+        }
+
+        /// <summary>
+        /// Fills the run-wide assessed-dither-interval totals (Σ|ΔRA| / Σ|ΔDec| and median |Δ|) on the analysis,
+        /// excluding suspect intervals so reported sums match the dither assessment table and effectiveness scoring.
+        /// </summary>
+        private static void FillAssessedDitherIntervalStats(TargetAnalysis analysis) {
+            var assessed = analysis.Dithers.Where(d => !d.IsSuspect).ToList();
+            analysis.DitherIntervalAssessedSumAbsRaArcSec = assessed.Sum(d => Math.Abs(d.DeltaRaArcSec));
+            analysis.DitherIntervalAssessedSumAbsDecArcSec = assessed.Sum(d => Math.Abs(d.DeltaDecArcSec));
+            if (assessed.Count == 0)
+                return;
+            var moves = assessed.Select(d => d.MoveArcSec).OrderBy(v => v).ToList();
+            analysis.DitherIntervalMedianMoveArcSec = moves[(moves.Count - 1) / 2];
+            var px = assessed.Where(d => d.EquivalentPixels.HasValue).Select(d => d.EquivalentPixels!.Value).OrderBy(v => v).ToList();
+            if (px.Count > 0)
+                analysis.DitherIntervalMedianMovePixels = px[(px.Count - 1) / 2];
         }
 
         private static double? MedianExposureSeconds(IReadOnlyList<DriftSample> ordered) {

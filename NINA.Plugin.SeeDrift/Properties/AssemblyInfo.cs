@@ -16,8 +16,8 @@ using System.Windows;
 When log lines correlate between exposures, dither and center-after-drift triggers appear in the HTML report with advisory effectiveness metrics and settings hints. Recent NINA logs can be selected from the options UI. Reports are stored in a stable library by default, Seestar model/serial identity is shown when NINA logged a connected Alpaca telescope, star-shape and walking-noise drift risk are summarized separately from logged dithers, possible missing/unsolved frame gaps are marked, suspect tracking jumps are excluded from dither scoring, and schema-compatible saved reports can be compared by whole-report averages.")]
 [assembly: AssemblyCompany("Carl Stovell")]
 [assembly: AssemblyProduct("NINA.Plugin.SeeDrift")]
-[assembly: AssemblyVersion("0.8.22.0")]
-[assembly: AssemblyFileVersion("0.8.22.0")]
+[assembly: AssemblyVersion("0.8.23.0")]
+[assembly: AssemblyFileVersion("0.8.23.0")]
 [assembly: AssemblyMetadata("id", "E8D4C2F1-6B7A-4E9D-8C3F-1A2B5D7E9F0C")]
 [assembly: Guid("E8D4C2F1-6B7A-4E9D-8C3F-1A2B5D7E9F0C")]
 [assembly: ThemeInfo(

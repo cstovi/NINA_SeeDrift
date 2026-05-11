@@ -118,6 +118,30 @@ namespace NINA.Plugin.SeeDrift.Services {
                 "More Dec separation on average",
                 "Less Dec separation on average"));
             result.Metrics.Add(BuildMetric(
+                "Typical dither (median |Δ|)",
+                beforeStats.MedianDitherMoveArcSec,
+                afterStats.MedianDitherMoveArcSec,
+                "\"",
+                higherIsBetter: true,
+                "Stronger typical dither magnitude",
+                "Weaker typical dither magnitude"));
+            result.Metrics.Add(BuildMetric(
+                "Σ|ΔRA| over assessed dither intervals",
+                beforeStats.SumAbsDitherRaArcSec,
+                afterStats.SumAbsDitherRaArcSec,
+                "\"",
+                higherIsBetter: true,
+                "More total RA separation across the run",
+                "Less total RA separation across the run"));
+            result.Metrics.Add(BuildMetric(
+                "Σ|ΔDec| over assessed dither intervals",
+                beforeStats.SumAbsDitherDecArcSec,
+                afterStats.SumAbsDitherDecArcSec,
+                "\"",
+                higherIsBetter: true,
+                "More total Dec separation across the run",
+                "Less total Dec separation across the run"));
+            result.Metrics.Add(BuildMetric(
                 "Dither RA/Dec balance",
                 beforeStats.DitherAxisBalancePercent,
                 afterStats.DitherAxisBalancePercent,
@@ -284,6 +308,27 @@ namespace NINA.Plugin.SeeDrift.Services {
             var balance = largerAxis > 0.001
                 ? 100.0 * Math.Min(avgRa, avgDec) / largerAxis
                 : 0;
+
+            // Sums of assessed (non-suspect) interval magnitudes — prefer the analysis-stored
+            // values when present; older reports fall back to summing the dither events directly.
+            var sumRa = targets.Sum(t => t.Analysis.DitherIntervalAssessedSumAbsRaArcSec);
+            var sumDec = targets.Sum(t => t.Analysis.DitherIntervalAssessedSumAbsDecArcSec);
+            if (sumRa <= 0 && sumDec <= 0) {
+                sumRa = dithers.Sum(d => Math.Abs(d.DeltaRaArcSec));
+                sumDec = dithers.Sum(d => Math.Abs(d.DeltaDecArcSec));
+            }
+            double medianMove = 0;
+            var medians = targets
+                .Select(t => t.Analysis.DitherIntervalMedianMoveArcSec)
+                .Where(v => v.HasValue)
+                .Select(v => v!.Value)
+                .ToList();
+            if (medians.Count > 0)
+                medianMove = medians.Average();
+            else if (dithers.Count > 0) {
+                var sorted = dithers.Select(d => d.MoveArcSec).OrderBy(v => v).ToList();
+                medianMove = sorted[(sorted.Count - 1) / 2];
+            }
             return new ComparisonStats {
                 TargetCount = targets.Count,
                 FrameCount = targets.Sum(t => t.FrameCount),
@@ -292,6 +337,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 CenterCount = centers.Count,
                 AverageAbsDitherRaArcSec = avgRa,
                 AverageAbsDitherDecArcSec = avgDec,
+                SumAbsDitherRaArcSec = sumRa,
+                SumAbsDitherDecArcSec = sumDec,
+                MedianDitherMoveArcSec = medianMove,
                 DitherAxisBalancePercent = balance,
                 WeakDitherRatePercent = Percent(dithers.Count(d => d.Assessment == "Weak"), dithers.Count),
                 AverageCenterImprovementPercent = AverageOrZero(centers.Select(c => c.ImprovementPercent)),
@@ -459,6 +507,9 @@ namespace NINA.Plugin.SeeDrift.Services {
             public int CenterCount { get; init; }
             public double AverageAbsDitherRaArcSec { get; init; }
             public double AverageAbsDitherDecArcSec { get; init; }
+            public double SumAbsDitherRaArcSec { get; init; }
+            public double SumAbsDitherDecArcSec { get; init; }
+            public double MedianDitherMoveArcSec { get; init; }
             public double DitherAxisBalancePercent { get; init; }
             public double WeakDitherRatePercent { get; init; }
             public double AverageCenterImprovementPercent { get; init; }

@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.23] — 2026-05-11
+
+### Changed
+
+- **Logged dither intervals total** now reports the **assessed** sums only — suspect tracking jumps (already excluded from the dither effectiveness scoring) are no longer added to `Σ|ΔRA|` / `Σ|ΔDec|` (or the detector `Σ|Δx|` / `Σ|Δy|`) above the per-row table. The same line now appears as `Logged dither intervals total (assessed)`.
+- When at least one suspect interval is detected, a new amber subtext lists how many intervals were skipped and the discounted Σ values so the original number can still be reconstructed.
+- A new "**Typical dither**" companion line shows the median |Δ| across assessed dithers (with detector px when plate scale is known). This makes a single huge suspect jump hide less of the typical session behaviour.
+- **Walking-noise / drift advisory** (`SessionAnalysisService.ClassifyDriftRisk`) no longer escalates the tier on direction consistency alone. The 0→Moderate bump now also requires `≥ 0.15 px` (or `≥ 0.6″`) of estimated per-exposure drift; the Moderate→Caution bump requires `≥ 0.25 px` (or `≥ 1.0″`). Tame traces with consistent but low-magnitude drift will no longer surface as **Caution**.
+
+### Added
+
+- `TargetAnalysis` now carries `DitherIntervalAssessedSumAbsRaArcSec`, `DitherIntervalAssessedSumAbsDecArcSec`, `DitherIntervalMedianMoveArcSec`, and `DitherIntervalMedianMovePixels` so the same numbers reach the embedded JSON payload.
+- **Compare saved reports** adds three new metric rows derived from the above: *Typical dither (median |Δ|)*, *Σ|ΔRA| over assessed dither intervals*, *Σ|ΔDec| over assessed dither intervals*. Older reports without the per-target fields fall back to summing the dither events directly, so comparison still works across plugin versions.
+
 ## [0.8.22] — 2026-05-11
 
 ### Added

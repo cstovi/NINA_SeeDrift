@@ -520,7 +520,14 @@ namespace NINA.Plugin.SeeDrift.Services {
             double sumAbsDec = 0;
             double sumAbsPx = 0;
             double sumAbsPy = 0;
+            double discountedAbsRa = 0;
+            double discountedAbsDec = 0;
+            double discountedAbsPx = 0;
+            double discountedAbsPy = 0;
+            var suspectCount = 0;
             var anyPxSegment = false;
+            var assessedMovesArc = new List<double>();
+            var assessedMovesPx = new List<double>();
 
             for (var i = 1; i < group.Count; i++) {
                 var markers = group[i].EdgeSequencerMarkers;
@@ -532,11 +539,19 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var dRa = x1 - x0;
                 var dDec = y1 - y0;
                 var move = Math.Sqrt(dRa * dRa + dDec * dDec);
-                var note = move >= suspectFloor
+                var suspect = move >= suspectFloor;
+                var note = suspect
                     ? "Excluded from dither assessment: likely tracking issue / suspect jump."
                     : "";
-                sumAbsRa += Math.Abs(dRa);
-                sumAbsDec += Math.Abs(dDec);
+                if (suspect) {
+                    suspectCount++;
+                    discountedAbsRa += Math.Abs(dRa);
+                    discountedAbsDec += Math.Abs(dDec);
+                } else {
+                    sumAbsRa += Math.Abs(dRa);
+                    sumAbsDec += Math.Abs(dDec);
+                    assessedMovesArc.Add(move);
+                }
                 var prev = group[i - 1];
                 var cur = group[i];
                 var label = FormattableString.Invariant(
@@ -548,8 +563,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                     && cur.CumulativePixelX is double px1 && cur.CumulativePixelY is double py1) {
                     var adx = Math.Abs(px1 - px0);
                     var ady = Math.Abs(py1 - py0);
-                    sumAbsPx += adx;
-                    sumAbsPy += ady;
+                    if (suspect) {
+                        discountedAbsPx += adx;
+                        discountedAbsPy += ady;
+                    } else {
+                        sumAbsPx += adx;
+                        sumAbsPy += ady;
+                        assessedMovesPx.Add(Math.Sqrt(adx * adx + ady * ady));
+                    }
                     anyPxSegment = true;
                     pxText = FormattableString.Invariant($"|Δx| {adx:0.##} px · |Δy| {ady:0.##} px");
                 }
@@ -560,15 +581,44 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (rows.Count == 0)
                 return "";
 
+            var assessedCount = rows.Count - suspectCount;
             var totalArc = FormattableString.Invariant(
-                $"Logged dither intervals total — Σ|ΔRA| {sumAbsRa:0.###}″ · Σ|ΔDec| {sumAbsDec:0.###}″");
+                $"Logged dither intervals total (assessed) — Σ|ΔRA| {sumAbsRa:0.###}″ · Σ|ΔDec| {sumAbsDec:0.###}″");
             if (anyPxSegment)
                 totalArc += FormattableString.Invariant(
                     $" · detector Σ|Δx| {sumAbsPx:0.##} px · Σ|Δy| {sumAbsPy:0.##} px");
 
+            string? discountedLine = null;
+            if (suspectCount > 0) {
+                var disc = FormattableString.Invariant(
+                    $"{suspectCount} suspect interval{(suspectCount == 1 ? "" : "s")} excluded — discounted Σ|ΔRA| {discountedAbsRa:0.###}″ · Σ|ΔDec| {discountedAbsDec:0.###}″");
+                if (anyPxSegment && (discountedAbsPx > 0 || discountedAbsPy > 0))
+                    disc += FormattableString.Invariant(
+                        $" · detector Σ|Δx| {discountedAbsPx:0.##} px · Σ|Δy| {discountedAbsPy:0.##} px");
+                discountedLine = disc + ".";
+            }
+
+            string? typicalLine = null;
+            if (assessedMovesArc.Count > 0) {
+                var sorted = assessedMovesArc.OrderBy(v => v).ToList();
+                var medianArc = sorted[(sorted.Count - 1) / 2];
+                var typical = FormattableString.Invariant(
+                    $"Typical dither — median |Δ| {medianArc:0.##}″ across {assessedCount} assessed dither{(assessedCount == 1 ? "" : "s")}");
+                if (assessedMovesPx.Count > 0) {
+                    var sortedPx = assessedMovesPx.OrderBy(v => v).ToList();
+                    var medianPx = sortedPx[(sortedPx.Count - 1) / 2];
+                    typical += FormattableString.Invariant($" (~{medianPx:0.#} px)");
+                }
+                typicalLine = typical + ".";
+            }
+
             var sb = new StringBuilder();
             sb.AppendLine("    <div class=\"mt-4 rounded-lg border border-purple-900/40 bg-slate-900/30 p-3 text-xs text-slate-400\">");
             sb.AppendLine($"      <p class=\"font-semibold text-purple-200\">{totalArc}</p>");
+            if (discountedLine != null)
+                sb.AppendLine($"      <p class=\"mt-1 text-amber-200\">{Escape(discountedLine)}</p>");
+            if (typicalLine != null)
+                sb.AppendLine($"      <p class=\"mt-1 text-slate-300\">{Escape(typicalLine)}</p>");
             sb.AppendLine("      <details class=\"mt-3\">");
             sb.AppendLine(
                 $"        <summary class=\"cursor-pointer text-slate-300 marker:text-purple-300 hover:text-white\">Exposures with logged dithers between them — {rows.Count} result{(rows.Count == 1 ? "" : "s")} (click to expand)</summary>");

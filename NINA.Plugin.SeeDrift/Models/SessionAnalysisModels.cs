@@ -123,6 +123,18 @@ namespace NINA.Plugin.SeeDrift.Models {
         public int SuspectDitherCount { get; set; }
         public double SuspectDitherDiscountedAbsRaArcSec { get; set; }
         public double SuspectDitherDiscountedAbsDecArcSec { get; set; }
+
+        /// <summary>Σ|ΔRA| (arc-seconds) across logged dither intervals, excluding suspect intervals.</summary>
+        public double DitherIntervalAssessedSumAbsRaArcSec { get; set; }
+
+        /// <summary>Σ|ΔDec| (arc-seconds) across logged dither intervals, excluding suspect intervals.</summary>
+        public double DitherIntervalAssessedSumAbsDecArcSec { get; set; }
+
+        /// <summary>Median |Δ| (arc-seconds) across assessed (non-suspect) dither intervals.</summary>
+        public double? DitherIntervalMedianMoveArcSec { get; set; }
+
+        /// <summary>Median |Δ| (detector pixels) across assessed (non-suspect) dither intervals (when plate scale is known).</summary>
+        public double? DitherIntervalMedianMovePixels { get; set; }
     }
 
     /// <summary>
