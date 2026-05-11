@@ -149,8 +149,124 @@ namespace NINA.Plugin.SeeDrift.Services {
                 higherIsBetter: false,
                 "Fewer ineffective centers",
                 "More ineffective centers"));
-            result.OverallSummary = BuildOverallSummary(result.Metrics);
+            result.SettingsRows.AddRange(BuildSettingsRows(before.SequencerSettings, after.SequencerSettings));
+            result.SettingsDiffer = result.SettingsRows.Any(r => r.Status == "changed");
+            result.OverallSummary = BuildOverallSummary(result.Metrics, result.SettingsDiffer);
             return result;
+        }
+
+        /// <summary>
+        /// Builds the comparison rows for the run-wide "Session settings used" block. Rows are emitted only when at
+        /// least one of the two reports has data for that row; absent values are rendered as "—" with status="missing".
+        /// </summary>
+        private static IEnumerable<ReportComparisonSettingsRow> BuildSettingsRows(
+                SessionSequencerSettings? before, SessionSequencerSettings? after) {
+            if (before == null && after == null)
+                yield break;
+
+            // Mount Dither Pixels (median)
+            if (before?.DitherPixelsMedian.HasValue == true || after?.DitherPixelsMedian.HasValue == true) {
+                yield return CompareNumeric(
+                    "Mount Dither Pixels (median, px)",
+                    before?.DitherPixelsMedian, after?.DitherPixelsMedian,
+                    suffix: " px", changedTolerance: 1.0, decimals: 1,
+                    note: "Median commanded |Δ| from DirectGuider pulses; proxy for the NINA Mount Dither Pixels setting.");
+            }
+
+            // CenterAfterDrift threshold (arc-min)
+            if (before?.CenterMaxArcMin.HasValue == true || after?.CenterMaxArcMin.HasValue == true) {
+                yield return CompareNumeric(
+                    "Center After Drift — Max (arc-min)",
+                    before?.CenterMaxArcMin, after?.CenterMaxArcMin,
+                    suffix: "′", changedTolerance: 0.1, decimals: 1,
+                    note: "Configured CenterAfterDrift threshold (from evaluation lines).");
+            }
+
+            // CenterAfterDrift evaluate cadence
+            if (before?.CenterEvaluateAfterExposures.HasValue == true || after?.CenterEvaluateAfterExposures.HasValue == true) {
+                yield return CompareCadence(
+                    "Center After Drift — Evaluate every N exp.",
+                    before?.CenterEvaluateAfterExposures, after?.CenterEvaluateAfterExposures,
+                    note: "Inferred from frame gaps between CenterAfterDrift evaluation lines.");
+            }
+
+            // DitherAfterExposures cadence
+            if (before?.DitherAfterExposuresN.HasValue == true || after?.DitherAfterExposuresN.HasValue == true) {
+                var beforeNote = before?.DitherCadenceInferred == true ? "before: inferred" : "before: from log";
+                var afterNote = after?.DitherCadenceInferred == true ? "after: inferred" : "after: from log";
+                yield return CompareCadence(
+                    "Dither After Exposures — Cadence (every N exp.)",
+                    before?.DitherAfterExposuresN, after?.DitherAfterExposuresN,
+                    note: $"DitherAfterExposures trigger cadence ({beforeNote}; {afterNote}).");
+            }
+
+            // Dither pulse guide durations (RA / Dec)
+            if ((before?.DitherGuideDurationFirstSecMedian.HasValue == true && before?.DitherGuideDurationSecondSecMedian.HasValue == true)
+                || (after?.DitherGuideDurationFirstSecMedian.HasValue == true && after?.DitherGuideDurationSecondSecMedian.HasValue == true)) {
+                var beforeStr = FormatPulseDurations(before);
+                var afterStr = FormatPulseDurations(after);
+                var status = string.Equals(beforeStr, afterStr, StringComparison.Ordinal)
+                    ? "same"
+                    : (beforeStr == "—" || afterStr == "—" ? "missing" : "changed");
+                yield return new ReportComparisonSettingsRow {
+                    Setting = "Dither pulse durations (s, RA · Dec)",
+                    BeforeValue = beforeStr,
+                    AfterValue = afterStr,
+                    Status = status,
+                    Note = "Median seconds across dither pulses; proxy for the Seestar Alpaca RA/Dec guide rate."
+                };
+            }
+        }
+
+        private static string FormatPulseDurations(SessionSequencerSettings? s) {
+            if (s?.DitherGuideDurationFirstSecMedian.HasValue != true
+                || s?.DitherGuideDurationSecondSecMedian.HasValue != true)
+                return "—";
+            return string.Format(CultureInfo.InvariantCulture,
+                "{0:0.00} · {1:0.00}", s.DitherGuideDurationFirstSecMedian!.Value, s.DitherGuideDurationSecondSecMedian!.Value);
+        }
+
+        private static ReportComparisonSettingsRow CompareNumeric(
+                string setting, double? before, double? after, string suffix, double changedTolerance, int decimals, string note) {
+            string beforeStr = before.HasValue
+                ? before.Value.ToString("0." + new string('#', decimals), CultureInfo.InvariantCulture) + suffix
+                : "—";
+            string afterStr = after.HasValue
+                ? after.Value.ToString("0." + new string('#', decimals), CultureInfo.InvariantCulture) + suffix
+                : "—";
+            string status;
+            if (!before.HasValue || !after.HasValue)
+                status = "missing";
+            else if (Math.Abs(before.Value - after.Value) < changedTolerance)
+                status = "same";
+            else
+                status = "changed";
+            return new ReportComparisonSettingsRow {
+                Setting = setting,
+                BeforeValue = beforeStr,
+                AfterValue = afterStr,
+                Status = status,
+                Note = note
+            };
+        }
+
+        private static ReportComparisonSettingsRow CompareCadence(string setting, int? before, int? after, string note) {
+            string beforeStr = before.HasValue ? $"every {before.Value}" : "—";
+            string afterStr = after.HasValue ? $"every {after.Value}" : "—";
+            string status;
+            if (!before.HasValue || !after.HasValue)
+                status = "missing";
+            else if (before.Value == after.Value)
+                status = "same";
+            else
+                status = "changed";
+            return new ReportComparisonSettingsRow {
+                Setting = setting,
+                BeforeValue = beforeStr,
+                AfterValue = afterStr,
+                Status = status,
+                Note = note
+            };
         }
 
         private static ComparisonStats BuildStats(SeeDriftReportPayload report) {
@@ -228,14 +344,19 @@ namespace NINA.Plugin.SeeDrift.Services {
             return "";
         }
 
-        private static string BuildOverallSummary(IReadOnlyList<ReportComparisonMetricResult> metrics) {
+        private static string BuildOverallSummary(IReadOnlyList<ReportComparisonMetricResult> metrics, bool settingsDiffer) {
             var better = metrics.Count(m => m.Direction == "better");
             var worse = metrics.Count(m => m.Direction == "worse");
+            string baseLine;
             if (better > worse)
-                return $"Overall read: better on average ({better} improved, {worse} worsened).";
-            if (worse > better)
-                return $"Overall read: worse on average ({better} improved, {worse} worsened).";
-            return $"Overall read: mixed or similar on average ({better} improved, {worse} worsened).";
+                baseLine = $"Overall read: better on average ({better} improved, {worse} worsened).";
+            else if (worse > better)
+                baseLine = $"Overall read: worse on average ({better} improved, {worse} worsened).";
+            else
+                baseLine = $"Overall read: mixed or similar on average ({better} improved, {worse} worsened).";
+            return settingsDiffer
+                ? baseLine + " Session settings differed between runs — see the Settings table for what changed."
+                : baseLine;
         }
 
         private static double AverageOrZero(IEnumerable<double> values) {
@@ -274,6 +395,29 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine("</tr>");
             }
             sb.AppendLine("</tbody></table></div>");
+
+            if (result.SettingsRows.Count > 0) {
+                sb.AppendLine("<h2 class=\"mt-8 text-base font-semibold text-sky-200\">Session settings used</h2>");
+                sb.AppendLine("<p class=\"mt-1 text-xs text-slate-500\">Observed in NINA logs during each run. Use this to see whether changes above correlate with a configuration change between sessions. Older reports without embedded settings show <span class=\"font-mono\">—</span>.</p>");
+                sb.AppendLine("<div class=\"mt-3 overflow-x-auto rounded-lg border border-slate-700\"><table class=\"min-w-full divide-y divide-slate-700 text-left text-sm\">");
+                sb.AppendLine("<thead class=\"bg-slate-900 text-sky-300\"><tr><th class=\"px-3 py-2\">Setting</th><th class=\"px-3 py-2\">Before</th><th class=\"px-3 py-2\">After</th><th class=\"px-3 py-2\">Change</th></tr></thead>");
+                sb.AppendLine("<tbody class=\"divide-y divide-slate-800 bg-slate-950/40\">");
+                foreach (var r in result.SettingsRows) {
+                    var (badgeClass, badgeText) = r.Status switch {
+                        "changed" => ("border-amber-500/40 bg-amber-500/10 text-amber-200", "Changed"),
+                        "same" => ("border-slate-700 bg-slate-800/60 text-slate-300", "Same"),
+                        _ => ("border-slate-800 bg-slate-900/40 text-slate-500", "—")
+                    };
+                    sb.AppendLine("<tr>");
+                    sb.AppendLine($"<td class=\"px-3 py-2 text-slate-100\">{Escape(r.Setting)}<div class=\"mt-1 text-[11px] text-slate-500\">{Escape(r.Note)}</div></td>");
+                    sb.AppendLine($"<td class=\"px-3 py-2\">{Escape(r.BeforeValue)}</td>");
+                    sb.AppendLine($"<td class=\"px-3 py-2\">{Escape(r.AfterValue)}</td>");
+                    sb.AppendLine($"<td class=\"px-3 py-2\"><span class=\"rounded border {badgeClass} px-2 py-0.5 text-[11px] uppercase tracking-wide\">{Escape(badgeText)}</span></td>");
+                    sb.AppendLine("</tr>");
+                }
+                sb.AppendLine("</tbody></table></div>");
+            }
+
             sb.AppendLine("<p class=\"mt-4 text-xs text-slate-500\">Comparison uses embedded SeeDrift report data across the whole report. It does not require matching target names or session order. No FITS files are scanned and no plate solving is run.</p>");
             sb.AppendLine("</main></body></html>");
             return sb.ToString();

@@ -65,7 +65,7 @@ Near the top of each night HTML, above the per-target sections, a **Session sett
 | **Dither After Exposures — Cadence** | `Starting Trigger: ... DitherAfterExposures` (parsed `AfterExposures = N` when the NINA build prints it), with frame-gap fallback | Either parsed from the log or inferred from gaps between successive triggers; inferred values are tagged. |
 | **Dither pulse guide durations** | `using guide durations of X and Y seconds` on the dither pulse line | Median seconds across pulses (RA / Dec). The Seestar Alpaca RA/Dec guide rate is **not** in NINA logs; this row is the visible proxy. |
 
-The same values are also embedded in the report's JSON payload (additive `SequencerSettings` field), so future before/after comparisons can show settings drift without re-running plate solves.
+The same values are also embedded in the report's JSON payload (additive `SequencerSettings` field). **Compare saved reports** reads them and adds a **Session settings used** table to the comparison HTML — each row shows the **Before** and **After** value with a **Changed / Same / —** badge so you can tell at a glance whether metric improvements / regressions came alongside a configuration change. When any row is **Changed**, the comparison's overall summary appends a short tip pointing at that table. Reports created before this metadata existed still compare and simply show `—` for the settings rows.
 
 ### Sequencer events in HTML
 

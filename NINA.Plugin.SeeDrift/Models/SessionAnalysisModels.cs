@@ -206,6 +206,24 @@ namespace NINA.Plugin.SeeDrift.Models {
         public SeestarDeviceInfo AfterSeestarDevice { get; init; } = SeestarDeviceInfo.Unknown;
         public string DeviceComparisonAdvisory { get; set; } = "";
         public List<ReportComparisonMetricResult> Metrics { get; init; } = new();
+
+        /// <summary>
+        /// Session-settings comparison rows (Mount Dither Pixels, CenterAfterDrift threshold + evaluate cadence,
+        /// DitherAfterExposures cadence, dither pulse durations). Empty when neither report carries SequencerSettings.
+        /// </summary>
+        public List<ReportComparisonSettingsRow> SettingsRows { get; init; } = new();
+
+        /// <summary>True when any settings row differs, so the metric deltas should be read alongside the change.</summary>
+        public bool SettingsDiffer { get; set; }
+    }
+
+    public sealed class ReportComparisonSettingsRow {
+        public string Setting { get; init; } = "";
+        public string BeforeValue { get; init; } = "";
+        public string AfterValue { get; init; } = "";
+        /// <summary>"changed", "same", or "missing" (one or both reports do not have this row).</summary>
+        public string Status { get; init; } = "";
+        public string Note { get; init; } = "";
     }
 
     public sealed class ReportComparisonMetricResult {

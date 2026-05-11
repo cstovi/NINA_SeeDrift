@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.22] — 2026-05-11
+
+### Added
+
+- **Compare saved reports — Session settings table:** The comparison HTML now includes a **Session settings used** table directly under the metric table, showing **Before / After** values and a **Changed / Same / —** badge for each row in the night-report settings panel: Mount Dither Pixels, CenterAfterDrift max arc-minutes, CenterAfterDrift evaluate cadence, DitherAfterExposures cadence, and dither pulse durations.
+- **Overall read tip:** When any setting differs between the two reports, the comparison's overall summary appends a one-line tip pointing the user at the settings table so metric improvements / regressions can be read alongside the configuration change.
+- Reports made before 0.8.21 still compare — settings rows for those show `—` and are tagged `Missing`.
+
 ## [0.8.21] — 2026-05-11
 
 ### Added
