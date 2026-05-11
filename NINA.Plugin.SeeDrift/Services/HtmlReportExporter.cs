@@ -128,6 +128,10 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("  </div>");
             sb.AppendLine("</header>");
 
+            var sequencerSettings = SessionAnalysisService.BuildSequencerSettings(targets);
+            if (sequencerSettings != null)
+                sb.Append(FormatSessionSettingsHtml(sequencerSettings));
+
             for (var t = 0; t < targets.Count; t++) {
                 var batch = targets[t];
                 var samples = batch.Samples;
@@ -957,6 +961,116 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("        </div>");
             sb.AppendLine("      </details>");
             sb.AppendLine("    </div>");
+        }
+
+        /// <summary>
+        /// Run-wide "Session settings used" card showing values observed from NINA logs (CenterAfterDrift threshold,
+        /// CenterAfterDrift evaluate cadence, DitherAfterExposures cadence, Mount Dither Pixels via DirectGuider
+        /// pulse magnitudes, and observed dither pulse guide durations as a Seestar Alpaca guide-rate proxy).
+        /// </summary>
+        private static string FormatSessionSettingsHtml(SessionSequencerSettings s) {
+            var rows = new List<string>();
+
+            if (s.DitherPixelsMedian.HasValue && s.DitherPulseCount > 0) {
+                var px = s.DitherPixelsMedian.Value;
+                var pulses = s.DitherPulseCount;
+                rows.Add(FormatSettingsRow(
+                    "Mount Dither Device — Dither Pixels",
+                    string.Format(CultureInfo.InvariantCulture, "~{0:0.#} px", px),
+                    $"median of {pulses} pulse{(pulses == 1 ? "" : "s")} · commanded |Δ| from DirectGuider log",
+                    false));
+            }
+
+            if (s.CenterMaxArcMin.HasValue) {
+                var v = s.CenterMaxArcMin.Value;
+                var detail = "configured threshold (CenterAfterDriftTrigger evaluation lines)";
+                var variance = (s.CenterMaxArcMinMin.HasValue && s.CenterMaxArcMinMax.HasValue
+                                && Math.Abs(s.CenterMaxArcMinMax.Value - s.CenterMaxArcMinMin.Value) > 0.05)
+                    ? string.Format(CultureInfo.InvariantCulture, " · varied: {0:0.#}′–{1:0.#}′",
+                        s.CenterMaxArcMinMin!.Value, s.CenterMaxArcMinMax!.Value)
+                    : "";
+                rows.Add(FormatSettingsRow(
+                    "Center After Drift — Max arc-minutes",
+                    string.Format(CultureInfo.InvariantCulture, "{0:0.#}′ threshold", v),
+                    detail + variance,
+                    false));
+            }
+
+            if (s.CenterEvaluateAfterExposures.HasValue && s.ObservedCenterEvaluationCount >= 2) {
+                var n = s.CenterEvaluateAfterExposures.Value;
+                var detail = "inferred from frame gaps between CenterAfterDrift evaluation lines";
+                var variance = (s.CenterEvaluateAfterExposuresMin.HasValue && s.CenterEvaluateAfterExposuresMax.HasValue
+                                && s.CenterEvaluateAfterExposuresMin.Value != s.CenterEvaluateAfterExposuresMax.Value)
+                    ? $" · varied: every {s.CenterEvaluateAfterExposuresMin}–{s.CenterEvaluateAfterExposuresMax} exposures"
+                    : "";
+                rows.Add(FormatSettingsRow(
+                    "Center After Drift — Evaluate after exposures",
+                    $"every ~{n} exposure{(n == 1 ? "" : "s")}",
+                    detail + variance,
+                    true));
+            }
+
+            if (s.DitherAfterExposuresN.HasValue && s.ObservedDitherTriggerCount > 0) {
+                var n = s.DitherAfterExposuresN.Value;
+                var detail = s.DitherCadenceInferred
+                    ? "inferred from frame gaps between DitherAfterExposures triggers"
+                    : "from NINA Starting Trigger log line";
+                var variance = (s.DitherAfterExposuresNMin.HasValue && s.DitherAfterExposuresNMax.HasValue
+                                && s.DitherAfterExposuresNMin.Value != s.DitherAfterExposuresNMax.Value)
+                    ? $" · varied: every {s.DitherAfterExposuresNMin}–{s.DitherAfterExposuresNMax} exposures"
+                    : "";
+                var label = s.DitherCadenceInferred
+                    ? $"every ~{n} exposure{(n == 1 ? "" : "s")}"
+                    : $"every {n} exposure{(n == 1 ? "" : "s")}";
+                rows.Add(FormatSettingsRow(
+                    "Dither After Exposures — Cadence",
+                    label,
+                    detail + variance,
+                    s.DitherCadenceInferred));
+            }
+
+            if (s.DitherGuideDurationFirstSecMedian.HasValue && s.DitherGuideDurationSecondSecMedian.HasValue
+                && s.GuideDurationSampleCount > 0) {
+                var ra = s.DitherGuideDurationFirstSecMedian.Value;
+                var dec = s.DitherGuideDurationSecondSecMedian.Value;
+                var count = s.GuideDurationSampleCount;
+                rows.Add(FormatSettingsRow(
+                    "Dither pulse guide durations",
+                    string.Format(CultureInfo.InvariantCulture, "{0:0.00} s RA · {1:0.00} s Dec", ra, dec),
+                    $"median across {count} pulse{(count == 1 ? "" : "s")} · proxy for Seestar Alpaca RA/Dec guide rate",
+                    false));
+            }
+
+            if (rows.Count == 0)
+                return "";
+
+            var sb = new StringBuilder();
+            sb.AppendLine("<section class=\"mb-10\">");
+            sb.AppendLine("  <div class=\"rounded-lg border border-slate-800 bg-slate-900/40 p-4\">");
+            sb.AppendLine("    <div class=\"flex items-baseline justify-between gap-3\">");
+            sb.AppendLine("      <h2 class=\"text-base font-semibold text-sky-200\">Session settings used</h2>");
+            sb.AppendLine("      <span class=\"text-[10px] uppercase tracking-wide text-slate-500\">observed from NINA logs</span>");
+            sb.AppendLine("    </div>");
+            sb.AppendLine("    <p class=\"mt-1 text-xs text-slate-500\">Values reflect how NINA was configured during this run. Effectiveness of each event is in the per-target panels below. RA/Dec guide rate is a Seestar Alpaca setting and only visible here as observed dither pulse durations.</p>");
+            sb.AppendLine("    <dl class=\"mt-3 grid gap-3 sm:grid-cols-2\">");
+            foreach (var row in rows)
+                sb.AppendLine(row);
+            sb.AppendLine("    </dl>");
+            sb.AppendLine("  </div>");
+            sb.AppendLine("</section>");
+            return sb.ToString();
+        }
+
+        private static string FormatSettingsRow(string label, string value, string detail, bool inferred) {
+            var inferredBadge = inferred
+                ? " <span class=\"ml-1 rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-400\">inferred</span>"
+                : "";
+            return
+                "      <div class=\"rounded-md border border-slate-800 bg-slate-950/40 p-3\">" +
+                $"<dt class=\"text-[11px] font-semibold uppercase tracking-wide text-sky-400\">{Escape(label)}</dt>" +
+                $"<dd class=\"mt-1 text-sm text-slate-100\">{Escape(value)}{inferredBadge}</dd>" +
+                $"<dd class=\"mt-1 text-[11px] text-slate-500\">{Escape(detail)}</dd>" +
+                "</div>";
         }
 
         private static string FormatPageHeaderLogsHtml(IReadOnlyList<DriftTrackingService.CompletedTarget> targets) {

@@ -93,6 +93,13 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static readonly Regex RxTriggerDither = new Regex(
             @"Starting\s+Trigger:.*DitherAfterExposures", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary>
+        /// AfterExposures = N (DitherAfterExposures cadence) or EveryExposures = N (CenterAfterDrift cadence)
+        /// that some NINA builds emit on or near the <c>Starting Trigger</c> line.
+        /// </summary>
+        private static readonly Regex RxAfterExposuresInline = new Regex(
+            @"After\s*Exposures\s*[=:]\s*(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         /// <summary>NINA guider commanded dither: full line includes from→to and optional guide durations (seconds).</summary>
         private static readonly Regex RxDitherPulse = new Regex(
             @"DirectGuider\.cs\|SelectDitherPulse\|.*\|Dither target from \(([-0-9.eE]+)\s*,\s*([-0-9.eE]+)\) to \(([-0-9.eE]+)\s*,\s*([-0-9.eE]+)\)(?: using guide durations of ([-0-9.eE]+) and ([-0-9.eE]+) seconds)?",
@@ -141,6 +148,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
             public DateTime UtcTime { get; set; }
             public TriggerKind Kind { get; set; }
             public string Label { get; set; } = "";
+
+            /// <summary>
+            /// When the NINA build prints <c>AfterExposures = N</c> on or near the trigger line, captured here.
+            /// Null when no such number was visible — caller falls back to inferring N from frame gaps.
+            /// </summary>
+            public int? AfterExposuresFromLog { get; set; }
         }
 
         private sealed class DitherPulse {
@@ -259,6 +272,18 @@ namespace NINA.Plugin.SeeDrift.Utility {
         public static (int MatchedJumps, bool LogFound, int TriggersLoaded, int SequencerEdges, int TraceDitherTriggers, int TraceCenterTriggers) AnnotateWithLogEvents(
                 List<DriftSample> samples,
                 IReadOnlyList<string>? explicitLogPaths = null) {
+            return AnnotateWithLogEvents(samples, out _, explicitLogPaths);
+        }
+
+        /// <summary>
+        /// Overload that also returns a <see cref="SessionLogObservations"/> built from the same parsed log data
+        /// (configured CenterAfterDrift threshold, dither pulse magnitudes / guide durations, cadence hints).
+        /// </summary>
+        public static (int MatchedJumps, bool LogFound, int TriggersLoaded, int SequencerEdges, int TraceDitherTriggers, int TraceCenterTriggers) AnnotateWithLogEvents(
+                List<DriftSample> samples,
+                out SessionLogObservations observations,
+                IReadOnlyList<string>? explicitLogPaths = null) {
+            observations = new SessionLogObservations();
             if (samples.Count == 0) return (0, false, 0, 0, 0, 0);
             try {
                 foreach (var s in samples) {
@@ -300,6 +325,8 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     $"SeeDrift: log correlator — triggers={triggers.Count}, dither pulses={pulses.Count}, center drift lines={centerDriftLines.Count}, image saves={imageSaves.Count}");
                 AssignInterFrameEdges(samples, triggers, pulses, centerDriftLines, imageSaves);
 
+                observations = BuildSessionLogObservations(samples, triggers, pulses, centerDriftLines);
+
                 if (triggers.Count == 0) {
                     SeeDriftLog.Debug("SeeDrift: log correlator — no Starting Trigger lines in date window");
                     return (CountJumpsWithNextFrameLogInterval(samples), true, 0, CountSequencerEdges(samples), 0, 0);
@@ -322,6 +349,83 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 SeeDriftLog.Debug($"SeeDrift: log correlation skipped: {ex.Message}");
                 return (0, false, 0, 0, 0, 0);
             }
+        }
+
+        /// <summary>
+        /// Builds the run-wide "settings used" observations from the per-batch log parse. Cadence values are
+        /// captured from log text first (when present) and supplemented with frame-index gaps between successive
+        /// triggers / evaluation lines as a fallback that does not depend on the NINA build's exact ToString().
+        /// </summary>
+        private static SessionLogObservations BuildSessionLogObservations(
+                IReadOnlyList<DriftSample> samples,
+                IReadOnlyList<TimedTrigger> triggers,
+                IReadOnlyList<DitherPulse> pulses,
+                IReadOnlyList<CenterDriftLogLine> centerDriftLines) {
+            var obs = new SessionLogObservations {
+                ObservedCenterEvaluationCount = centerDriftLines.Count,
+                ObservedDitherTriggerCount = triggers.Count(t => t.Kind == TriggerKind.Dither),
+                ObservedDitherPulseCount = pulses.Count
+            };
+
+            foreach (var c in centerDriftLines) {
+                if (c.ThresholdArcMinutes > 0)
+                    obs.CenterAfterDriftThresholdArcMin.Add(c.ThresholdArcMinutes);
+            }
+
+            foreach (var t in triggers) {
+                if (t.Kind == TriggerKind.Dither && t.AfterExposuresFromLog.HasValue)
+                    obs.DitherAfterExposuresFromLog.Add(t.AfterExposuresFromLog.Value);
+            }
+
+            foreach (var p in pulses) {
+                obs.DitherPulseMagnitudePixels.Add(Math.Max(Math.Abs(p.Dx), Math.Abs(p.Dy)));
+                if (p.GuideDurationFirstSec.HasValue)
+                    obs.DitherGuideDurationsFirstSec.Add(p.GuideDurationFirstSec.Value);
+                if (p.GuideDurationSecondSec.HasValue)
+                    obs.DitherGuideDurationsSecondSec.Add(p.GuideDurationSecondSec.Value);
+            }
+
+            if (samples.Count > 0) {
+                var ordered = samples.OrderBy(s => s.FrameIndex).ToList();
+                var tLo = ordered[0].ExposureStartUtc;
+                var tHi = ordered[^1].ExposureStartUtc;
+                if (tHi < tLo) (tLo, tHi) = (tHi, tLo);
+
+                int? FrameIndexAtOrAfter(DateTime utc) {
+                    foreach (var s in ordered) {
+                        if (s.ExposureStartUtc >= utc)
+                            return s.FrameIndex;
+                    }
+                    return null;
+                }
+
+                var ditherFrames = new List<int>();
+                foreach (var t in triggers) {
+                    if (t.Kind != TriggerKind.Dither) continue;
+                    if (t.UtcTime < tLo || t.UtcTime > tHi) continue;
+                    if (FrameIndexAtOrAfter(t.UtcTime) is { } f)
+                        ditherFrames.Add(f);
+                }
+                for (var i = 1; i < ditherFrames.Count; i++) {
+                    var gap = ditherFrames[i] - ditherFrames[i - 1];
+                    if (gap > 0)
+                        obs.DitherAfterExposuresInferredGapsFrames.Add(gap);
+                }
+
+                var centerFrames = new List<int>();
+                foreach (var c in centerDriftLines) {
+                    if (c.UtcTime < tLo || c.UtcTime > tHi) continue;
+                    if (FrameIndexAtOrAfter(c.UtcTime) is { } f)
+                        centerFrames.Add(f);
+                }
+                for (var i = 1; i < centerFrames.Count; i++) {
+                    var gap = centerFrames[i] - centerFrames[i - 1];
+                    if (gap > 0)
+                        obs.CenterAfterDriftEvaluateGapsFrames.Add(gap);
+                }
+            }
+
+            return obs;
         }
 
         /// <summary>
@@ -384,6 +488,16 @@ namespace NINA.Plugin.SeeDrift.Utility {
             var p = fullPath.Replace('/', '\\');
             return p.IndexOf("PlateSolver", StringComparison.OrdinalIgnoreCase) >= 0
                 || p.IndexOf(@"\AppData\Local\Temp\", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>Returns the first <c>AfterExposures = N</c> on the line, or null if absent.</summary>
+        private static int? TryParseAfterExposures(string line) {
+            var m = RxAfterExposuresInline.Match(line);
+            if (!m.Success)
+                return null;
+            return int.TryParse(m.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n > 0
+                ? n
+                : (int?)null;
         }
 
         /// <summary>
@@ -611,7 +725,8 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     triggers.Add(new TimedTrigger {
                         UtcTime = ts,
                         Kind = TriggerKind.Center,
-                        Label = "Center after drift"
+                        Label = "Center after drift",
+                        AfterExposuresFromLog = TryParseAfterExposures(line)
                     });
                     continue;
                 }
@@ -619,7 +734,8 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     triggers.Add(new TimedTrigger {
                         UtcTime = ts,
                         Kind = TriggerKind.Dither,
-                        Label = "Dither (after exposures)"
+                        Label = "Dither (after exposures)",
+                        AfterExposuresFromLog = TryParseAfterExposures(line)
                     });
                     continue;
                 }

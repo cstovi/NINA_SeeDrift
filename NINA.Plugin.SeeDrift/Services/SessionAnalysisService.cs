@@ -48,7 +48,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 GeneratedLocal = DateTime.Now,
                 SeestarDevice = ResolveReportDevice(batches),
                 SourceLogPaths = sourceLogs,
-                RunProcessingSeconds = runProcessingSeconds
+                RunProcessingSeconds = runProcessingSeconds,
+                SequencerSettings = BuildSequencerSettings(batches)
             };
 
             var min = Math.Max(1, minExposuresPerTarget);
@@ -79,6 +80,115 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             return payload;
+        }
+
+        /// <summary>
+        /// Aggregates per-batch <see cref="SessionLogObservations"/> into a single run-wide settings block.
+        /// Returns null when no batch produced any trigger / pulse observations (older logs or runs with no events).
+        /// </summary>
+        internal static SessionSequencerSettings? BuildSequencerSettings(
+                IReadOnlyList<DriftTrackingService.CompletedTarget> batches) {
+            var observations = batches
+                .Select(b => b.LogObservations)
+                .Where(o => o != null)
+                .Cast<SessionLogObservations>()
+                .ToList();
+            if (observations.Count == 0)
+                return null;
+
+            var thresholds = observations.SelectMany(o => o.CenterAfterDriftThresholdArcMin).ToList();
+            var ditherFromLog = observations.SelectMany(o => o.DitherAfterExposuresFromLog).ToList();
+            var ditherInferred = observations.SelectMany(o => o.DitherAfterExposuresInferredGapsFrames).ToList();
+            var centerEvalGaps = observations.SelectMany(o => o.CenterAfterDriftEvaluateGapsFrames).ToList();
+            var pulseMags = observations.SelectMany(o => o.DitherPulseMagnitudePixels).ToList();
+            var durFirst = observations.SelectMany(o => o.DitherGuideDurationsFirstSec).ToList();
+            var durSecond = observations.SelectMany(o => o.DitherGuideDurationsSecondSec).ToList();
+
+            var centerEvalCount = observations.Sum(o => o.ObservedCenterEvaluationCount);
+            var ditherTriggerCount = observations.Sum(o => o.ObservedDitherTriggerCount);
+            var ditherPulseCount = observations.Sum(o => o.ObservedDitherPulseCount);
+
+            if (centerEvalCount == 0 && ditherTriggerCount == 0 && ditherPulseCount == 0)
+                return null;
+
+            // Threshold: round to 0.1 arcmin before mode/min/max so float jitter from logs collapses to the slider step.
+            double? centerMaxArcMin = null;
+            double? centerMaxMin = null;
+            double? centerMaxMaxV = null;
+            if (thresholds.Count > 0) {
+                var rounded = thresholds.Select(v => Math.Round(v, 1)).ToList();
+                centerMaxArcMin = ModeOrFirst(rounded);
+                centerMaxMin = rounded.Min();
+                centerMaxMaxV = rounded.Max();
+            }
+
+            int? ditherN = null;
+            int? ditherMin = null;
+            int? ditherMax = null;
+            var cadenceInferred = false;
+            if (ditherFromLog.Count > 0) {
+                ditherN = ModeOrFirst(ditherFromLog);
+                ditherMin = ditherFromLog.Min();
+                ditherMax = ditherFromLog.Max();
+            } else if (ditherInferred.Count > 0) {
+                ditherN = ModeOrFirst(ditherInferred);
+                ditherMin = ditherInferred.Min();
+                ditherMax = ditherInferred.Max();
+                cadenceInferred = true;
+            }
+
+            int? centerEvalN = null;
+            int? centerEvalMin = null;
+            int? centerEvalMax = null;
+            if (centerEvalGaps.Count > 0) {
+                centerEvalN = ModeOrFirst(centerEvalGaps);
+                centerEvalMin = centerEvalGaps.Min();
+                centerEvalMax = centerEvalGaps.Max();
+            }
+
+            return new SessionSequencerSettings {
+                DitherPixelsMedian = pulseMags.Count > 0 ? Median(pulseMags) : (double?)null,
+                DitherPulseCount = ditherPulseCount,
+
+                CenterMaxArcMin = centerMaxArcMin,
+                CenterMaxArcMinMin = centerMaxMin,
+                CenterMaxArcMinMax = centerMaxMaxV,
+
+                CenterEvaluateAfterExposures = centerEvalN,
+                CenterEvaluateAfterExposuresMin = centerEvalMin,
+                CenterEvaluateAfterExposuresMax = centerEvalMax,
+                CenterEvaluateInferred = true,
+
+                DitherAfterExposuresN = ditherN,
+                DitherAfterExposuresNMin = ditherMin,
+                DitherAfterExposuresNMax = ditherMax,
+                DitherCadenceInferred = cadenceInferred,
+
+                DitherGuideDurationFirstSecMedian = durFirst.Count > 0 ? Median(durFirst) : (double?)null,
+                DitherGuideDurationSecondSecMedian = durSecond.Count > 0 ? Median(durSecond) : (double?)null,
+                GuideDurationSampleCount = Math.Min(durFirst.Count, durSecond.Count),
+
+                ObservedCenterEvaluationCount = centerEvalCount,
+                ObservedDitherTriggerCount = ditherTriggerCount
+            };
+        }
+
+        private static double Median(IReadOnlyList<double> values) {
+            var sorted = values.OrderBy(v => v).ToList();
+            var n = sorted.Count;
+            return n % 2 == 1 ? sorted[n / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0;
+        }
+
+        private static T ModeOrFirst<T>(IReadOnlyList<T> values) where T : notnull {
+            var counts = values
+                .GroupBy(v => v)
+                .Select(g => new { Value = g.Key, Count = g.Count() })
+                .ToList();
+            var topCount = counts.Max(g => g.Count);
+            var top = counts.Where(g => g.Count == topCount).ToList();
+            if (top.Count == 1)
+                return top[0].Value;
+            return values[0];
         }
 
         private static SeestarDeviceInfo ResolveReportDevice(IReadOnlyList<DriftTrackingService.CompletedTarget> batches) {

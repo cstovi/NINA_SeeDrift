@@ -8,6 +8,38 @@ namespace NINA.Plugin.SeeDrift.Models {
         CenterAfterDrift
     }
 
+    /// <summary>
+    /// Per-batch observations read from NINA logs by <c>NinaLogCorrelator.AnnotateWithLogEvents</c>.
+    /// Used by <c>SessionAnalysisService</c> to build the run-wide "Session settings used" panel.
+    /// All lists may be empty when nothing was captured for that signal.
+    /// </summary>
+    public sealed class SessionLogObservations {
+        /// <summary>Configured CenterAfterDrift threshold (arc-minutes) — Y in <c>Drift: X / Y arc minutes</c>.</summary>
+        public List<double> CenterAfterDriftThresholdArcMin { get; init; } = new();
+
+        /// <summary>Frame-index gaps between consecutive CenterAfterDriftTrigger evaluation lines (inferred cadence).</summary>
+        public List<int> CenterAfterDriftEvaluateGapsFrames { get; init; } = new();
+
+        /// <summary>DitherAfterExposures N values parsed directly from the trigger line (when the NINA build prints it).</summary>
+        public List<int> DitherAfterExposuresFromLog { get; init; } = new();
+
+        /// <summary>Frame-index gaps between consecutive DitherAfterExposures triggers (fallback cadence).</summary>
+        public List<int> DitherAfterExposuresInferredGapsFrames { get; init; } = new();
+
+        /// <summary>Per-pulse commanded dither magnitude in guider pixels (max(|Δx|,|Δy|) from <c>SelectDitherPulse</c>).</summary>
+        public List<double> DitherPulseMagnitudePixels { get; init; } = new();
+
+        /// <summary>Per-pulse guide duration (seconds), first axis (RA), from <c>using guide durations of X and Y</c>.</summary>
+        public List<double> DitherGuideDurationsFirstSec { get; init; } = new();
+
+        /// <summary>Per-pulse guide duration (seconds), second axis (Dec).</summary>
+        public List<double> DitherGuideDurationsSecondSec { get; init; } = new();
+
+        public int ObservedCenterEvaluationCount { get; init; }
+        public int ObservedDitherTriggerCount { get; init; }
+        public int ObservedDitherPulseCount { get; init; }
+    }
+
     public sealed class DitherEventAnalysis {
         public int FromFrameIndex { get; init; }
         public int ToFrameIndex { get; init; }
@@ -93,6 +125,37 @@ namespace NINA.Plugin.SeeDrift.Models {
         public double SuspectDitherDiscountedAbsDecArcSec { get; set; }
     }
 
+    /// <summary>
+    /// Run-wide "Session settings used" panel data — aggregates one or more <see cref="SessionLogObservations"/>
+    /// into mode/min/max/median values. <c>null</c> when no triggers or pulses were observed at all.
+    /// </summary>
+    public sealed class SessionSequencerSettings {
+        /// <summary>Median commanded dither magnitude in guider pixels (proxy for the Mount Dither Device "Dither Pixels" setting).</summary>
+        public double? DitherPixelsMedian { get; init; }
+        public int DitherPulseCount { get; init; }
+
+        public double? CenterMaxArcMin { get; init; }
+        public double? CenterMaxArcMinMin { get; init; }
+        public double? CenterMaxArcMinMax { get; init; }
+
+        public int? CenterEvaluateAfterExposures { get; init; }
+        public int? CenterEvaluateAfterExposuresMin { get; init; }
+        public int? CenterEvaluateAfterExposuresMax { get; init; }
+        public bool CenterEvaluateInferred { get; init; } = true;
+
+        public int? DitherAfterExposuresN { get; init; }
+        public int? DitherAfterExposuresNMin { get; init; }
+        public int? DitherAfterExposuresNMax { get; init; }
+        public bool DitherCadenceInferred { get; init; }
+
+        public double? DitherGuideDurationFirstSecMedian { get; init; }
+        public double? DitherGuideDurationSecondSecMedian { get; init; }
+        public int GuideDurationSampleCount { get; init; }
+
+        public int ObservedCenterEvaluationCount { get; init; }
+        public int ObservedDitherTriggerCount { get; init; }
+    }
+
     public sealed class SeeDriftReportPayload {
         public int SchemaVersion { get; init; } = 1;
         public string PluginVersion { get; init; } = "";
@@ -105,6 +168,9 @@ namespace NINA.Plugin.SeeDrift.Models {
 
         /// <summary>Sum of batch processing wall times (plate solve, correlation, HTML write) included in this report.</summary>
         public double RunProcessingSeconds { get; init; }
+
+        /// <summary>Configured-as-observed settings used during the run (Mount Dither Pixels proxy, CenterAfterDrift, DitherAfterExposures, dither pulse durations).</summary>
+        public SessionSequencerSettings? SequencerSettings { get; init; }
 
         public List<SeeDriftReportTargetPayload> Targets { get; init; } = new();
     }

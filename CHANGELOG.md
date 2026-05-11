@@ -6,7 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.8.20] — 2026-05-10
+## [0.8.21] — 2026-05-11
+
+### Added
+
+- **Session settings used panel:** New run-wide card near the top of each night HTML reports the **NINA + Seestar** values that drove the session — read from existing log lines (no new file scans):
+  - **Mount Dither Device — Dither Pixels** (median commanded `|Δ|` from `DirectGuider.SelectDitherPulse` lines; proxy for the configured Dither Pixels).
+  - **Center After Drift — Max arc-minutes** (configured threshold from `CenterAfterDriftTrigger ... Drift: X / Y arc minutes` evaluation lines).
+  - **Center After Drift — Evaluate after exposures** (cadence inferred from frame gaps between evaluation lines).
+  - **Dither After Exposures — Cadence** (every N exposures; parsed from `AfterExposures =` on the Starting Trigger line when present, otherwise inferred from frame gaps between dither triggers).
+  - **Dither pulse guide durations** (median seconds across pulses; Seestar Alpaca RA/Dec guide rate is only visible via these durations and is labelled as a proxy).
+- Embedded JSON payload gains an additive **`SequencerSettings`** block carrying the same values for future comparisons; older reports without this block continue to load.
+
+### Changed
+
+- `NinaLogCorrelator.AnnotateWithLogEvents` now exposes a `SessionLogObservations` record (additive overload; the original signature is preserved).
 
 ### Changed
 

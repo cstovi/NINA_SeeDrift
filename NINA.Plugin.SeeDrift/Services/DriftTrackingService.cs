@@ -43,6 +43,9 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             /// <summary>Processing time for this run (log read, plate solves, correlation, HTML write).</summary>
             public TimeSpan RunDuration { get; init; }
+
+            /// <summary>NINA log observations (configured threshold, dither pulse magnitudes / durations, cadence hints) for this batch.</summary>
+            public SessionLogObservations? LogObservations { get; init; }
         }
 
         private sealed class TraceState {
@@ -502,7 +505,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                     Samples = built,
                     SourceLogPaths = sourceLogsForBatch,
                     SeestarDevice = SeestarDeviceInfoService.FromLogFiles(sourceLogsForBatch),
-                    RunDuration = runStopwatch.Elapsed
+                    RunDuration = runStopwatch.Elapsed,
+                    LogObservations = LatestLogObservations
                 });
                 if (!TryWriteNightReport(out nightSavedPath, out nightSaveError)) {
                     // Avoid leaving a batch in memory that never reached disk.
@@ -541,7 +545,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         private void ApplyJumpAndLogAnnotation(List<DriftSample> frames, IReadOnlyList<string>? correlatorLogPaths) {
             JumpDetector.AnnotateJumps(frames);
             var (logMatched, logFound, triggersLoaded, sequencerEdges, traceDithers, traceCenters) =
-                NinaLogCorrelator.AnnotateWithLogEvents(frames, correlatorLogPaths);
+                NinaLogCorrelator.AnnotateWithLogEvents(frames, out var observations, correlatorLogPaths);
             JumpCount = JumpDetector.CountJumps(frames);
             LogCorrelatedCount = logMatched;
             LogWasFound = logFound;
@@ -549,7 +553,11 @@ namespace NINA.Plugin.SeeDrift.Services {
             LogSequencerEdgeCount = sequencerEdges;
             LogTraceDitherTriggerCount = traceDithers;
             LogTraceCenterTriggerCount = traceCenters;
+            LatestLogObservations = observations;
         }
+
+        /// <summary>Last <see cref="SessionLogObservations"/> built by the correlator for this batch (null before the first run).</summary>
+        public SessionLogObservations? LatestLogObservations { get; private set; }
 
         /// <summary>
         /// Writes all <see cref="CompletedTargets"/> to the rolling night HTML file

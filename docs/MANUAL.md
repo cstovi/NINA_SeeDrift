@@ -53,6 +53,20 @@ Each target also includes an **analytics** strip. **Drift / walking-noise risk**
 
 New reports embed a structured JSON data block in the HTML. This is what **Compare saved reports** reads for before/after comparisons, so old reports without that block need to be regenerated before they can be compared.
 
+### Session settings used (run-wide panel)
+
+Near the top of each night HTML, above the per-target sections, a **Session settings used** card surfaces the NINA + Seestar values that actually drove this run. Values come from log lines that the correlator already reads, so the panel never opens additional files. Rows that have no observations are omitted (no empty zeros).
+
+| Row | Source line | What it represents |
+|---|---|---|
+| **Mount Dither Device — Dither Pixels** | `DirectGuider.cs\|SelectDitherPulse\|...\|Dither target from (x0, y0) to (x1, y1)` | Median commanded `max(\|Δx\|, \|Δy\|)` across all pulses; a faithful proxy for the **Mount Dither Pixels** setting that NINA actually told the mount to use. |
+| **Center After Drift — Max arc-minutes** | `CenterAfterDriftTrigger.cs\|PlatesolvingImageFollower_PropertyChanged\|...\|Drift: X / Y arc minutes` | The Y value is the **threshold** configured on the CenterAfterDrift trigger. Variance across the run is flagged. |
+| **Center After Drift — Evaluate after exposures** | Same evaluation lines, one per evaluation | Cadence is inferred from frame gaps between consecutive evaluation lines and labelled **inferred**. |
+| **Dither After Exposures — Cadence** | `Starting Trigger: ... DitherAfterExposures` (parsed `AfterExposures = N` when the NINA build prints it), with frame-gap fallback | Either parsed from the log or inferred from gaps between successive triggers; inferred values are tagged. |
+| **Dither pulse guide durations** | `using guide durations of X and Y seconds` on the dither pulse line | Median seconds across pulses (RA / Dec). The Seestar Alpaca RA/Dec guide rate is **not** in NINA logs; this row is the visible proxy. |
+
+The same values are also embedded in the report's JSON payload (additive `SequencerSettings` field), so future before/after comparisons can show settings drift without re-running plate solves.
+
 ### Sequencer events in HTML
 
 When log lines match **between-frame** intervals, **dither** and **center-after-drift** triggers appear in **Sequencer events (NINA logs)** — same strict rules as before (paired save times when present, fractional seconds, etc.). Timestamps without `Z` are treated as **local wall time**. If nothing correlates, you still see an explanatory empty state. When rows exist, the table is **collapsed by default**; click the summary line to expand it.
