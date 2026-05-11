@@ -156,6 +156,18 @@ namespace NINA.Plugin.SeeDrift.Models {
 
         /// <summary>Median |Δ| (detector pixels) across assessed (non-suspect) dither intervals (when plate scale is known).</summary>
         public double? DitherIntervalMedianMovePixels { get; set; }
+
+        /// <summary>Median commanded dither magnitude (detector pixels) from DirectGuider pulse lines, across assessed dithers with both commanded and measured values.</summary>
+        public double? MedianCommandedDitherPixels { get; set; }
+
+        /// <summary>Median measured dither magnitude (detector pixels) across assessed dithers with both commanded and measured values.</summary>
+        public double? MedianRealizedDitherPixels { get; set; }
+
+        /// <summary>Median realized ratio = measured / commanded magnitude across assessed dithers. Values close to 1.0 = mount reached target; well below 1.0 = likely insufficient settle time.</summary>
+        public double? MedianRealizedDitherRatio { get; set; }
+
+        /// <summary>Number of assessed dithers contributing to the realized-ratio stats (requires both commanded and measured magnitude).</summary>
+        public int RealizedDitherSampleCount { get; set; }
     }
 
     /// <summary>
@@ -187,6 +199,18 @@ namespace NINA.Plugin.SeeDrift.Models {
 
         public int ObservedCenterEvaluationCount { get; init; }
         public int ObservedDitherTriggerCount { get; init; }
+
+        /// <summary>Run-wide median commanded dither magnitude (detector pixels) — average of per-target medians.</summary>
+        public double? RealizedCommandedDitherPixels { get; init; }
+
+        /// <summary>Run-wide median measured dither magnitude (detector pixels) — average of per-target medians.</summary>
+        public double? RealizedMeasuredDitherPixels { get; init; }
+
+        /// <summary>Run-wide median realized ratio (measured / commanded), averaged across per-target medians. Null when no targets had data.</summary>
+        public double? RealizedDitherRatio { get; init; }
+
+        /// <summary>Total number of assessed dithers contributing to the realized-ratio stats across all targets.</summary>
+        public int RealizedSampleCount { get; init; }
     }
 
     public sealed class SeeDriftReportPayload {

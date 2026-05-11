@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.25] — 2026-05-11
+
+### Added
+
+- **Realized dither magnitude** line in the *Session settings used* panel, shown directly under **Mount Dither Device — Dither Pixels** when the night had at least 3 commanded/measured dither pairs: *"Realized X.X px (Y%) median across N pulses"*. The commanded magnitude is the matched `DirectGuider.SelectDitherPulse` Δx/Δy; the measured magnitude is the frame-to-frame Δ converted to detector pixels via the median plate scale. Suspect dithers are excluded (same rule as the assessed-sum totals and effectiveness score).
+- **Settle-time recommendation:** when a target's median realized ratio is `< 80%` across `≥ 3` realized samples, a new warn-level recommendation appears: *"Logged dithers measured roughly Y% of the commanded magnitude (median X.X px measured vs Z.Z px commanded across N pulses). The mount may not be settling before the next exposure starts — try increasing the settle time on NINA's Direct Guider / dither device settings."* This is the clearest available signal that the next exposure begins before the mount stops moving, separate from the existing "Weak" dither check (which uses frame-to-frame noise as the floor, not the commanded slew).
+- `TargetAnalysis` now carries `MedianCommandedDitherPixels`, `MedianRealizedDitherPixels`, `MedianRealizedDitherRatio`, and `RealizedDitherSampleCount`. `SessionSequencerSettings` exposes pooled run-wide values (`RealizedCommandedDitherPixels`, `RealizedMeasuredDitherPixels`, `RealizedDitherRatio`, `RealizedSampleCount`) — the run-wide value is the mean of the per-target medians, matching how the comparison view averages medians today.
+
+### Notes
+
+- Reports made before 0.8.25 still render — the realized line is hidden when the sample count is below 3 (older payloads, plate-scale-less runs, or runs whose logs did not include `DirectGuider` Δx/Δy).
+
 ## [0.8.24] — 2026-05-11
 
 ### Changed

@@ -128,7 +128,23 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("  </div>");
             sb.AppendLine("</header>");
 
-            var sequencerSettings = SessionAnalysisService.BuildSequencerSettings(targets);
+            // Pre-build per-target analyses up-front so the run-wide Session Settings panel can pool
+            // the realized-dither medians (the run-wide value is the mean of per-target medians).
+            // Reused later inside the per-target loop to avoid duplicate work.
+            var preBuiltAnalyses = new Dictionary<(int BatchIndex, string TargetKey), TargetAnalysis>();
+            var allAnalyses = new List<TargetAnalysis>();
+            for (var t0 = 0; t0 < targets.Count; t0++) {
+                var orderedFull0 = targets[t0].Samples.OrderBy(s => s.FrameIndex).ToList();
+                var groups0 = SplitBatchByTargetInOrder(orderedFull0);
+                var filtered0 = groups0.Where(g => g.Samples.Count >= min).ToList();
+                foreach (var (name0, grp0) in filtered0) {
+                    var analysis0 = SessionAnalysisService.AnalyzeTarget(name0, grp0);
+                    preBuiltAnalyses[(t0, name0)] = analysis0;
+                    allAnalyses.Add(analysis0);
+                }
+            }
+
+            var sequencerSettings = SessionAnalysisService.BuildSequencerSettings(targets, allAnalyses);
             if (sequencerSettings != null)
                 sb.Append(FormatSessionSettingsHtml(sequencerSettings));
 
@@ -177,7 +193,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                     var (targetName, grp) = filteredGroups[g];
                     var canvasId = $"c{t}_{g}";
                     var labelJson = JsonSerializer.Serialize($"{targetName} — drift path");
-                    var analysis = SessionAnalysisService.AnalyzeTarget(targetName, grp);
+                    var analysis = preBuiltAnalyses.TryGetValue((t, targetName), out var preBuilt)
+                        ? preBuilt
+                        : SessionAnalysisService.AnalyzeTarget(targetName, grp);
 
                     sb.AppendLine($"  <div class=\"{(g > 0 ? "mt-12 border-t border-slate-800 pt-10" : "mt-8")}\">");
                     sb.AppendLine("    <div class=\"flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between\">");
@@ -1050,11 +1068,25 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (s.DitherPixelsMedian.HasValue && s.DitherPulseCount > 0) {
                 var px = s.DitherPixelsMedian.Value;
                 var pulses = s.DitherPulseCount;
+                // Realized line is shown only when we have ≥3 commanded/measured pairs (otherwise the median is too noisy);
+                // a value well below ~85–90% is most often a settle-time problem, not a wrong commanded magnitude.
+                string realizedExtra = "";
+                if (s.RealizedSampleCount >= 3
+                    && s.RealizedMeasuredDitherPixels.HasValue
+                    && s.RealizedDitherRatio.HasValue) {
+                    realizedExtra = string.Format(CultureInfo.InvariantCulture,
+                        "Realized {0:0.#} px ({1:0.#}%) median across {2} pulse{3}",
+                        s.RealizedMeasuredDitherPixels.Value,
+                        s.RealizedDitherRatio.Value * 100.0,
+                        s.RealizedSampleCount,
+                        s.RealizedSampleCount == 1 ? "" : "s");
+                }
                 rows.Add(FormatSettingsRow(
                     "Mount Dither Device — Dither Pixels",
                     string.Format(CultureInfo.InvariantCulture, "~{0:0.#} px", px),
                     $"median of {pulses} pulse{(pulses == 1 ? "" : "s")} · commanded |Δ| from DirectGuider log",
-                    false));
+                    false,
+                    realizedExtra));
             }
 
             if (s.CenterMaxArcMin.HasValue) {
@@ -1137,14 +1169,18 @@ namespace NINA.Plugin.SeeDrift.Services {
             return sb.ToString();
         }
 
-        private static string FormatSettingsRow(string label, string value, string detail, bool inferred) {
+        private static string FormatSettingsRow(string label, string value, string detail, bool inferred, string? secondaryLine = null) {
             var inferredBadge = inferred
                 ? " <span class=\"ml-1 rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-400\">inferred</span>"
                 : "";
+            var secondary = string.IsNullOrEmpty(secondaryLine)
+                ? ""
+                : $"<dd class=\"mt-1 text-xs text-slate-300\">{Escape(secondaryLine!)}</dd>";
             return
                 "      <div class=\"rounded-md border border-slate-800 bg-slate-950/40 p-3\">" +
                 $"<dt class=\"text-[11px] font-semibold uppercase tracking-wide text-sky-400\">{Escape(label)}</dt>" +
                 $"<dd class=\"mt-1 text-sm text-slate-100\">{Escape(value)}{inferredBadge}</dd>" +
+                secondary +
                 $"<dd class=\"mt-1 text-[11px] text-slate-500\">{Escape(detail)}</dd>" +
                 "</div>";
         }

@@ -24,6 +24,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             analysis.SuspectDitherDiscountedAbsRaArcSec = analysis.Dithers.Where(d => d.IsSuspect).Sum(d => Math.Abs(d.DeltaRaArcSec));
             analysis.SuspectDitherDiscountedAbsDecArcSec = analysis.Dithers.Where(d => d.IsSuspect).Sum(d => Math.Abs(d.DeltaDecArcSec));
             FillAssessedDitherIntervalStats(analysis);
+            FillRealizedDitherStats(analysis);
             analysis.Centers.AddRange(BuildCenterAnalyses(ordered));
             analysis.Timeline.AddRange(BuildTimeline(ordered, analysis));
             analysis.Recommendations.AddRange(BuildRecommendations(analysis));
@@ -43,21 +44,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                 .ToList();
             var runProcessingSeconds = batches.Sum(b => b.RunDuration.TotalSeconds);
 
-            var payload = new SeeDriftReportPayload {
-                PluginVersion = typeof(SessionAnalysisService).Assembly.GetName().Version?.ToString() ?? "",
-                SessionDate = sessionDateLabel,
-                GeneratedLocal = DateTime.Now,
-                SeestarDevice = ResolveReportDevice(batches),
-                SourceLogPaths = sourceLogs,
-                RunProcessingSeconds = runProcessingSeconds,
-                SequencerSettings = BuildSequencerSettings(batches)
-            };
-
+            // Build per-target analyses up-front so BuildSequencerSettings can pool the realized-dither medians
+            // (run-wide value is the mean of per-target medians, matching how the comparison view averages medians).
             var min = Math.Max(1, minExposuresPerTarget);
+            var targetPayloads = new List<SeeDriftReportTargetPayload>();
             foreach (var batch in batches) {
                 foreach (var group in SplitByTarget(batch.Samples).Where(g => g.Samples.Count >= min)) {
                     var analysis = AnalyzeTarget(group.Name, group.Samples);
-                    payload.Targets.Add(new SeeDriftReportTargetPayload {
+                    targetPayloads.Add(new SeeDriftReportTargetPayload {
                         TargetName = group.Name,
                         FrameCount = group.Samples.Count,
                         StartUtc = group.Samples.Min(s => s.ExposureStartUtc),
@@ -80,6 +74,18 @@ namespace NINA.Plugin.SeeDrift.Services {
                 }
             }
 
+            var payload = new SeeDriftReportPayload {
+                PluginVersion = typeof(SessionAnalysisService).Assembly.GetName().Version?.ToString() ?? "",
+                SessionDate = sessionDateLabel,
+                GeneratedLocal = DateTime.Now,
+                SeestarDevice = ResolveReportDevice(batches),
+                SourceLogPaths = sourceLogs,
+                RunProcessingSeconds = runProcessingSeconds,
+                SequencerSettings = BuildSequencerSettings(batches, targetPayloads.Select(t => t.Analysis).ToList())
+            };
+
+            payload.Targets.AddRange(targetPayloads);
+
             return payload;
         }
 
@@ -88,7 +94,8 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// Returns null when no batch produced any trigger / pulse observations (older logs or runs with no events).
         /// </summary>
         internal static SessionSequencerSettings? BuildSequencerSettings(
-                IReadOnlyList<DriftTrackingService.CompletedTarget> batches) {
+                IReadOnlyList<DriftTrackingService.CompletedTarget> batches,
+                IReadOnlyList<TargetAnalysis>? targetAnalyses = null) {
             var observations = batches
                 .Select(b => b.LogObservations)
                 .Where(o => o != null)
@@ -147,6 +154,27 @@ namespace NINA.Plugin.SeeDrift.Services {
                 centerEvalMax = centerEvalGaps.Max();
             }
 
+            // Pool realized-dither stats: run-wide value is the mean of the per-target medians, weighted by sample count
+            // for stability across short batches (matches the "average of per-target medians" rule from the plan).
+            double? realizedCommanded = null;
+            double? realizedMeasured = null;
+            double? realizedRatio = null;
+            var realizedSampleTotal = 0;
+            if (targetAnalyses != null && targetAnalyses.Count > 0) {
+                var contributors = targetAnalyses
+                    .Where(a => a.RealizedDitherSampleCount > 0
+                                && a.MedianCommandedDitherPixels.HasValue
+                                && a.MedianRealizedDitherPixels.HasValue
+                                && a.MedianRealizedDitherRatio.HasValue)
+                    .ToList();
+                if (contributors.Count > 0) {
+                    realizedSampleTotal = contributors.Sum(a => a.RealizedDitherSampleCount);
+                    realizedCommanded = contributors.Average(a => a.MedianCommandedDitherPixels!.Value);
+                    realizedMeasured = contributors.Average(a => a.MedianRealizedDitherPixels!.Value);
+                    realizedRatio = contributors.Average(a => a.MedianRealizedDitherRatio!.Value);
+                }
+            }
+
             return new SessionSequencerSettings {
                 DitherPixelsMedian = pulseMags.Count > 0 ? Median(pulseMags) : (double?)null,
                 DitherPulseCount = ditherPulseCount,
@@ -170,7 +198,12 @@ namespace NINA.Plugin.SeeDrift.Services {
                 GuideDurationSampleCount = Math.Min(durFirst.Count, durSecond.Count),
 
                 ObservedCenterEvaluationCount = centerEvalCount,
-                ObservedDitherTriggerCount = ditherTriggerCount
+                ObservedDitherTriggerCount = ditherTriggerCount,
+
+                RealizedCommandedDitherPixels = realizedCommanded,
+                RealizedMeasuredDitherPixels = realizedMeasured,
+                RealizedDitherRatio = realizedRatio,
+                RealizedSampleCount = realizedSampleTotal
             };
         }
 
@@ -572,6 +605,37 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>
+        /// Pairs commanded dither magnitude (from the matched DirectGuider pulse line) with the measured
+        /// frame-to-frame magnitude to give a per-target "realized %" view. A consistent shortfall is the
+        /// clearest signal of an under-tuned settle time. Suspect dithers are excluded (same rule as totals/effectiveness).
+        /// </summary>
+        private static void FillRealizedDitherStats(TargetAnalysis analysis) {
+            var commanded = new List<double>();
+            var measured = new List<double>();
+            var ratios = new List<double>();
+            foreach (var d in analysis.Dithers.Where(d => !d.IsSuspect)) {
+                if (!d.LoggedGuiderDx.HasValue || !d.LoggedGuiderDy.HasValue)
+                    continue;
+                if (!d.EquivalentPixels.HasValue)
+                    continue;
+                var cmd = Math.Sqrt(d.LoggedGuiderDx.Value * d.LoggedGuiderDx.Value
+                                    + d.LoggedGuiderDy.Value * d.LoggedGuiderDy.Value);
+                if (cmd < 0.01)
+                    continue;
+                var meas = d.EquivalentPixels.Value;
+                commanded.Add(cmd);
+                measured.Add(meas);
+                ratios.Add(meas / cmd);
+            }
+            analysis.RealizedDitherSampleCount = ratios.Count;
+            if (ratios.Count == 0)
+                return;
+            analysis.MedianCommandedDitherPixels = Median(commanded);
+            analysis.MedianRealizedDitherPixels = Median(measured);
+            analysis.MedianRealizedDitherRatio = Median(ratios);
+        }
+
+        /// <summary>
         /// Fills the run-wide assessed-dither-interval totals (Σ|ΔRA| / Σ|ΔDec| and median |Δ|) on the analysis,
         /// excluding suspect intervals so reported sums match the dither assessment table and effectiveness scoring.
         /// </summary>
@@ -885,6 +949,23 @@ namespace NINA.Plugin.SeeDrift.Services {
                 yield return new SessionRecommendation {
                     Level = "warn",
                     Text = "At least half of logged dithers measured low movement; consider increasing dither size or checking guider dither response."
+                };
+            }
+
+            // Realized vs commanded magnitude shortfall — independent of "Weak" because the floor there
+            // is set from frame-to-frame noise, not the commanded slew. Median < 80% across >= 3 samples
+            // is the clearest available signal that the next exposure begins before the mount settles.
+            if (analysis.RealizedDitherSampleCount >= 3
+                && analysis.MedianRealizedDitherRatio.HasValue
+                && analysis.MedianRealizedDitherPixels.HasValue
+                && analysis.MedianCommandedDitherPixels.HasValue
+                && analysis.MedianRealizedDitherRatio.Value < 0.8) {
+                emitted = true;
+                var pct = analysis.MedianRealizedDitherRatio.Value * 100.0;
+                yield return new SessionRecommendation {
+                    Level = "warn",
+                    Text = FormattableString.Invariant(
+                        $"Logged dithers measured roughly {pct:0.#}% of the commanded magnitude (median {analysis.MedianRealizedDitherPixels.Value:0.#} px measured vs {analysis.MedianCommandedDitherPixels.Value:0.#} px commanded across {analysis.RealizedDitherSampleCount} pulses). The mount may not be settling before the next exposure starts — try increasing the settle time on NINA's Direct Guider / dither device settings.")
                 };
             }
 
