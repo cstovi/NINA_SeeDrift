@@ -163,7 +163,7 @@ namespace NINA.Plugin.SeeDrift.Models {
         /// <summary>Median measured dither magnitude (detector pixels) across assessed dithers with both commanded and measured values.</summary>
         public double? MedianRealizedDitherPixels { get; set; }
 
-        /// <summary>Median realized ratio = measured / commanded magnitude across assessed dithers. Values close to 1.0 = mount reached target; well below 1.0 = likely insufficient settle time.</summary>
+        /// <summary>Median realized ratio = measured / commanded magnitude across assessed dithers. Values close to 1.0 = mount reached target; well below 1.0 = likely mount backlash or guide-rate calibration offset, with settle time as a secondary suspect via motion-blur centroid bias during the next exposure.</summary>
         public double? MedianRealizedDitherRatio { get; set; }
 
         /// <summary>Number of assessed dithers contributing to the realized-ratio stats (requires both commanded and measured magnitude).</summary>

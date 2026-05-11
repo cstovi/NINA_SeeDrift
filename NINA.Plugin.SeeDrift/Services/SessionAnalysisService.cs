@@ -606,8 +606,11 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         /// <summary>
         /// Pairs commanded dither magnitude (from the matched DirectGuider pulse line) with the measured
-        /// frame-to-frame magnitude to give a per-target "realized %" view. A consistent shortfall is the
-        /// clearest signal of an under-tuned settle time. Suspect dithers are excluded (same rule as totals/effectiveness).
+        /// frame-to-frame magnitude to give a per-target "realized %" view. NINA runs the dither pulse to
+        /// completion before settle time starts, so a consistent shortfall most often points at mount
+        /// mechanics (Dec backlash on direction-reversing pulses, or a small guide-rate calibration offset);
+        /// a too-short settle time is a secondary cause via motion-blur centroid bias during the next
+        /// exposure. Suspect dithers are excluded (same rule as totals/effectiveness).
         /// </summary>
         private static void FillRealizedDitherStats(TargetAnalysis analysis) {
             var commanded = new List<double>();
@@ -953,8 +956,10 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             // Realized vs commanded magnitude shortfall — independent of "Weak" because the floor there
-            // is set from frame-to-frame noise, not the commanded slew. Median < 80% across >= 3 samples
-            // is the clearest available signal that the next exposure begins before the mount settles.
+            // is set from frame-to-frame noise, not the commanded slew. The pulse runs to completion
+            // before settle starts in NINA's normal flow, so a low ratio is more often mount mechanics
+            // (backlash on direction reversals, guide-rate calibration) than settle-time related; settle
+            // can still bias the measured centroid via residual motion during the next exposure.
             if (analysis.RealizedDitherSampleCount >= 3
                 && analysis.MedianRealizedDitherRatio.HasValue
                 && analysis.MedianRealizedDitherPixels.HasValue
@@ -965,7 +970,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 yield return new SessionRecommendation {
                     Level = "warn",
                     Text = FormattableString.Invariant(
-                        $"Logged dithers measured roughly {pct:0.#}% of the commanded magnitude (median {analysis.MedianRealizedDitherPixels.Value:0.#} px measured vs {analysis.MedianCommandedDitherPixels.Value:0.#} px commanded across {analysis.RealizedDitherSampleCount} pulses). The mount may not be settling before the next exposure starts — try increasing the settle time on NINA's Direct Guider / dither device settings.")
+                        $"Logged dithers measured roughly {pct:0.#}% of the commanded magnitude (median {analysis.MedianRealizedDitherPixels.Value:0.#} px measured vs {analysis.MedianCommandedDitherPixels.Value:0.#} px commanded across {analysis.RealizedDitherSampleCount} pulses). On small EQ mounts this is most often Dec backlash on direction-reversing dithers or a small guide-rate calibration offset; a too-short settle time can also bias the measured centroid via residual mount motion during the next exposure. Worth checking the Seestar Alpaca RA/Dec guide rates and, if the shortfall persists, raising settle time.")
                 };
             }
 
