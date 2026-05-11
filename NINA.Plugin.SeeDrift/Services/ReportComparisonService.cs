@@ -173,6 +173,22 @@ namespace NINA.Plugin.SeeDrift.Services {
                 higherIsBetter: false,
                 "Fewer ineffective centers",
                 "More ineffective centers"));
+            result.Metrics.Add(BuildMetric(
+                "Dither vs drift headroom",
+                beforeStats.AverageDitherHeadroom,
+                afterStats.AverageDitherHeadroom,
+                "x",
+                higherIsBetter: true,
+                "More headroom between dithers and drift",
+                "Less headroom between dithers and drift"));
+            result.Metrics.Add(BuildMetric(
+                "Worst short-window drift",
+                beforeStats.AverageWorstWindowDriftPixels,
+                afterStats.AverageWorstWindowDriftPixels,
+                " px",
+                higherIsBetter: false,
+                "Less worst-window drift across the run",
+                "More worst-window drift across the run"));
             result.SettingsRows.AddRange(BuildSettingsRows(before.SequencerSettings, after.SequencerSettings));
             result.SettingsDiffer = result.SettingsRows.Any(r => r.Status == "changed");
             result.OverallSummary = BuildOverallSummary(result.Metrics, result.SettingsDiffer);
@@ -329,6 +345,20 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var sorted = dithers.Select(d => d.MoveArcSec).OrderBy(v => v).ToList();
                 medianMove = sorted[(sorted.Count - 1) / 2];
             }
+
+            // Walking-noise specific metrics. DriftRisk is per-target — average across targets we have.
+            var headrooms = targets
+                .Select(t => t.Analysis.DriftRisk?.DitherHeadroomRatio)
+                .Where(v => v.HasValue)
+                .Select(v => v!.Value)
+                .ToList();
+            var avgHeadroom = headrooms.Count > 0 ? headrooms.Average() : 0;
+            var worstWindowsPx = targets
+                .Select(t => t.Analysis.DriftRisk?.WorstWindowDriftPixels)
+                .Where(v => v.HasValue)
+                .Select(v => v!.Value)
+                .ToList();
+            var avgWorstWindowPx = worstWindowsPx.Count > 0 ? worstWindowsPx.Average() : 0;
             return new ComparisonStats {
                 TargetCount = targets.Count,
                 FrameCount = targets.Sum(t => t.FrameCount),
@@ -343,7 +373,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 DitherAxisBalancePercent = balance,
                 WeakDitherRatePercent = Percent(dithers.Count(d => d.Assessment == "Weak"), dithers.Count),
                 AverageCenterImprovementPercent = AverageOrZero(centers.Select(c => c.ImprovementPercent)),
-                IneffectiveCenterRatePercent = Percent(centers.Count(c => c.Assessment == "Ineffective"), centers.Count)
+                IneffectiveCenterRatePercent = Percent(centers.Count(c => c.Assessment == "Ineffective"), centers.Count),
+                AverageDitherHeadroom = avgHeadroom,
+                AverageWorstWindowDriftPixels = avgWorstWindowPx
             };
         }
 
@@ -356,7 +388,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 string improvedText,
                 string worsenedText) {
             var delta = after - before;
-            var threshold = suffix == "%" ? 2.0 : 0.2;
+            var threshold = suffix == "%" ? 2.0
+                : suffix == "x" ? 0.5
+                : 0.2;
             if (Math.Abs(delta) < threshold) {
                 return new ReportComparisonMetricResult {
                     Metric = metric,
@@ -514,6 +548,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             public double WeakDitherRatePercent { get; init; }
             public double AverageCenterImprovementPercent { get; init; }
             public double IneffectiveCenterRatePercent { get; init; }
+            public double AverageDitherHeadroom { get; init; }
+            public double AverageWorstWindowDriftPixels { get; init; }
         }
     }
 }

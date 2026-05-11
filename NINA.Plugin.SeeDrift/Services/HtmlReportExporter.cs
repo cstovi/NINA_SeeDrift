@@ -741,13 +741,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (string.IsNullOrWhiteSpace(risk.Status))
                 return "";
 
-            var tone = risk.Tone == "good"
-                ? ("border-emerald-500/40", "bg-emerald-500/10", "text-emerald-200", "Low")
-                : risk.Tone == "warn"
-                    ? ("border-amber-500/50", "bg-amber-500/10", "text-amber-200", risk.Status)
-                    : risk.Tone == "ok"
-                        ? ("border-sky-500/40", "bg-sky-500/10", "text-sky-200", "Moderate")
-                        : ("border-slate-600", "bg-slate-900/40", "text-slate-300", risk.Status);
+            var tone = ToneTriple(risk.Tone, risk.Status);
             var px = risk.NaturalDriftPixelsPerMinute.HasValue
                 ? FormattableString.Invariant($" · ≈ {risk.NaturalDriftPixelsPerMinute.Value:0.##} px/min")
                 : "";
@@ -761,9 +755,20 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-slate-300\">Drift / walking-noise risk</p>");
             sb.AppendLine($"        <span class=\"rounded-full border {tone.Item1} px-2 py-0.5 text-xs font-semibold {tone.Item3}\">{Escape(tone.Item4)}</span>");
             sb.AppendLine("      </div>");
+
+            // Sub-tier chips: star shape + walking noise so the headline label never surprises.
+            if (!string.IsNullOrWhiteSpace(risk.StarShapeStatus) || !string.IsNullOrWhiteSpace(risk.WalkingNoiseStatus)) {
+                sb.AppendLine("      <div class=\"mt-2 flex flex-wrap gap-2\">");
+                if (!string.IsNullOrWhiteSpace(risk.StarShapeStatus))
+                    sb.AppendLine($"        {FormatSubTierChip("Star shape", risk.StarShapeStatus, risk.StarShapeTone)}");
+                if (!string.IsNullOrWhiteSpace(risk.WalkingNoiseStatus))
+                    sb.AppendLine($"        {FormatSubTierChip("Walking noise", risk.WalkingNoiseStatus, risk.WalkingNoiseTone)}");
+                sb.AppendLine("      </div>");
+            }
+
             if (risk.IntervalCount > 0) {
                 sb.AppendLine(
-                    $"      <p class=\"mt-1 text-sm {tone.Item3}\">{risk.NaturalDriftArcSecPerMinute:0.##}″/min natural drift{Escape(px)} · {risk.DirectionConsistency:P0} directional</p>");
+                    $"      <p class=\"mt-2 text-sm {tone.Item3}\">{risk.NaturalDriftArcSecPerMinute:0.##}″/min natural drift{Escape(px)} · {risk.DirectionConsistency:P0} directional</p>");
                 sb.AppendLine(
                     $"      <p class=\"mt-1 text-xs text-slate-400\">Net drift without logged dither/center intervals: {risk.NetNaturalDriftArcSec:0.#}″ across {risk.IntervalCount} interval{(risk.IntervalCount == 1 ? "" : "s")}.</p>");
                 if (risk.EstimatedDriftPerExposureArcSec.HasValue) {
@@ -771,19 +776,40 @@ namespace NINA.Plugin.SeeDrift.Services {
                         ? FormattableString.Invariant($" · ≈ {risk.EstimatedDriftPerExposurePixels.Value:0.##} px")
                         : "";
                     sb.AppendLine(
-                        $"      <p class=\"mt-1 text-xs text-slate-400\">Star-shape hint: estimated {risk.EstimatedDriftPerExposureArcSec.Value:0.#}″ drift during a typical exposure{Escape(perSubPx)}.</p>");
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Star-shape hint: estimated {risk.EstimatedDriftPerExposureArcSec.Value:0.#}″ drift during a typical exposure{Escape(perSubPx)}. Round stars typically tolerate &lt; 1–2 px of motion per exposure.</p>");
                 }
-                if (risk.WorstWindowDriftArcSec.HasValue && risk.WorstWindowFrameCount > 0) {
+                if (risk.DitherHeadroomRatio.HasValue && risk.BetweenDitherDriftArcSec.HasValue) {
+                    var ditherPxBit = risk.BetweenDitherDriftPixels.HasValue
+                        ? FormattableString.Invariant($" · ≈ {risk.BetweenDitherDriftPixels.Value:0.##} px between dithers")
+                        : "";
+                    sb.AppendLine(
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Walking-noise hint: dither headroom <span class=\"font-semibold text-slate-200\">{risk.DitherHeadroomRatio.Value:0.0}×</span> (median dither magnitude vs cumulative drift between dithers — {risk.BetweenDitherDriftArcSec.Value:0.##}″ between dithers{Escape(ditherPxBit)}). Higher is safer.</p>");
+                } else if (risk.WorstWindowDriftArcSec.HasValue && risk.WorstWindowFrameCount > 0) {
                     var windowPx = risk.WorstWindowDriftPixels.HasValue
                         ? FormattableString.Invariant($" · ≈ {risk.WorstWindowDriftPixels.Value:0.##} px")
                         : "";
                     sb.AppendLine(
-                        $"      <p class=\"mt-1 text-xs text-slate-400\">Walking-noise hint: worst short-window drift was {risk.WorstWindowDriftArcSec.Value:0.#}″ over {risk.WorstWindowFrameCount} frame{(risk.WorstWindowFrameCount == 1 ? "" : "s")}{Escape(windowPx)}.</p>");
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Walking-noise hint (no dither headroom data): worst short-window drift was {risk.WorstWindowDriftArcSec.Value:0.#}″ over {risk.WorstWindowFrameCount} frame{(risk.WorstWindowFrameCount == 1 ? "" : "s")}{Escape(windowPx)}.</p>");
                 }
             }
-            sb.AppendLine($"      <p class=\"mt-1 text-xs text-slate-500\">{Escape(detail)} Risk is advisory: it estimates possible star-shape softening during individual exposures and correlated walking-noise patterns across several frames.</p>");
+            sb.AppendLine($"      <p class=\"mt-1 text-xs text-slate-500\">{Escape(detail)} Risk is advisory: star-shape is about single-exposure round stars (&lt; 1–2 px is typically acceptable), walking-noise is about cumulative drift between dithers vs the dither magnitude.</p>");
             sb.AppendLine("    </div>");
             return sb.ToString();
+        }
+
+        private static (string, string, string, string) ToneTriple(string tone, string statusText) =>
+            tone == "good"
+                ? ("border-emerald-500/40", "bg-emerald-500/10", "text-emerald-200", "Low")
+                : tone == "warn"
+                    ? ("border-amber-500/50", "bg-amber-500/10", "text-amber-200", statusText)
+                    : tone == "ok"
+                        ? ("border-sky-500/40", "bg-sky-500/10", "text-sky-200", "Moderate")
+                        : ("border-slate-600", "bg-slate-900/40", "text-slate-300", statusText);
+
+        private static string FormatSubTierChip(string label, string status, string tone) {
+            var t = ToneTriple(tone, status);
+            return FormattableString.Invariant(
+                $"<span class=\"rounded-full border {t.Item1} {t.Item2} px-2 py-0.5 text-[11px] {t.Item3}\"><span class=\"font-semibold uppercase tracking-wide\">{Escape(label)}</span>: {Escape(status)}</span>");
         }
 
         private static string FormatTimelineHtml(TargetAnalysis analysis) {

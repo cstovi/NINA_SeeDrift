@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.24] — 2026-05-11
+
+### Changed
+
+- **Drift / walking-noise advisory** is now split into two sub-tiers, each shown as its own chip in the night report strip, with the surrounding box tone driven by the worse of the two:
+  - **Star shape** — per-exposure motion concern. Thresholds relaxed to match the community "< 1–2 px per exposure is acceptable" rule of thumb: Moderate at `>= 1.0 px` (`>= 2.0″`), Caution at `>= 2.0 px` (`>= 4.0″`). Consistency-only escalation still requires a small magnitude floor.
+  - **Walking noise** — correlated FPN concern. Driven by a new **dither headroom ratio** = `median dither |Δ| (px) / median cumulative drift between dithers (px)`. Caution when `consistency ≥ 0.75 AND headroom < 2× AND between-dither drift ≥ 0.5 px`; Moderate when `consistency ≥ 0.5 AND headroom < 4× AND ≥ 0.25 px`; Low otherwise. Targets with fewer than two logged dithers fall back to the previous worst-short-window check.
+- The advisory `Detail` line now says which signal drove the headline (e.g. *"Walking-noise signal drives the headline: dither headroom 1.5× with 87% directional drift between dithers."*) so a Caution headline never surprises when stars in single exposures look fine.
+
+### Added
+
+- `DriftRiskSummary` now carries `StarShapeStatus`/`StarShapeTone`, `WalkingNoiseStatus`/`WalkingNoiseTone`, `BetweenDitherDriftArcSec`, `BetweenDitherDriftPixels`, `DitherHeadroomRatio`, and `WalkingNoiseReason` — surfaced in the embedded JSON so the comparison view can read them.
+- **Walking-noise hint** line in the strip shows the new headroom number, e.g. *"dither headroom 3.4× (median dither magnitude vs cumulative drift between dithers — 1.62″ between dithers · ≈ 0.41 px between dithers). Higher is safer."*
+- **Recommendations** rewritten around the two sub-tiers:
+  - Star-shape Caution → suggests shorter exposures, polar alignment, or guiding (if applicable).
+  - Walking-noise Caution → suggests increasing **Mount Dither Pixels** in NINA, dithering more often, and addressing field drift (polar alignment / differential flexure). When stars look fine but walking-noise is Caution, an info line clarifies that single-exposure stars should still look fine.
+  - When a logged dither repeated the same direction as the natural drift, an extra recommendation notes that randomization isn't breaking the FPN pattern.
+  - Walking-noise Moderate + `headroom < 3×` → info recommendation that the margin is workable but a larger dither widens it.
+- **Compare saved reports** gains two new metric rows: **Dither vs drift headroom** (×, higher is better) and **Worst short-window drift** (px, lower is better). Older reports without `DriftRisk` walking-noise fields show `0` and surface no change.
+
 ## [0.8.23] — 2026-05-11
 
 ### Changed

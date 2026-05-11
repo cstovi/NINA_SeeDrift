@@ -254,6 +254,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return new DriftRiskSummary {
                     Status = "Not enough data",
                     Tone = "info",
+                    StarShapeStatus = "Not enough data",
+                    StarShapeTone = "info",
+                    WalkingNoiseStatus = "Not enough data",
+                    WalkingNoiseTone = "info",
                     Detail = "Need at least three solved frames before judging drift consistency."
                 };
             }
@@ -281,6 +285,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                     Status = "Not enough drift-only intervals",
                     Tone = "info",
                     IntervalCount = intervals.Count,
+                    StarShapeStatus = "Not enough data",
+                    StarShapeTone = "info",
+                    WalkingNoiseStatus = "Not enough data",
+                    WalkingNoiseTone = "info",
                     Detail = "Most measured movement is attached to logged dither or center events, so SeeDrift is not separating a natural drift trend here."
                 };
             }
@@ -308,10 +316,27 @@ namespace NINA.Plugin.SeeDrift.Services {
                 ? windowDrift.Value / scale
                 : (double?)null;
 
-            var (status, tone) = ClassifyDriftRisk(driftPerExposure, driftPerExposurePx, windowDrift, windowPx, consistency);
+            var (starStatus, starTone) = ClassifyStarShape(driftPerExposure, driftPerExposurePx, consistency);
+
+            ComputeBetweenDitherDrift(ordered, hasScale, scale,
+                out var medianDitherArc, out var medianDitherPx,
+                out var betweenArc, out var betweenPx, out var ditherWindowCount);
+            var headroom = ComputeHeadroom(medianDitherPx, betweenPx, medianDitherArc, betweenArc);
+
+            var (walkStatus, walkTone, walkReason) = ClassifyWalkingNoise(
+                consistency, headroom, betweenPx, betweenArc, windowDrift, windowPx, ditherWindowCount);
+
+            var (headlineStatus, headlineTone) = HeadlineOf(starStatus, starTone, walkStatus, walkTone);
+
+            var detail = BuildDriftRiskDetail(
+                intervals.Count, rate, consistency,
+                starStatus, walkStatus, walkReason,
+                driftPerExposurePx, driftPerExposure, headroom,
+                headlineStatus);
+
             return new DriftRiskSummary {
-                Status = status,
-                Tone = tone,
+                Status = headlineStatus,
+                Tone = headlineTone,
                 IntervalCount = intervals.Count,
                 DurationMinutes = duration,
                 NaturalDriftArcSecPerMinute = rate,
@@ -323,22 +348,32 @@ namespace NINA.Plugin.SeeDrift.Services {
                 WorstWindowDriftArcSec = windowDrift,
                 WorstWindowDriftPixels = windowPx,
                 WorstWindowFrameCount = windowFrames,
-                Detail = FormattableString.Invariant(
-                    $"Advisory only: {intervals.Count} intervals without logged dither/center commands; {rate:0.##}\"/min natural drift and {consistency:P0} direction consistency.")
+                StarShapeStatus = starStatus,
+                StarShapeTone = starTone,
+                WalkingNoiseStatus = walkStatus,
+                WalkingNoiseTone = walkTone,
+                BetweenDitherDriftArcSec = betweenArc,
+                BetweenDitherDriftPixels = betweenPx,
+                DitherHeadroomRatio = headroom,
+                WalkingNoiseReason = walkReason,
+                Detail = detail
             };
         }
 
-        private static (string Status, string Tone) ClassifyDriftRisk(
+        /// <summary>
+        /// Star-shape sub-tier: how much motion lands within a single exposure (round vs elongated stars).
+        /// The cited rule-of-thumb is "<1-2 px per exposure is acceptable" — thresholds are sized accordingly.
+        /// Consistency can nudge the verdict but only when a small per-exposure floor is also met.
+        /// </summary>
+        private static (string Status, string Tone) ClassifyStarShape(
                 double? perExposureArcSec,
                 double? perExposurePixels,
-                double? windowArcSec,
-                double? windowPixels,
                 double consistency) {
             var level = 0;
             if (perExposurePixels.HasValue) {
-                if (perExposurePixels.Value >= 1.0)
+                if (perExposurePixels.Value >= 2.0)
                     level = Math.Max(level, 2);
-                else if (perExposurePixels.Value >= 0.5)
+                else if (perExposurePixels.Value >= 1.0)
                     level = Math.Max(level, 1);
             } else if (perExposureArcSec.HasValue) {
                 if (perExposureArcSec.Value >= 4.0)
@@ -347,29 +382,16 @@ namespace NINA.Plugin.SeeDrift.Services {
                     level = Math.Max(level, 1);
             }
 
-            if (windowPixels.HasValue) {
-                if (windowPixels.Value >= 5.0)
-                    level = Math.Max(level, 2);
-                else if (windowPixels.Value >= 1.0)
-                    level = Math.Max(level, 1);
-            } else if (windowArcSec.HasValue) {
-                if (windowArcSec.Value >= 20.0)
-                    level = Math.Max(level, 2);
-                else if (windowArcSec.Value >= 4.0)
-                    level = Math.Max(level, 1);
-            }
-
             // Consistency-only escalation is gated by a magnitude floor so a low but directional drift
-            // (visually tame on the path plot) cannot push the advisory to "Caution" on its own.
-            // Promote 1→2 requires moderate per-exposure motion; 0→1 requires a smaller floor.
+            // can't push the star-shape verdict to Caution on its own.
             var moderateFloor = perExposurePixels.HasValue
-                ? perExposurePixels.Value >= 0.25
-                : perExposureArcSec.HasValue && perExposureArcSec.Value >= 1.0;
+                ? perExposurePixels.Value >= 0.5
+                : perExposureArcSec.HasValue && perExposureArcSec.Value >= 1.5;
             var smallFloor = perExposurePixels.HasValue
-                ? perExposurePixels.Value >= 0.15
-                : perExposureArcSec.HasValue && perExposureArcSec.Value >= 0.6;
+                ? perExposurePixels.Value >= 0.3
+                : perExposureArcSec.HasValue && perExposureArcSec.Value >= 0.8;
 
-            if (level == 1 && consistency >= 0.75 && moderateFloor)
+            if (level == 1 && consistency >= 0.85 && moderateFloor)
                 level = 2;
             else if (level == 0 && consistency >= 0.85 && smallFloor)
                 level = 1;
@@ -379,6 +401,174 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (level == 1)
                 return ("Moderate", "ok");
             return ("Low", "good");
+        }
+
+        /// <summary>
+        /// Walking-noise sub-tier: cumulative coherent drift between dithers vs the dither magnitude.
+        /// References (CN Jon Rista, freestar8n, Wade, Spokeshave) treat this combination — not per-exposure
+        /// magnitude — as the root cause of correlated FPN in the stacked image.
+        /// Falls back to the worst-short-window check when no logged dithers exist for a headroom comparison.
+        /// </summary>
+        private static (string Status, string Tone, string Reason) ClassifyWalkingNoise(
+                double consistency,
+                double? headroom,
+                double? betweenDriftPx,
+                double? betweenDriftArcSec,
+                double? worstWindowArcSec,
+                double? worstWindowPx,
+                int ditherWindowCount) {
+            if (ditherWindowCount >= 1 && headroom.HasValue) {
+                var pxFloorCaution = betweenDriftPx.HasValue
+                    ? betweenDriftPx.Value >= 0.5
+                    : betweenDriftArcSec.HasValue && betweenDriftArcSec.Value >= 2.0;
+                var pxFloorModerate = betweenDriftPx.HasValue
+                    ? betweenDriftPx.Value >= 0.25
+                    : betweenDriftArcSec.HasValue && betweenDriftArcSec.Value >= 1.0;
+
+                if (consistency >= 0.75 && headroom.Value < 2.0 && pxFloorCaution) {
+                    return ("Caution", "warn", FormattableString.Invariant(
+                        $"dither headroom {headroom.Value:0.0}× with {consistency:P0} directional drift between dithers."));
+                }
+                if (consistency >= 0.5 && headroom.Value < 4.0 && pxFloorModerate) {
+                    return ("Moderate", "ok", FormattableString.Invariant(
+                        $"dither headroom {headroom.Value:0.0}× with {consistency:P0} directional drift."));
+                }
+                return ("Low", "good", FormattableString.Invariant(
+                    $"dither headroom {headroom.Value:0.0}× clears the between-dither drift."));
+            }
+
+            // Fallback: no logged dithers (or no plate scale and arcsec data) — use the short-window check.
+            var level = 0;
+            if (worstWindowPx.HasValue) {
+                if (worstWindowPx.Value >= 5.0) level = 2;
+                else if (worstWindowPx.Value >= 1.0) level = 1;
+            } else if (worstWindowArcSec.HasValue) {
+                if (worstWindowArcSec.Value >= 20.0) level = 2;
+                else if (worstWindowArcSec.Value >= 4.0) level = 1;
+            }
+            // Without dithers we can't compare to headroom; consistency still informs but only when window size also clears a floor.
+            if (level == 1 && consistency >= 0.75) level = 2;
+            else if (level == 0 && consistency >= 0.85) level = 1;
+
+            var reason = ditherWindowCount == 0
+                ? "no logged dithers in this run — using worst short-window drift instead"
+                : "only one logged dither — using worst short-window drift instead";
+            if (level >= 2)
+                return ("Caution", "warn", reason);
+            if (level == 1)
+                return ("Moderate", "ok", reason);
+            return ("Low", "good", reason);
+        }
+
+        private static (string Status, string Tone) HeadlineOf(
+                string starStatus, string starTone,
+                string walkStatus, string walkTone) {
+            int Rank(string tone) => tone switch { "warn" => 2, "ok" => 1, "good" => 0, _ => -1 };
+            return Rank(walkTone) >= Rank(starTone)
+                ? (walkStatus, walkTone)
+                : (starStatus, starTone);
+        }
+
+        private static string BuildDriftRiskDetail(
+                int intervalCount, double rate, double consistency,
+                string starStatus, string walkStatus, string walkReason,
+                double? perExposurePixels, double? perExposureArcSec, double? headroom,
+                string headlineStatus) {
+            var perSub = perExposurePixels.HasValue
+                ? FormattableString.Invariant($"per-exposure motion {perExposurePixels.Value:0.##} px")
+                : perExposureArcSec.HasValue
+                    ? FormattableString.Invariant($"per-exposure motion {perExposureArcSec.Value:0.##}\"")
+                    : "per-exposure motion unknown";
+            var which = headlineStatus == starStatus && headlineStatus != walkStatus
+                ? "Star-shape signal drives the headline"
+                : headlineStatus == walkStatus && headlineStatus != starStatus
+                    ? "Walking-noise signal drives the headline"
+                    : "Star-shape and walking-noise signals agree";
+            var head = headroom.HasValue
+                ? FormattableString.Invariant($" Dither headroom {headroom.Value:0.0}×.")
+                : "";
+            return FormattableString.Invariant(
+                $"Advisory: {intervalCount} natural-drift intervals; {rate:0.##}\"/min, {consistency:P0} directional, {perSub}.{head} {which}: {walkReason}.");
+        }
+
+        /// <summary>
+        /// Collects the per-segment cumulative natural drift (net vector magnitude) between consecutive
+        /// logged dither markers, plus the median dither magnitude. Returns 0 windows if there are not
+        /// at least two dither markers in this target's samples.
+        /// </summary>
+        private static void ComputeBetweenDitherDrift(
+                IReadOnlyList<DriftSample> ordered,
+                bool hasScale, double scale,
+                out double? medianDitherArc, out double? medianDitherPx,
+                out double? betweenArc, out double? betweenPx,
+                out int windowCount) {
+            medianDitherArc = null;
+            medianDitherPx = null;
+            betweenArc = null;
+            betweenPx = null;
+            windowCount = 0;
+
+            var ditherEdges = new List<int>();
+            for (var i = 1; i < ordered.Count; i++) {
+                var markers = ordered[i].EdgeSequencerMarkers ?? new List<SequencerEdgeMarker>();
+                if (markers.Any(m => m.IsDither))
+                    ditherEdges.Add(i);
+            }
+            if (ditherEdges.Count == 0)
+                return;
+
+            // Median dither magnitude (arcsec) from the markers themselves.
+            var ditherMagsArc = new List<double>();
+            foreach (var idx in ditherEdges) {
+                foreach (var m in ordered[idx].EdgeSequencerMarkers!.Where(mk => mk.IsDither)) {
+                    ditherMagsArc.Add(Math.Sqrt(m.DeltaRaArcSec * m.DeltaRaArcSec + m.DeltaDecArcSec * m.DeltaDecArcSec));
+                }
+            }
+            if (ditherMagsArc.Count > 0) {
+                ditherMagsArc.Sort();
+                medianDitherArc = ditherMagsArc[(ditherMagsArc.Count - 1) / 2];
+                if (hasScale)
+                    medianDitherPx = medianDitherArc.Value / scale;
+            }
+
+            if (ditherEdges.Count < 2)
+                return;
+
+            // For each pair of consecutive dither edges, sum the natural-drift-only steps strictly between them.
+            var segmentMagsArc = new List<double>();
+            for (var w = 0; w + 1 < ditherEdges.Count; w++) {
+                var a = ditherEdges[w];
+                var b = ditherEdges[w + 1];
+                double sumDx = 0, sumDy = 0;
+                var any = false;
+                for (var k = a + 1; k < b; k++) {
+                    var markers = ordered[k].EdgeSequencerMarkers ?? new List<SequencerEdgeMarker>();
+                    if (markers.Any()) continue;
+                    GetAnchoredPoint(ordered, ordered[k - 1], out var x0, out var y0);
+                    GetAnchoredPoint(ordered, ordered[k], out var x1, out var y1);
+                    sumDx += (x1 - x0);
+                    sumDy += (y1 - y0);
+                    any = true;
+                }
+                if (any)
+                    segmentMagsArc.Add(Math.Sqrt(sumDx * sumDx + sumDy * sumDy));
+            }
+            windowCount = segmentMagsArc.Count;
+            if (windowCount == 0)
+                return;
+            segmentMagsArc.Sort();
+            betweenArc = segmentMagsArc[(segmentMagsArc.Count - 1) / 2];
+            if (hasScale)
+                betweenPx = betweenArc.Value / scale;
+        }
+
+        private static double? ComputeHeadroom(double? medianDitherPx, double? betweenPx,
+                double? medianDitherArc, double? betweenArc) {
+            if (medianDitherPx.HasValue && betweenPx.HasValue)
+                return medianDitherPx.Value / Math.Max(0.05, betweenPx.Value);
+            if (medianDitherArc.HasValue && betweenArc.HasValue)
+                return medianDitherArc.Value / Math.Max(0.2, betweenArc.Value);
+            return null;
         }
 
         /// <summary>
@@ -622,17 +812,53 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             var emitted = false;
-            if (analysis.DriftRisk.Tone == "warn") {
+
+            // Star-shape: per-exposure motion concern. References put round stars at < 1-2 px/exposure.
+            if (analysis.DriftRisk.StarShapeTone == "warn") {
                 emitted = true;
-                var window = analysis.DriftRisk.WorstWindowDriftArcSec.HasValue && analysis.DriftRisk.WorstWindowFrameCount > 0
-                    ? FormattableString.Invariant($"; worst short-window drift {analysis.DriftRisk.WorstWindowDriftArcSec.Value:0.#}\" over {analysis.DriftRisk.WorstWindowFrameCount} frames")
-                    : "";
-                var star = analysis.DriftRisk.EstimatedDriftPerExposureArcSec.HasValue
-                    ? FormattableString.Invariant($"; estimated per-exposure drift {analysis.DriftRisk.EstimatedDriftPerExposureArcSec.Value:0.#}\"")
-                    : "";
+                var pxBit = analysis.DriftRisk.EstimatedDriftPerExposurePixels.HasValue
+                    ? FormattableString.Invariant($" ({analysis.DriftRisk.EstimatedDriftPerExposurePixels.Value:0.##} px/exposure)")
+                    : analysis.DriftRisk.EstimatedDriftPerExposureArcSec.HasValue
+                        ? FormattableString.Invariant($" ({analysis.DriftRisk.EstimatedDriftPerExposureArcSec.Value:0.#}\"/exposure)")
+                        : "";
                 yield return new SessionRecommendation {
                     Level = "warn",
-                    Text = FormattableString.Invariant($"Natural drift may be consistent enough to raise walking-noise risk ({analysis.DriftRisk.NaturalDriftArcSecPerMinute:0.##}\"/min, {analysis.DriftRisk.DirectionConsistency:P0} directional{window}{star}). Stronger or more varied dithers may help break the pattern.")
+                    Text = FormattableString.Invariant($"Per-exposure motion is large enough{pxBit} that single subs may show elongated stars. Shorter exposures, better polar alignment, or guiding (if applicable) help here.")
+                };
+            }
+
+            // Walking-noise: cumulative coherent drift vs the dither magnitude — different concern from star shape.
+            var assessedDithersAll = analysis.Dithers.Where(d => !d.IsSuspect).ToList();
+            var repeatedDirection = assessedDithersAll.Count(d => d.Assessment == "Repeated direction");
+            if (analysis.DriftRisk.WalkingNoiseTone == "warn") {
+                emitted = true;
+                var headBit = analysis.DriftRisk.DitherHeadroomRatio.HasValue
+                    ? FormattableString.Invariant($"Dither headroom is {analysis.DriftRisk.DitherHeadroomRatio.Value:0.0}× ")
+                    : "";
+                var consBit = FormattableString.Invariant($"with {analysis.DriftRisk.DirectionConsistency:P0} directional drift between dithers");
+                yield return new SessionRecommendation {
+                    Level = "warn",
+                    Text = $"{headBit}{consBit}. Coherent drift can correlate fixed-pattern noise across stacked subs (walking noise). Consider increasing Mount Dither Pixels in NINA, dithering more often, or addressing field drift (polar alignment / differential flexure)."
+                };
+                if (analysis.DriftRisk.StarShapeTone == "good") {
+                    yield return new SessionRecommendation {
+                        Level = "info",
+                        Text = "Stars in single exposures should still look fine — the walking-noise advisory is about correlated FPN across the stack, not elongation in any one frame."
+                    };
+                }
+                if (repeatedDirection > 0) {
+                    yield return new SessionRecommendation {
+                        Level = "warn",
+                        Text = FormattableString.Invariant($"{repeatedDirection} logged dither(s) repeated the same direction as the natural drift; the dither pattern is not randomizing the FPN. Check that NINA's dither randomization is enabled and dither size exceeds your drift between dithers.")
+                    };
+                }
+            } else if (analysis.DriftRisk.WalkingNoiseTone == "ok"
+                       && analysis.DriftRisk.DitherHeadroomRatio.HasValue
+                       && analysis.DriftRisk.DitherHeadroomRatio.Value < 3.0) {
+                emitted = true;
+                yield return new SessionRecommendation {
+                    Level = "info",
+                    Text = FormattableString.Invariant($"Dither headroom is {analysis.DriftRisk.DitherHeadroomRatio.Value:0.0}× — workable, but a larger Mount Dither Pixels (or fixing slow field drift) widens the margin against walking noise.")
                 };
             }
 
@@ -644,7 +870,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 };
             }
 
-            var assessedDithers = analysis.Dithers.Where(d => !d.IsSuspect).ToList();
+            var assessedDithers = assessedDithersAll;
             if (analysis.SuspectDitherCount > 0) {
                 emitted = true;
                 yield return new SessionRecommendation {

@@ -96,6 +96,27 @@ namespace NINA.Plugin.SeeDrift.Models {
         public double? WorstWindowDriftPixels { get; init; }
         public int WorstWindowFrameCount { get; init; }
         public string Detail { get; init; } = "";
+
+        /// <summary>Per-exposure star-shape sub-tier: "Low" / "Moderate" / "Caution".</summary>
+        public string StarShapeStatus { get; init; } = "";
+        /// <summary>Tone for the star-shape sub-tier: good / ok / warn.</summary>
+        public string StarShapeTone { get; init; } = "";
+
+        /// <summary>Correlated-FPN walking-noise sub-tier: "Low" / "Moderate" / "Caution".</summary>
+        public string WalkingNoiseStatus { get; init; } = "";
+        /// <summary>Tone for the walking-noise sub-tier.</summary>
+        public string WalkingNoiseTone { get; init; } = "";
+
+        /// <summary>Median cumulative natural drift (arc-seconds) between consecutive dither markers.</summary>
+        public double? BetweenDitherDriftArcSec { get; init; }
+        /// <summary>Median cumulative natural drift (detector pixels) between consecutive dither markers.</summary>
+        public double? BetweenDitherDriftPixels { get; init; }
+
+        /// <summary>Median observed dither magnitude (px) divided by between-dither drift (px). Higher is safer for walking noise.</summary>
+        public double? DitherHeadroomRatio { get; init; }
+
+        /// <summary>One-line reason for the walking-noise sub-tier verdict.</summary>
+        public string WalkingNoiseReason { get; init; } = "";
     }
 
     public sealed class QualityTimelineSegment {
