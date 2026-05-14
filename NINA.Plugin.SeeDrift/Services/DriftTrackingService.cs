@@ -174,6 +174,21 @@ namespace NINA.Plugin.SeeDrift.Services {
         private static ApplicationStatus StatusOnly(string msg) =>
             new ApplicationStatus { Source = "SeeDrift", Status = msg, Progress = 0, MaxProgress = 0 };
 
+        /// <summary>
+        /// Builds status with <see cref="ApplicationStatus.StatusProgressType.ValueOfMaxValue"/> so <c>Progress</c>/<c>MaxProgress</c> use a 0–100 scale;
+        /// NINA’s default <see cref="ApplicationStatus.StatusProgressType.Percent"/> treats <c>Progress</c> as a 0–1 fraction (e.g. 100 → <c>10000%</c> in the bar).
+        /// </summary>
+        private static ApplicationStatus ProgressStatus(string msg, double progress, int maxProgress) {
+            var s = new ApplicationStatus {
+                Source = "SeeDrift",
+                Status = msg,
+                Progress = progress,
+                MaxProgress = maxProgress,
+                ProgressType = ApplicationStatus.StatusProgressType.ValueOfMaxValue
+            };
+            return s;
+        }
+
         public void ResetSession() {
             CompletedTargets.Clear();
             IsArmed = false;
@@ -197,12 +212,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 CancellationToken token) {
 
             void Report(string msg, int prog = 0, int max = 0) {
-                progress?.Report(new ApplicationStatus {
-                    Source = "SeeDrift",
-                    Status = msg,
-                    Progress = prog,
-                    MaxProgress = max
-                });
+                if (max > 0)
+                    progress?.Report(ProgressStatus(msg, prog, max));
+                else
+                    progress?.Report(new ApplicationStatus { Source = "SeeDrift", Status = msg, Progress = prog, MaxProgress = max });
             }
 
             var runStopwatch = Stopwatch.StartNew();
@@ -312,12 +325,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             Report("Initializing plate solver…");
 
-            progress?.Report(new ApplicationStatus {
-                Source = "SeeDrift",
-                Status = $"Plate solving {windowed.Count} lights…",
-                Progress = 0,
-                MaxProgress = 100
-            });
+            progress?.Report(ProgressStatus($"Plate solving {windowed.Count} lights…", 0, 100));
 
             var parallelismCfg = Math.Clamp(
                 _plugin.PlateSolveParallelism,
@@ -382,12 +390,10 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 var done = Interlocked.Increment(ref completed);
                 var pct = (int)Math.Clamp((100 * done + windowed.Count / 2) / windowed.Count, 0, 100);
-                progress?.Report(new ApplicationStatus {
-                    Source = "SeeDrift",
-                    Status = $"Solving {done}/{windowed.Count} — {Path.GetFileName(pathForProgress)}",
-                    Progress = pct,
-                    MaxProgress = 100
-                });
+                progress?.Report(ProgressStatus(
+                    $"Solving {done}/{windowed.Count} — {Path.GetFileName(pathForProgress)}",
+                    pct,
+                    100));
             }
 
             var pool = new BlockingCollection<IImageSolver>();

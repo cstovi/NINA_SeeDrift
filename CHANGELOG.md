@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.26] — 2026-05-14
+
+### Fixed
+
+- **NINA status bar percent:** `ApplicationStatus` defaults to `ProgressType = Percent`, where `Progress` is a **0–1** fraction. SeeDrift was sending **0–100** with `MaxProgress = 100` (intended as percent-complete), which made the main status bar show nonsensical values such as **10000%** at the end of a run. Progress updates now set `ProgressType = ValueOfMaxValue` for that scale.
+
 ### Changed
 
 - **Session settings used** card in the night HTML is now **collapsed by default** (click the header to expand). The card behavior in **Compare saved reports** is unchanged — the comparison HTML still renders the settings table inline.
