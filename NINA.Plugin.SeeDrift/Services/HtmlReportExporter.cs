@@ -210,7 +210,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"    <div class=\"seedrift-chart-box mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-2\">");
                     sb.AppendLine($"      <canvas id=\"{canvasId}\"></canvas>");
                     sb.AppendLine("    </div>");
-                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center. <span class=\"text-amber-300\">?</span> marks possibly missing/unsolved frames between plotted points. Hover path, △/□, or ? markers for detail.</p>");
+                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither (tip toward next frame) · <span class=\"text-pink-400\">□</span> center. <span class=\"text-amber-300\">?</span> marks possibly missing/unsolved frames between plotted points. Hover path, △/□, or ? markers for detail.</p>");
                     sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{Escape(FormatMovementTotalsLine(grp))}</p>");
                     var ditherSegHtml = FormatDitherIntervalMovementHtml(grp);
                     if (!string.IsNullOrEmpty(ditherSegHtml))
@@ -251,6 +251,16 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("    if (i === n - 1) return '#fb923c';");
                     sb.AppendLine("    return '#38bdf8';");
                     sb.AppendLine("  }");
+                    sb.AppendLine("  function seedriftDitherRotationDeg(chart, raw) {");
+                    sb.AppendLine("    if (!raw || !raw.isDither) return 0;");
+                    sb.AppendLine("    var sx = chart.scales.x, sy = chart.scales.y;");
+                    sb.AppendLine("    if (!sx || !sy) return 0;");
+                    sb.AppendLine("    var x0 = sx.getPixelForValue(raw.x0), y0 = sy.getPixelForValue(raw.y0);");
+                    sb.AppendLine("    var x1 = sx.getPixelForValue(raw.x1), y1 = sy.getPixelForValue(raw.y1);");
+                    sb.AppendLine("    var dx = x1 - x0, dy = y1 - y0;");
+                    sb.AppendLine("    if (dx === 0 && dy === 0) return 0;");
+                    sb.AppendLine("    return (Math.atan2(dy, dx) * 180 / Math.PI) + 90;");
+                    sb.AppendLine("  }");
                     sb.AppendLine("  var datasets = [{");
                     sb.AppendLine("      label: datasetLabel,");
                     sb.AppendLine("      data: pts, borderColor: '#38bdf8',");
@@ -277,6 +287,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("      pointStyle: function(ctx) {");
                     sb.AppendLine("        var d = ctx.raw;");
                     sb.AppendLine("        return (d && d.isDither) ? 'triangle' : 'rect';");
+                    sb.AppendLine("      },");
+                    sb.AppendLine("      pointRotation: function(ctx) {");
+                    sb.AppendLine("        return seedriftDitherRotationDeg(ctx.chart, ctx.raw);");
                     sb.AppendLine("      }");
                     sb.AppendLine("    });");
                     sb.AppendLine("  }");
@@ -946,6 +959,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                     list.Add(new {
                         x = Math.Round(mx, 4),
                         y = Math.Round(my, 4),
+                        x0 = px,
+                        y0 = py,
+                        x1 = cx,
+                        y1 = cy,
                         isDither = markers[j].IsDither,
                         tooltip = markers[j].Tooltip ?? ""
                     });
