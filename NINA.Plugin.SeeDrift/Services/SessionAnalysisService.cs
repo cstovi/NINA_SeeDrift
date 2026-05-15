@@ -395,7 +395,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         /// <summary>
         /// Star-shape sub-tier: how much motion lands within a single exposure (round vs elongated stars).
-        /// The cited rule-of-thumb is "<1-2 px per exposure is acceptable" — thresholds are sized accordingly.
+        /// The cited rule-of-thumb is "<1-2 px per exposure is acceptable" — Caution starts above ~2.5 px.
         /// Consistency can nudge the verdict but only when a small per-exposure floor is also met.
         /// </summary>
         private static (string Status, string Tone) ClassifyStarShape(
@@ -404,12 +404,12 @@ namespace NINA.Plugin.SeeDrift.Services {
                 double consistency) {
             var level = 0;
             if (perExposurePixels.HasValue) {
-                if (perExposurePixels.Value >= 2.0)
+                if (perExposurePixels.Value >= 2.5)
                     level = Math.Max(level, 2);
                 else if (perExposurePixels.Value >= 1.0)
                     level = Math.Max(level, 1);
             } else if (perExposureArcSec.HasValue) {
-                if (perExposureArcSec.Value >= 4.0)
+                if (perExposureArcSec.Value >= 5.0)
                     level = Math.Max(level, 2);
                 else if (perExposureArcSec.Value >= 2.0)
                     level = Math.Max(level, 1);
@@ -458,7 +458,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     ? betweenDriftPx.Value >= 0.25
                     : betweenDriftArcSec.HasValue && betweenDriftArcSec.Value >= 1.0;
 
-                if (consistency >= 0.75 && headroom.Value < 2.0 && pxFloorCaution) {
+                if (consistency >= 0.75 && headroom.Value < 1.5 && pxFloorCaution) {
                     return ("Caution", "warn", FormattableString.Invariant(
                         $"dither headroom {headroom.Value:0.0}× with {consistency:P0} directional drift between dithers."));
                 }
