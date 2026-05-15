@@ -7,7 +7,7 @@ namespace NINA.Plugin.SeeDrift {
 
     public class SeeDriftSettings {
 
-        /// <summary>Previous session report: path to a NINA .log file (Saved image to … lines).</summary>
+        /// <summary>Run report: path to a NINA .log file (Saved image to … lines).</summary>
         public string TestReportLogFilePath { get; set; } = "";
 
         /// <summary>Max concurrent plate solves (1 … <see cref="CpuTopology.MaxPlateSolveParallelism"/>). Default on fresh settings matches physical CPU cores (clamped to that ceiling).</summary>

@@ -8,11 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Plugins → SeeDrift wording:** **Previous session Log** / **Run previous session report** renamed to **Create report** / **Run report** (status: **Report status**) so the options page reads as “pick a log, run a report” rather than a special mode distinct from Start/Stop. Dialogs, log lines, and night HTML copy use the same terms.
+
 - **Drift advisory Caution thresholds relaxed** so borderline sessions are not over-flagged: **Walking noise** Caution now requires dither headroom `< 1.5×` (was `< 2×`) with the same consistency and between-dither floors; **Star shape** Caution now starts at `≥ 2.5 px` per exposure (`≥ 5.0″`, was `≥ 2.0 px` / `≥ 4.0″`). Moderate bands and consistency-only escalation floors are unchanged.
 
 - **Night HTML:** **Dither** (purple triangle) markers on drift charts **rotate along the inter-frame segment** so the tip points **toward the later frame** (center-after-drift squares stay axis-aligned).
 
-- **SeeDrift Stop (nothing to report):** When Stop finds fewer than two usable saved-light lines, LIGHT frames after FITS filter, or successful plate solves, NINA’s status bar now shows **Complete — no drift report…** instead of **Stopped —**. If **Discord webhook** is set, SeeDrift sends a **text-only** webhook (no HTML attachment). **Previous session report** still shows the informational dialog on failure and does not upload to Discord.
+- **SeeDrift Stop (nothing to report):** When Stop finds fewer than two usable saved-light lines, LIGHT frames after FITS filter, or successful plate solves, NINA’s status bar now shows **Complete — no drift report…** instead of **Stopped —**. If **Discord webhook** is set, SeeDrift sends a **text-only** webhook (no HTML attachment). **Run report** still shows the informational dialog on failure and does not upload to Discord.
 
 ## [0.8.26] — 2026-05-14
 

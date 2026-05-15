@@ -93,7 +93,7 @@ namespace NINA.Plugin.SeeDrift {
             ScheduleRefreshResolvedReportForSelectedLog();
         }
 
-        /// <summary>Last-used NINA log path for previous session report (persisted).</summary>
+        /// <summary>Last-used NINA log path for Run report (persisted).</summary>
         public string TestReportLogFilePath {
             get => _testReportLogFilePath;
             set {
@@ -219,7 +219,7 @@ namespace NINA.Plugin.SeeDrift {
             if (string.IsNullOrWhiteSpace(TestReportLogFilePath)) {
                 MessageBox.Show(
                     "Choose a NINA log from the dropdown first.",
-                    "SeeDrift — Previous session report",
+                    "SeeDrift — Report",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 return;
@@ -227,28 +227,28 @@ namespace NINA.Plugin.SeeDrift {
 
             await Application.Current!.Dispatcher.InvokeAsync(BeginTestReportUi);
             await Task.Yield();
-            SeeDriftLog.Info($"SeeDrift: Previous session report starting — {TestReportLogFilePath.Trim()}");
+            SeeDriftLog.Info($"SeeDrift: Report from log starting — {TestReportLogFilePath.Trim()}");
             var ok = false;
             try {
                 var progress = new Progress<ApplicationStatus>(OnTestReportApplicationStatus);
                 ok = await DriftTracker.RunTestReportFromLogAsync(TestReportLogFilePath.Trim(), progress, CancellationToken.None)
                     .ConfigureAwait(false);
             } catch (Exception ex) {
-                SeeDriftLog.Error($"SeeDrift: Previous session report failed — {ex.Message}");
+                SeeDriftLog.Error($"SeeDrift: Report from log failed — {ex.Message}");
             } finally {
                 await Application.Current!.Dispatcher.InvokeAsync(EndTestReportUi);
             }
 
             if (!ok) {
                 MessageBox.Show(
-                    "Previous session report did not add a batch to the night HTML.\n\n" +
+                    "The report did not add a batch to the night HTML.\n\n" +
                     "Common causes:\n" +
                     "• Fewer than two usable lights — NINA often saves .xisf (now accepted); logs must contain “Saved image to …” lines.\n" +
                     "• Files moved/deleted since the session.\n" +
                     "• Frames classified as calibration in FITS headers.\n" +
                     "• Plate solve failures.\n\n" +
                     "See %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log and NINA’s application log for lines starting with SeeDrift.",
-                    "SeeDrift — Previous session report",
+                    "SeeDrift — Report",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
@@ -272,7 +272,7 @@ namespace NINA.Plugin.SeeDrift {
         private int _testReportProgressMaximum = 1;
         private bool _testReportIndeterminate;
 
-        /// <summary>False while a previous session report run is in progress (disables Run).</summary>
+        /// <summary>False while a report run is in progress (disables Run report).</summary>
         public bool TestReportNotBusy => !_testReportBusy;
 
         public string TestReportStatusText => _testReportStatusText;
@@ -283,7 +283,7 @@ namespace NINA.Plugin.SeeDrift {
 
         public bool TestReportIndeterminate => _testReportIndeterminate;
 
-        /// <summary>Shows the progress row while a previous session report runs, or content scoped to the **currently selected** log.</summary>
+        /// <summary>Shows the progress row while a report runs, or content scoped to the **currently selected** log.</summary>
         public Visibility TestReportChromeVisibility =>
             ShouldShowPreviousSessionReportPanel() ? Visibility.Visible : Visibility.Collapsed;
 
@@ -488,7 +488,7 @@ namespace NINA.Plugin.SeeDrift {
                     _resolvedNightReportSummary = summary;
                 } else {
                     _selectedLogNoReportHint =
-                        "No saved SeeDrift HTML in the report library lists this log yet. Run \"Run previous session report\" or check %LocalAppData%\\NINA\\SeeDrift\\Reports.";
+                        "No saved SeeDrift HTML in the report library lists this log yet. Click Run report or check %LocalAppData%\\NINA\\SeeDrift\\Reports.";
                 }
             } catch (Exception ex) {
                 _selectedLogNoReportHint = $"Could not scan report library — {ex.Message}";
@@ -709,7 +709,7 @@ namespace NINA.Plugin.SeeDrift {
 
         private void BeginTestReportUi() {
             _testReportBusy = true;
-            _testReportStatusText = "Previous session report — starting (status updates appear here)…";
+            _testReportStatusText = "Report — starting (status updates appear here)…";
             _testReportProgressValue = 0;
             _testReportProgressMaximum = 1;
             _testReportIndeterminate = true;
@@ -784,7 +784,7 @@ namespace NINA.Plugin.SeeDrift {
         private int _plateSolveParallelism =
             Math.Clamp(CpuTopology.PhysicalCoreCount, 1, CpuTopology.MaxPlateSolveParallelism);
 
-        /// <summary>Concurrent plate solves during Stop or previous session report (clamped to 1 … <see cref="CpuTopology.MaxPlateSolveParallelism"/>). Fresh defaults match physical CPU cores (clamped to that ceiling).</summary>
+        /// <summary>Concurrent plate solves during Stop or Run report (clamped to 1 … <see cref="CpuTopology.MaxPlateSolveParallelism"/>). Fresh defaults match physical CPU cores (clamped to that ceiling).</summary>
         public int PlateSolveParallelism {
             get => _plateSolveParallelism;
             set {

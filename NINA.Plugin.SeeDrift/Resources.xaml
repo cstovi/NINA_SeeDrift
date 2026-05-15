@@ -19,7 +19,7 @@
                 <Grid.ToolTip>
                     <ToolTip>
                         <TextBlock MaxWidth="420" TextWrapping="Wrap"
-                                   Text="Optional. Paste a Discord channel webhook URL (Integrations → Webhooks). After SeeDrift Stop writes the night HTML, the file is POSTed as an attachment. The URL contains a secret token — do not share it. Leave empty to disable. Previous session report never uploads to Discord."/>
+                                   Text="Optional. Paste a Discord channel webhook URL (Integrations → Webhooks). After SeeDrift Stop writes the night HTML, the file is POSTed as an attachment. The URL contains a secret token — do not share it. Leave empty to disable. Run report on this page never uploads to Discord."/>
                     </ToolTip>
                 </Grid.ToolTip>
                 <Grid.ColumnDefinitions>
@@ -85,8 +85,8 @@
 
             <Separator Margin="0,0,0,12"/>
 
-            <TextBlock Text="Previous session Log" FontWeight="Bold" Margin="0,0,0,4"/>
-            <TextBlock Text="Pick a saved NINA .log from the last 14 days. SeeDrift plate-solves every LIGHT frame listed on “Saved image to …” lines in that file — fast, no date window. Same drift + sequencer correlation as Stop."
+            <TextBlock Text="Create report" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBlock Text="Choose a NINA session log, then run a drift report on every LIGHT frame it recorded (full log file — no Start/Stop window)."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
             <TextBlock Text="{Binding RecentLogSessionsStatusText, Mode=OneWay}"
@@ -115,7 +115,7 @@
             </Border>
 
             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                <Button Content="Run previous session report" Command="{Binding RunTestReportCommand}" Padding="12,6"
+                <Button Content="Run report" Command="{Binding RunTestReportCommand}" Padding="12,6"
                         IsEnabled="{Binding TestReportNotBusy, Mode=OneWay}"/>
             </StackPanel>
 
@@ -123,7 +123,7 @@
                     Background="#1e293b" BorderBrush="#334155" BorderThickness="1"
                     Visibility="{Binding TestReportChromeVisibility, Mode=OneWay}">
                 <StackPanel>
-                    <TextBlock Text="Previous session report status" FontWeight="SemiBold" Foreground="#94a3b8" FontSize="10" Margin="0,0,0,6"/>
+                    <TextBlock Text="Report status" FontWeight="SemiBold" Foreground="#94a3b8" FontSize="10" Margin="0,0,0,6"/>
                     <TextBlock Text="{Binding TestReportStatusDisplayText, Mode=OneWay}" Foreground="#7dd3fc" FontSize="12" TextWrapping="Wrap" LineHeight="18" Margin="0,0,0,4"/>
                     <TextBlock Text="{Binding SelectedLogSavedReportSummaryText, Mode=OneWay}"
                                Foreground="#94a3b8" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"
