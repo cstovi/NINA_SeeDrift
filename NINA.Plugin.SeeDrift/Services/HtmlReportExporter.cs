@@ -548,7 +548,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return "";
             var rows = new List<(string Label, string DeltaRa, string DeltaDec, string Pixel, string Note)>();
             var pixelPath = group.All(s => s.IsPixelPath);
-            var suspectFloor = CalculateSuspectDitherFloor(group);
             double sumAbsRa = 0;
             double sumAbsDec = 0;
             double sumAbsPx = 0;
@@ -572,9 +571,11 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var dRa = x1 - x0;
                 var dDec = y1 - y0;
                 var move = Math.Sqrt(dRa * dRa + dDec * dDec);
-                var suspect = move >= suspectFloor;
+                var pulseMarker = markers.FirstOrDefault(m => m.IsDither && m.LoggedGuiderDx.HasValue)
+                                  ?? markers.First(m => m.IsDither);
+                var suspect = DitherSuspectRules.IsSuspectDitherInterval(group, dRa, dDec, pulseMarker, out var suspectReason);
                 var note = suspect
-                    ? "Excluded from dither assessment: likely tracking issue / suspect jump."
+                    ? $"Excluded from dither assessment: {suspectReason}"
                     : "";
                 if (suspect) {
                     suspectCount++;
@@ -688,22 +689,6 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         private static string FmtSignedArcSec(double v) =>
             string.Format(CultureInfo.InvariantCulture, "{0:+0.###;-0.###;0}", v);
-
-        private static double CalculateSuspectDitherFloor(IReadOnlyList<DriftSample> group) {
-            var moves = group
-                .Skip(1)
-                .SelectMany(s => s.EdgeSequencerMarkers ?? new List<SequencerEdgeMarker>())
-                .Where(m => m.IsDither)
-                .Select(m => Math.Sqrt(m.DeltaRaArcSec * m.DeltaRaArcSec + m.DeltaDecArcSec * m.DeltaDecArcSec))
-                .OrderBy(v => v)
-                .ToList();
-            if (moves.Count == 0)
-                return double.PositiveInfinity;
-            var median = moves[(moves.Count - 1) / 2];
-            return moves.Count > 1
-                ? Math.Max(300.0, median * 5.0)
-                : 600.0;
-        }
 
         private static string FormatAnalysisSummaryHtml(TargetAnalysis analysis) {
             var sb = new StringBuilder();

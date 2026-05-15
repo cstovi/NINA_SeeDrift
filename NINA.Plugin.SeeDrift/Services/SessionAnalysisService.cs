@@ -725,19 +725,9 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         private static IEnumerable<DitherEventAnalysis> BuildDitherAnalyses(IReadOnlyList<DriftSample> ordered) {
-            var allDitherSteps = ordered
-                .Skip(1)
-                .SelectMany(s => s.EdgeSequencerMarkers ?? new List<SequencerEdgeMarker>())
-                .Where(m => m.IsDither)
-                .Select(m => Math.Sqrt(m.DeltaRaArcSec * m.DeltaRaArcSec + m.DeltaDecArcSec * m.DeltaDecArcSec))
-                .OrderBy(v => v)
-                .ToList();
             var medianStep = MedianNonEventStep(ordered);
-            var medianDitherStep = allDitherSteps.Count == 0 ? medianStep : allDitherSteps[(allDitherSteps.Count - 1) / 2];
             var weakFloor = Math.Max(2.0, medianStep * 1.25);
-            var suspectFloor = allDitherSteps.Count > 1
-                ? Math.Max(300.0, medianDitherStep * 5.0)
-                : 600.0;
+            var byIndex = ordered.ToDictionary(s => s.FrameIndex);
             double? prevRa = null;
             double? prevDec = null;
 
@@ -745,16 +735,20 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var markers = cur.EdgeSequencerMarkers;
                 if (markers == null) continue;
                 foreach (var marker in markers.Where(m => m.IsDither)) {
-                    var move = Math.Sqrt(marker.DeltaRaArcSec * marker.DeltaRaArcSec + marker.DeltaDecArcSec * marker.DeltaDecArcSec);
-                    var suspect = move >= suspectFloor;
-                    var suspectReason = suspect
-                        ? FormattableString.Invariant($"Likely tracking issue: measured movement {move:0.##}\" is far outside normal logged dither scale ({medianDitherStep:0.##}\" median).")
-                        : "";
+                    if (!byIndex.TryGetValue(marker.FromFrameIndex, out var prev))
+                        continue;
+
+                    GetAnchoredPoint(ordered, prev, out var x0, out var y0);
+                    GetAnchoredPoint(ordered, cur, out var x1, out var y1);
+                    var dRa = x1 - x0;
+                    var dDec = y1 - y0;
+                    var move = Math.Sqrt(dRa * dRa + dDec * dDec);
+                    var suspect = DitherSuspectRules.IsSuspectDitherInterval(ordered, dRa, dDec, marker, out var suspectReason);
                     var repeated = false;
                     if (!suspect && prevRa.HasValue && prevDec.HasValue) {
                         var prevLen = Math.Sqrt(prevRa.Value * prevRa.Value + prevDec.Value * prevDec.Value);
                         if (prevLen > 0.001 && move > 0.001) {
-                            var dot = (prevRa.Value * marker.DeltaRaArcSec + prevDec.Value * marker.DeltaDecArcSec) / (prevLen * move);
+                            var dot = (prevRa.Value * dRa + prevDec.Value * dDec) / (prevLen * move);
                             repeated = dot > 0.85;
                         }
                     }
@@ -775,16 +769,16 @@ namespace NINA.Plugin.SeeDrift.Services {
                                 : "Measured movement is clearly separated from nearby drift/noise.";
 
                     if (!suspect) {
-                        prevRa = marker.DeltaRaArcSec;
-                        prevDec = marker.DeltaDecArcSec;
+                        prevRa = dRa;
+                        prevDec = dDec;
                     }
 
                     yield return new DitherEventAnalysis {
                         FromFrameIndex = marker.FromFrameIndex,
                         ToFrameIndex = marker.ToFrameIndex,
                         EventUtc = marker.EventUtc,
-                        DeltaRaArcSec = marker.DeltaRaArcSec,
-                        DeltaDecArcSec = marker.DeltaDecArcSec,
+                        DeltaRaArcSec = dRa,
+                        DeltaDecArcSec = dDec,
                         MoveArcSec = move,
                         EquivalentPixels = TryMedianPlateScale(ordered, out var scale) && scale > 0 ? move / scale : null,
                         LoggedGuiderDx = marker.LoggedGuiderDx,
