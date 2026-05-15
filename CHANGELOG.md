@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Target chart subtitle:** Under each **Target:** heading, the second line now shows **total integration** (sum of FITS `EXPTIME` across solved frames, e.g. `184 frames · 1h 1m 20s`) instead of a single exposure length.
+
 ### Changed
 
 - **Plugins → SeeDrift wording:** **Previous session Log** / **Run previous session report** renamed to **Create report** / **Run report** (status: **Report status**) so the options page reads as “pick a log, run a report” rather than a special mode distinct from Start/Stop. Dialogs, log lines, and night HTML copy use the same terms.

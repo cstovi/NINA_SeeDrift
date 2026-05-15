@@ -1234,36 +1234,25 @@ namespace NINA.Plugin.SeeDrift.Services {
             return $"{frames} · Processing time {RunDurationFormatter.ToReadable(runDuration)}";
         }
 
-        /// <summary>Frame count plus FITS integration time when <c>EXPTIME</c> (or related keywords) is available.</summary>
+        /// <summary>Frame count plus total integration (sum of per-frame <c>EXPTIME</c>) when every solved frame has exposure metadata.</summary>
         private static string FormatTargetFramesSubtitle(IReadOnlyList<DriftSample> grp) {
             var frames = $"{grp.Count} frame{(grp.Count == 1 ? "" : "s")}";
-            var integration = FormatTargetIntegrationTime(grp);
+            var integration = FormatTargetTotalIntegrationTime(grp);
             return string.IsNullOrEmpty(integration) ? frames : $"{frames} · {integration}";
         }
 
-        private static string FormatTargetIntegrationTime(IReadOnlyList<DriftSample> grp) {
-            var values = grp
+        private static string FormatTargetTotalIntegrationTime(IReadOnlyList<DriftSample> grp) {
+            var perFrameSeconds = grp
                 .Select(s => s.ExposureDurationSeconds)
                 .Where(v => v.HasValue && v.Value > 0)
                 .Select(v => v!.Value)
                 .ToList();
-            if (values.Count == 0)
+            if (perFrameSeconds.Count != grp.Count)
                 return "";
-            var min = values.Min();
-            var max = values.Max();
-            if (Math.Abs(min - max) < 0.05)
-                return FormatIntegrationSeconds(min);
-            return $"{FormatIntegrationSeconds(min)}–{FormatIntegrationSeconds(max)}";
-        }
-
-        private static string FormatIntegrationSeconds(double seconds) {
-            if (seconds >= 60)
-                return string.Format(CultureInfo.InvariantCulture, "{0:0.#}m", seconds / 60.0);
-            if (seconds >= 10)
-                return string.Format(CultureInfo.InvariantCulture, "{0:0}s", seconds);
-            if (seconds >= 1)
-                return string.Format(CultureInfo.InvariantCulture, "{0:0.#}s", seconds);
-            return string.Format(CultureInfo.InvariantCulture, "{0:0.##}s", seconds);
+            var totalSeconds = perFrameSeconds.Sum();
+            if (totalSeconds <= 0)
+                return "";
+            return RunDurationFormatter.ToReadable(TimeSpan.FromSeconds(totalSeconds));
         }
 
         /// <summary>First/last exposure start from solved frames (DATE-OBS / log timing), shown in local wall time.</summary>
