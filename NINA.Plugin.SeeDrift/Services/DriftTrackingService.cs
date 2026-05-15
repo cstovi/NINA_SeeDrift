@@ -49,10 +49,10 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         private sealed class TraceState {
-            public double? RefRaHours;
-            public double? RefDecDeg;
+            /// <summary>First solved RA/Dec per FITS target — drift deltas match per-target chart anchors.</summary>
+            public readonly Dictionary<string, (double RaHours, double DecDeg)> RefByTarget =
+                new(StringComparer.OrdinalIgnoreCase);
             public int NextFrameIndex;
-            public string? RefTargetName;
         }
 
         private readonly record struct SolvedCoords(double RaHours, double DecDeg);
@@ -745,13 +745,12 @@ namespace NINA.Plugin.SeeDrift.Services {
             double? exposureDurationSeconds,
             out DriftSample sample) {
 
-            if (st.RefRaHours == null || st.RefDecDeg == null) {
-                st.RefRaHours = raHours;
-                st.RefDecDeg = decDeg;
-                st.RefTargetName = label;
+            if (!st.RefByTarget.TryGetValue(label, out var refCoords)) {
+                refCoords = (raHours, decDeg);
+                st.RefByTarget[label] = refCoords;
             }
 
-            AstrometryMath.DeltaArcSec(st.RefRaHours.Value, st.RefDecDeg.Value, raHours, decDeg,
+            AstrometryMath.DeltaArcSec(refCoords.RaHours, refCoords.DecDeg, raHours, decDeg,
                 out var dRa, out var dDec);
 
             var utc = exposureUtc.Kind == DateTimeKind.Utc ? exposureUtc : exposureUtc.ToUniversalTime();

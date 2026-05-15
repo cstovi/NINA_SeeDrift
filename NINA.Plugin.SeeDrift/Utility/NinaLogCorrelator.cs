@@ -553,8 +553,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     continue;
 
                 var measuredTail = BuildMeasuredFrameToFrameLines(prev, cur);
-                var dHdrRa = cur.DeltaRaArcSec - prev.DeltaRaArcSec;
-                var dHdrDec = cur.DeltaDecArcSec - prev.DeltaDecArcSec;
+                FrameToFrameStepAlongTrace(prev, cur, out var dHdrRa, out var dHdrDec);
                 double? dPx = null;
                 double? dPy = null;
                 if (cur.IsPixelPath && prev.CumulativePixelX.HasValue && cur.CumulativePixelX.HasValue) {
@@ -639,10 +638,15 @@ namespace NINA.Plugin.SeeDrift.Utility {
             }
         }
 
+        /// <summary>ΔRA/ΔDec step between consecutive frames (same geometry as the drift chart chord).</summary>
+        private static void FrameToFrameStepAlongTrace(DriftSample prev, DriftSample cur, out double dRa, out double dDec) {
+            dRa = cur.DeltaRaArcSec - prev.DeltaRaArcSec;
+            dDec = cur.DeltaDecArcSec - prev.DeltaDecArcSec;
+        }
+
         private static List<string> BuildMeasuredFrameToFrameLines(DriftSample prev, DriftSample cur) {
             var lines = new List<string>();
-            var dHdrRa = cur.DeltaRaArcSec - prev.DeltaRaArcSec;
-            var dHdrDec = cur.DeltaDecArcSec - prev.DeltaDecArcSec;
+            FrameToFrameStepAlongTrace(prev, cur, out var dHdrRa, out var dHdrDec);
             lines.Add($"Measured header Δ: ΔRA {dHdrRa:F2}″, ΔDec {dHdrDec:F2}″ (frame-to-frame)");
             if (cur.HasPixelDerivedRaDec && prev.HasPixelDerivedRaDec) {
                 var dRa = cur.PixelDerivedRaArcSec!.Value - prev.PixelDerivedRaArcSec!.Value;

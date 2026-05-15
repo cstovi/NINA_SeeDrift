@@ -368,7 +368,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("                if (raw && raw.isGap) return [raw.label || 'Possibly missing/unsolved frames', raw.tooltip || ''];");
                     sb.AppendLine("                var tip = raw && raw.tooltip ? String(raw.tooltip) : '';");
                     sb.AppendLine("                var kind = raw && raw.isDither ? 'DitherAfterExposures / pulse' : 'CenterAfterDrift';");
-                    sb.AppendLine("                var hdr = kind + ' · ΔRA ' + ctx.parsed.x + '\" · ΔDec ' + ctx.parsed.y + '\"';");
+                    sb.AppendLine("                var stepRa = (raw && raw.x1 != null && raw.x0 != null) ? (raw.x1 - raw.x0) : ctx.parsed.x;");
+                    sb.AppendLine("                var stepDec = (raw && raw.y1 != null && raw.y0 != null) ? (raw.y1 - raw.y0) : ctx.parsed.y;");
+                    sb.AppendLine("                var hdr = kind + ' · ΔRA ' + stepRa.toFixed(4) + '\" · ΔDec ' + stepDec.toFixed(4) + '\" (along trace)';");
                     sb.AppendLine("                var lines = tip ? tip.split(/\\r?\\n/) : [];");
                     sb.AppendLine("                return [hdr].concat(lines);");
                     sb.AppendLine("              }");
