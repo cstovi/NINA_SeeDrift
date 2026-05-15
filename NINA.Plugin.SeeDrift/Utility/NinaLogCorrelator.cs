@@ -504,10 +504,15 @@ namespace NINA.Plugin.SeeDrift.Utility {
         /// Uses NINA exposure index from file names when both parse; otherwise trace position (<c>FrameIndex + 1</c>).
         /// </summary>
         private static string BetweenFramesHoverLine(DriftSample prev, DriftSample cur) {
-            if (FitsFolderImport.TryExposureSequenceFromFileName(prev.FileName, out var a)
-                && FitsFolderImport.TryExposureSequenceFromFileName(cur.FileName, out var b))
-                return $"Between frames {a} → {b} ({prev.FileName} → {cur.FileName})";
-            return $"Between frames {prev.FrameIndex + 1} → {cur.FrameIndex + 1} ({prev.FileName} → {cur.FileName})";
+            var frameRange = FitsFolderImport.TryExposureSequenceFromFileName(prev.FileName, out var a)
+                             && FitsFolderImport.TryExposureSequenceFromFileName(cur.FileName, out var b)
+                ? $"Between frames {a} → {b}"
+                : $"Between frames {prev.FrameIndex + 1} → {cur.FrameIndex + 1}";
+            return string.Join(Environment.NewLine, new[] {
+                frameRange,
+                prev.FileName ?? "",
+                cur.FileName ?? ""
+            });
         }
 
         private static void AssignInterFrameEdges(
