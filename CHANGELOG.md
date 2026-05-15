@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **SeeDrift Stop (nothing to report):** When Stop finds fewer than two usable saved-light lines, LIGHT frames after FITS filter, or successful plate solves, NINA’s status bar now shows **Complete — no drift report…** instead of **Stopped —**. If **Discord webhook** is set, SeeDrift sends a **text-only** webhook (no HTML attachment). **Previous session report** still shows the informational dialog on failure and does not upload to Discord.
+
 ## [0.8.26] — 2026-05-14
 
 ### Fixed

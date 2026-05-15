@@ -628,6 +628,12 @@ namespace NINA.Plugin.SeeDrift {
                 DiscordWebhookNotifier.EnqueueUpload(_discordWebhookUrl, absolutePath);
         }
 
+        /// <summary>Stop finished with nothing chartable — no night HTML; optional Discord text-only webhook.</summary>
+        internal void NotifyStopFinishedWithoutReport(string discordContent, bool postDiscordIfConfigured) {
+            if (postDiscordIfConfigured)
+                DiscordWebhookNotifier.EnqueueTextMessage(_discordWebhookUrl, discordContent);
+        }
+
         private static string FormatStatusForPanel(string? status, string? path) {
             if (string.IsNullOrEmpty(status))
                 return "";

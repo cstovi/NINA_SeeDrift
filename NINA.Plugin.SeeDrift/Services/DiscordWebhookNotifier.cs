@@ -37,6 +37,21 @@ namespace NINA.Plugin.SeeDrift.Services {
             _ = Task.Run(() => UploadAsync(url, path));
         }
 
+        /// <summary>Fire-and-forget text-only webhook (e.g. Stop with nothing to attach). Does not log the webhook URL.</summary>
+        public static void EnqueueTextMessage(string? webhookUrlRaw, string content) {
+            if (string.IsNullOrWhiteSpace(webhookUrlRaw) || string.IsNullOrWhiteSpace(content)) return;
+            var trimmed = webhookUrlRaw.Trim();
+            if (!IsAllowedDiscordWebhookUrl(trimmed, out _)) {
+                SeeDriftLog.Warning(
+                    "SeeDrift: Discord webhook URL ignored (must be https://discord.com/api/webhooks/… or https://discordapp.com/api/webhooks/…).");
+                return;
+            }
+
+            var url = trimmed;
+            var body = content.Trim();
+            _ = Task.Run(() => SendTextOnlyAsync(url, body));
+        }
+
         internal static bool IsAllowedDiscordWebhookUrl(string trimmed, out string normalizedUrl) {
             normalizedUrl = trimmed;
             if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)) return false;

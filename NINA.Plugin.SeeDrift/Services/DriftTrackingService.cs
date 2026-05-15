@@ -189,6 +189,28 @@ namespace NINA.Plugin.SeeDrift.Services {
             return s;
         }
 
+        /// <summary>Benign completion when there are no reportable targets (no night HTML written).</summary>
+        private bool FinishWithNoReportableTargets(
+                Stopwatch runStopwatch,
+                string logDetail,
+                string statusReason,
+                string statusHint,
+                string discordSummary,
+                bool postDiscordAfterSave,
+                Action<string, int, int> report) {
+            SeeDriftLog.Info($"SeeDrift: no drift report — {logDetail}");
+            var dur = RunDurationFormatter.ToReadable(runStopwatch.Elapsed);
+            var completeDetail =
+                $"Complete — no drift report in {dur}. {statusReason} {statusHint}";
+            if (postDiscordAfterSave)
+                _plugin.NotifyStopFinishedWithoutReport(
+                    $"SeeDrift — Stop finished with no drift report. {discordSummary}",
+                    postDiscordIfConfigured: true);
+            report(completeDetail, 100, 100);
+            SeeDriftLog.Info($"SeeDrift: run finished with no reportable targets in {dur}.");
+            return postDiscordAfterSave;
+        }
+
         public void ResetSession() {
             CompletedTargets.Clear();
             IsArmed = false;
@@ -259,12 +281,15 @@ namespace NINA.Plugin.SeeDrift.Services {
                 : logFilesToRead);
 
             if (orderedSaves.Count < 2) {
-                SeeDriftLog.Warning(
-                    $"SeeDrift: fewer than 2 saved-light lines in log(s) — no report ({orderedSaves.Count} candidates, filesOpened={filesOpenedOk.Count}).");
-                Report(
-                    $"Stopped — found {orderedSaves.Count} saved-light path line(s) SeeDrift could parse (need ≥2). " +
-                    "Typical causes: log level hides SaveToDisk lines, timestamps SeeDrift does not recognize, or no “Saved image to …” lines in this file.");
-                return false;
+                return FinishWithNoReportableTargets(
+                    runStopwatch,
+                    $"{orderedSaves.Count} saved-light candidates, filesOpened={filesOpenedOk.Count}",
+                    $"Found {orderedSaves.Count} saved-light path line(s) in {filesOpenedOk.Count} log file(s) (need ≥2).",
+                    "Check NINA log level includes SaveToDisk lines and that Start→Stop covered the session.",
+                    $"Found {orderedSaves.Count} saved-light path line(s) in {filesOpenedOk.Count} log file(s) (need ≥2). " +
+                    "Check NINA log level includes SaveToDisk / “Saved image to …” lines and that Start→Stop covered the session.",
+                    postDiscordAfterSave,
+                    Report);
             }
 
             Report($"Found {orderedSaves.Count} saved paths — checking FITS headers (LIGHT vs calibration)…");
@@ -272,9 +297,15 @@ namespace NINA.Plugin.SeeDrift.Services {
             var windowed = FitsFolderImport.BuildEntriesFromLogSaveOrder(orderedSaves, msg => Report(msg));
 
             if (windowed.Count < 2) {
-                SeeDriftLog.Warning($"SeeDrift: fewer than 2 LIGHT frames after FITS filter — no report ({windowed.Count} kept).");
-                Report($"Stopped — only {windowed.Count} LIGHT frame(s) after FITS filter (paths missing, wrong type, or not FITS).");
-                return false;
+                return FinishWithNoReportableTargets(
+                    runStopwatch,
+                    $"{windowed.Count} LIGHT frames after FITS filter",
+                    $"Only {windowed.Count} LIGHT frame(s) after FITS filter (need ≥2).",
+                    "Paths may be missing, wrong type, or not classified as LIGHT in FITS headers.",
+                    $"Only {windowed.Count} LIGHT frame(s) after FITS filter (need ≥2). " +
+                    "Paths may be missing, wrong type, or not classified as LIGHT in FITS headers.",
+                    postDiscordAfterSave,
+                    Report);
             }
 
             var minExpTarget = Math.Max(1, Math.Min(500, _plugin.MinExposuresPerTarget));
@@ -473,9 +504,15 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             if (built.Count < 2) {
-                SeeDriftLog.Warning($"SeeDrift: fewer than 2 plate-solved frames — no report segment.");
-                Report("Stopped — fewer than 2 frames solved (check plate solver profile and FITS readability).");
-                return false;
+                return FinishWithNoReportableTargets(
+                    runStopwatch,
+                    $"{built.Count} plate-solved frames",
+                    $"Only {built.Count} frame(s) plate-solved successfully (need ≥2).",
+                    "Check your NINA plate-solve profile and FITS readability.",
+                    $"Only {built.Count} frame(s) plate-solved successfully (need ≥2). " +
+                    "Check your NINA plate-solve profile and FITS readability.",
+                    postDiscordAfterSave,
+                    Report);
             }
 
             var maxSolvedPerTarget = MaxSolvedSamplesPerBestTarget(built);
