@@ -13,7 +13,6 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Application = System.Windows.Application;
-using Microsoft.Win32;
 using NINA.Core.Model;
 using NINA.Core.Utility;
 using NINA.Image.Interfaces;
@@ -52,17 +51,12 @@ namespace NINA.Plugin.SeeDrift {
             Enumerable.Range(1, CpuTopology.MaxPlateSolveParallelism).ToList();
 
         public ICommand RunTestReportCommand { get; }
-        public ICommand BrowseTestReportLogCommand { get; }
         public ICommand RefreshRecentLogSessionsCommand { get; }
         public ICommand OpenNightReportCommand { get; }
-        public ICommand BrowseCompareBeforeReportCommand { get; }
-        public ICommand BrowseCompareAfterReportCommand { get; }
         public ICommand RunCompareReportsCommand { get; }
         public ICommand OpenCompareReportCommand { get; }
         public ICommand RefreshSavedReportsCommand { get; }
         public ICommand DeleteSelectedSavedReportCommand { get; }
-        public ICommand UseSavedReportAsBeforeCommand { get; }
-        public ICommand UseSavedReportAsAfterCommand { get; }
 
         [ImportingConstructor]
         public SeeDriftPlugin(
@@ -84,22 +78,15 @@ namespace NINA.Plugin.SeeDrift {
             _discordWebhookUrl = Settings.DiscordWebhookUrl ?? "";
             _isInitializing = false;
             RaisePropertyChanged(nameof(TestReportLogFilePath));
-            RaisePropertyChanged(nameof(CompareBeforeReportPath));
-            RaisePropertyChanged(nameof(CompareAfterReportPath));
             RaisePropertyChanged(nameof(DiscordWebhookUrl));
 
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
-            BrowseTestReportLogCommand = new RelayCommand(_ => BrowseTestReportLog());
             RefreshRecentLogSessionsCommand = new RelayCommand(_ => { _ = RefreshRecentLogSessionsAsync(); });
             OpenNightReportCommand = new RelayCommand(_ => OpenNightReport());
-            BrowseCompareBeforeReportCommand = new RelayCommand(_ => BrowseCompareReport(before: true));
-            BrowseCompareAfterReportCommand = new RelayCommand(_ => BrowseCompareReport(before: false));
             RunCompareReportsCommand = new RelayCommand(_ => RunCompareReports());
             OpenCompareReportCommand = new RelayCommand(_ => OpenCompareReport());
             RefreshSavedReportsCommand = new RelayCommand(_ => RefreshSavedReports());
             DeleteSelectedSavedReportCommand = new RelayCommand(_ => DeleteSelectedSavedReport());
-            UseSavedReportAsBeforeCommand = new RelayCommand(_ => UseSelectedSavedReport(before: true));
-            UseSavedReportAsAfterCommand = new RelayCommand(_ => UseSelectedSavedReport(before: false));
 
             _ = RefreshRecentLogSessionsAsync();
             RefreshSavedReports();
@@ -114,6 +101,8 @@ namespace NINA.Plugin.SeeDrift {
                 _testReportLogFilePath = value ?? "";
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(SelectedRecentLogSession));
+                RaisePropertyChanged(nameof(SelectedRecentLogSessionDetailText));
+                RaisePropertyChanged(nameof(SelectedRecentLogSessionDetailVisibility));
                 SyncSettingsFromProperties();
                 ScheduleRefreshResolvedReportForSelectedLog();
                 var newNorm = NormalizeLogPath(value);
@@ -141,8 +130,16 @@ namespace NINA.Plugin.SeeDrift {
                     return;
                 TestReportLogFilePath = value.LogPath;
                 RaisePropertyChanged();
+                RaisePropertyChanged(nameof(SelectedRecentLogSessionDetailText));
+                RaisePropertyChanged(nameof(SelectedRecentLogSessionDetailVisibility));
             }
         }
+
+        public string SelectedRecentLogSessionDetailText =>
+            SelectedRecentLogSession?.DetailText ?? "";
+
+        public Visibility SelectedRecentLogSessionDetailVisibility =>
+            SelectedRecentLogSession != null ? Visibility.Visible : Visibility.Collapsed;
 
         private string _recentLogSessionsStatusText = "Scanning recent NINA logs…";
         public string RecentLogSessionsStatusText {
@@ -180,62 +177,48 @@ namespace NINA.Plugin.SeeDrift {
             }
         }
 
-        public string CompareBeforeReportPath {
-            get => _compareBeforeReportPath;
+        private SavedSeeDriftReport? _compareBeforeReport;
+        public SavedSeeDriftReport? CompareBeforeReport {
+            get => _compareBeforeReport;
             set {
-                var v = value ?? "";
-                if (v == _compareBeforeReportPath) return;
-                _compareBeforeReportPath = v;
+                if (ReferenceEquals(value, _compareBeforeReport)) return;
+                _compareBeforeReport = value;
+                _compareBeforeReportPath = value?.Path ?? "";
                 RaisePropertyChanged();
+                RaisePropertyChanged(nameof(CompareBeforeReportDetailText));
+                RaisePropertyChanged(nameof(CompareBeforeReportDetailVisibility));
                 SyncSettingsFromProperties();
             }
         }
 
-        public string CompareAfterReportPath {
-            get => _compareAfterReportPath;
+        private SavedSeeDriftReport? _compareAfterReport;
+        public SavedSeeDriftReport? CompareAfterReport {
+            get => _compareAfterReport;
             set {
-                var v = value ?? "";
-                if (v == _compareAfterReportPath) return;
-                _compareAfterReportPath = v;
+                if (ReferenceEquals(value, _compareAfterReport)) return;
+                _compareAfterReport = value;
+                _compareAfterReportPath = value?.Path ?? "";
                 RaisePropertyChanged();
+                RaisePropertyChanged(nameof(CompareAfterReportDetailText));
+                RaisePropertyChanged(nameof(CompareAfterReportDetailVisibility));
                 SyncSettingsFromProperties();
             }
         }
 
-        private void BrowseTestReportLog() {
-            var logsDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "NINA", "Logs");
-            var dlg = new OpenFileDialog {
-                Filter = "NINA log (*.log)|*.log|All files (*.*)|*.*",
-                CheckFileExists = true
-            };
-            if (Directory.Exists(logsDir))
-                dlg.InitialDirectory = logsDir;
-            if (dlg.ShowDialog() == true && !string.IsNullOrWhiteSpace(dlg.FileName))
-                TestReportLogFilePath = dlg.FileName;
-        }
+        public string CompareBeforeReportDetailText => CompareBeforeReport?.DetailText ?? "";
 
-        private void BrowseCompareReport(bool before) {
-            var dlg = new OpenFileDialog {
-                Filter = "SeeDrift HTML (*.html)|*.html|All files (*.*)|*.*",
-                CheckFileExists = true
-            };
-            var folder = ResolveHtmlExportFolder();
-            if (Directory.Exists(folder))
-                dlg.InitialDirectory = folder;
-            if (dlg.ShowDialog() != true || string.IsNullOrWhiteSpace(dlg.FileName))
-                return;
-            if (before)
-                CompareBeforeReportPath = dlg.FileName;
-            else
-                CompareAfterReportPath = dlg.FileName;
-        }
+        public Visibility CompareBeforeReportDetailVisibility =>
+            CompareBeforeReport != null ? Visibility.Visible : Visibility.Collapsed;
+
+        public string CompareAfterReportDetailText => CompareAfterReport?.DetailText ?? "";
+
+        public Visibility CompareAfterReportDetailVisibility =>
+            CompareAfterReport != null ? Visibility.Visible : Visibility.Collapsed;
 
         private async Task RunTestReportFireAsync() {
             if (string.IsNullOrWhiteSpace(TestReportLogFilePath)) {
                 MessageBox.Show(
-                    "Choose a NINA log file first (Browse…) or paste the full path to a .log file.",
+                    "Choose a NINA log from the dropdown first.",
                     "SeeDrift — Previous session report",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
@@ -410,16 +393,6 @@ namespace NINA.Plugin.SeeDrift {
 
         public ObservableCollection<SavedSeeDriftReport> SavedReports { get; } = new();
 
-        private SavedSeeDriftReport? _selectedSavedReport;
-        public SavedSeeDriftReport? SelectedSavedReport {
-            get => _selectedSavedReport;
-            set {
-                if (ReferenceEquals(value, _selectedSavedReport)) return;
-                _selectedSavedReport = value;
-                RaisePropertyChanged();
-            }
-        }
-
         private string _savedReportsStatusText = "Saved reports library";
         public string SavedReportsStatusText {
             get => _savedReportsStatusText;
@@ -450,15 +423,25 @@ namespace NINA.Plugin.SeeDrift {
                 foreach (var report in reports)
                     SavedReports.Add(report);
 
-                SelectedSavedReport = SavedReports.FirstOrDefault(r =>
-                    string.Equals(r.Path, CompareAfterReportPath, StringComparison.OrdinalIgnoreCase))
-                    ?? SavedReports.FirstOrDefault();
+                RebindCompareReportsFromPaths();
                 SavedReportsStatusText = reports.Count == 0
                     ? $"No SeeDrift HTML reports found in {SeeDriftPaths.ReportLibrary}."
                     : $"Saved SeeDrift reports ({reports.Count}) from the report library.";
             } catch (Exception ex) {
                 SavedReportsStatusText = $"Saved report scan failed — {ex.Message}";
             }
+        }
+
+        private void RebindCompareReportsFromPaths() {
+            CompareBeforeReport = FindSavedReportByPath(_compareBeforeReportPath);
+            CompareAfterReport = FindSavedReportByPath(_compareAfterReportPath);
+        }
+
+        private SavedSeeDriftReport? FindSavedReportByPath(string? path) {
+            if (string.IsNullOrWhiteSpace(path))
+                return null;
+            return SavedReports.FirstOrDefault(r =>
+                string.Equals(r.Path, path.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
         private void ScheduleRefreshResolvedReportForSelectedLog() {
@@ -527,27 +510,19 @@ namespace NINA.Plugin.SeeDrift {
             RaisePropertyChanged(nameof(SelectedLogNoReportHintVisibility));
         }
 
-        private void UseSelectedSavedReport(bool before) {
-            if (SelectedSavedReport == null)
-                return;
-            if (before)
-                CompareBeforeReportPath = SelectedSavedReport.Path;
-            else
-                CompareAfterReportPath = SelectedSavedReport.Path;
-        }
-
         private void DeleteSelectedSavedReport() {
-            if (SelectedSavedReport == null) {
+            var target = CompareAfterReport ?? CompareBeforeReport;
+            if (target == null) {
                 MessageBox.Show(
-                    "Choose one report in the dropdown first. Delete removes only that single file—not the whole library.",
+                    "Choose a Before or After report in the dropdowns first. Delete removes only that single file—not the whole library.",
                     "SeeDrift — Delete report",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 return;
             }
 
-            var path = SelectedSavedReport.Path;
-            var name = SelectedSavedReport.FileName;
+            var path = target.Path;
+            var name = target.FileName;
             var confirm = MessageBox.Show(
                 $"Delete only this one report file from disk?\n\n{name}\n\nOther saved reports are left untouched. This cannot be undone.",
                 "SeeDrift — Delete report",
@@ -565,10 +540,10 @@ namespace NINA.Plugin.SeeDrift {
                 return;
             }
 
-            if (string.Equals(path, CompareBeforeReportPath, StringComparison.OrdinalIgnoreCase))
-                CompareBeforeReportPath = "";
-            if (string.Equals(path, CompareAfterReportPath, StringComparison.OrdinalIgnoreCase))
-                CompareAfterReportPath = "";
+            if (string.Equals(path, CompareBeforeReport?.Path, StringComparison.OrdinalIgnoreCase))
+                CompareBeforeReport = null;
+            if (string.Equals(path, CompareAfterReport?.Path, StringComparison.OrdinalIgnoreCase))
+                CompareAfterReport = null;
             if (string.Equals(path, _nightReportLinkPath?.Trim(), StringComparison.OrdinalIgnoreCase))
                 ClearNightReportLink();
 
@@ -671,9 +646,17 @@ namespace NINA.Plugin.SeeDrift {
 
         private void RunCompareReports() {
             try {
+                if (CompareBeforeReport == null || CompareAfterReport == null) {
+                    _compareReportLinkPath = null;
+                    _compareReportStatusText = "Choose both a Before and an After report from the dropdowns.";
+                    RaisePropertyChanged(nameof(CompareReportStatusText));
+                    RaisePropertyChanged(nameof(CompareReportChromeVisibility));
+                    return;
+                }
+
                 if (ReportComparisonService.TryWriteComparison(
-                        CompareBeforeReportPath,
-                        CompareAfterReportPath,
+                        CompareBeforeReport.Path,
+                        CompareAfterReport.Path,
                         ResolveHtmlExportFolder(),
                         out var outputPath,
                         out var error)) {

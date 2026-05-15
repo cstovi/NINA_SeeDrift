@@ -32,6 +32,30 @@ namespace NINA.Plugin.SeeDrift.Models {
 
         public string FileName => string.IsNullOrWhiteSpace(Path) ? "" : System.IO.Path.GetFileName(Path);
 
+        /// <summary>Multi-line summary for the options panel below Before/After dropdowns.</summary>
+        public string DetailText {
+            get {
+                var date = string.IsNullOrWhiteSpace(SessionDate)
+                    ? LastWriteLocal.ToString("yyyy-MM-dd HH:mm")
+                    : SessionDate.Trim();
+                var device = string.IsNullOrWhiteSpace(SeestarDevice.DisplayName)
+                    ? "Unknown scope"
+                    : SeestarDevice.DisplayName.Trim();
+                var kind = string.IsNullOrWhiteSpace(Kind) ? "report" : Kind.Trim();
+                var version = string.IsNullOrWhiteSpace(Version) ? "" : $" (v{Version.Trim()})";
+                var content = TargetCount > 0 || FrameCount > 0
+                    ? $"{TargetCount} target{(TargetCount == 1 ? "" : "s")}, {FrameCount} frame{(FrameCount == 1 ? "" : "s")}"
+                    : "—";
+                return string.Join(Environment.NewLine, new[] {
+                    $"Session: {date}",
+                    $"Scope: {device}",
+                    $"Content: {content}",
+                    $"Kind: {kind}{version}",
+                    $"File: {FileName}"
+                });
+            }
+        }
+
         public override string ToString() => DisplayLabel;
     }
 }

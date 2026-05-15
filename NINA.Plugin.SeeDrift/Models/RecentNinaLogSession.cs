@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace NINA.Plugin.SeeDrift.Models {
 
@@ -22,6 +23,22 @@ namespace NINA.Plugin.SeeDrift.Models {
         }
 
         public override string ToString() => DisplayLabel;
+
+        /// <summary>Multi-line summary shown under the recent-log dropdown.</summary>
+        public string DetailText {
+            get {
+                var scope = string.IsNullOrWhiteSpace(SeestarDevice.DisplayName)
+                    ? "Unknown scope"
+                    : SeestarDevice.DisplayName.Trim();
+                var file = string.IsNullOrWhiteSpace(LogPath) ? "—" : Path.GetFileName(LogPath);
+                return string.Join(Environment.NewLine, new[] {
+                    $"Log file: {file}",
+                    $"Started: {LocalStart:yyyy-MM-dd HH:mm}",
+                    $"Scope: {scope}",
+                    $"Session: {TargetCount} target{(TargetCount == 1 ? "" : "s")}, {ImageCount} image{(ImageCount == 1 ? "" : "s")}, {FormatDuration(Duration)}"
+                });
+            }
+        }
 
         private static string FormatDuration(TimeSpan duration) {
             if (duration <= TimeSpan.Zero)
