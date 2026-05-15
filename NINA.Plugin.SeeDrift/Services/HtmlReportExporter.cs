@@ -202,7 +202,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("      <div class=\"min-w-0 flex-1\">");
                     sb.AppendLine($"        <h3 class=\"text-base font-semibold text-sky-200\">Target: {Escape(targetName)}</h3>");
                     sb.AppendLine(
-                        $"        <p class=\"mt-1 text-xs text-slate-500\">{grp.Count} frame{(grp.Count == 1 ? "" : "s")} · Δ vs first solved frame of this target</p>");
+                        $"        <p class=\"mt-1 text-xs text-slate-500\">{Escape(FormatTargetFramesSubtitle(grp))}</p>");
                     sb.AppendLine("      </div>");
                     sb.AppendLine(
                         $"      <div class=\"shrink-0 text-xs leading-snug text-slate-400 sm:max-w-[min(100%,20rem)] sm:text-right\">{FormatTargetExposureRangeHtml(grp)}</div>");
@@ -1245,6 +1245,38 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (runDuration.TotalMilliseconds < 0.5)
                 return frames;
             return $"{frames} · Processing time {RunDurationFormatter.ToReadable(runDuration)}";
+        }
+
+        /// <summary>Frame count plus FITS integration time when <c>EXPTIME</c> (or related keywords) is available.</summary>
+        private static string FormatTargetFramesSubtitle(IReadOnlyList<DriftSample> grp) {
+            var frames = $"{grp.Count} frame{(grp.Count == 1 ? "" : "s")}";
+            var integration = FormatTargetIntegrationTime(grp);
+            return string.IsNullOrEmpty(integration) ? frames : $"{frames} · {integration}";
+        }
+
+        private static string FormatTargetIntegrationTime(IReadOnlyList<DriftSample> grp) {
+            var values = grp
+                .Select(s => s.ExposureDurationSeconds)
+                .Where(v => v.HasValue && v.Value > 0)
+                .Select(v => v!.Value)
+                .ToList();
+            if (values.Count == 0)
+                return "";
+            var min = values.Min();
+            var max = values.Max();
+            if (Math.Abs(min - max) < 0.05)
+                return FormatIntegrationSeconds(min);
+            return $"{FormatIntegrationSeconds(min)}–{FormatIntegrationSeconds(max)}";
+        }
+
+        private static string FormatIntegrationSeconds(double seconds) {
+            if (seconds >= 60)
+                return string.Format(CultureInfo.InvariantCulture, "{0:0.#}m", seconds / 60.0);
+            if (seconds >= 10)
+                return string.Format(CultureInfo.InvariantCulture, "{0:0}s", seconds);
+            if (seconds >= 1)
+                return string.Format(CultureInfo.InvariantCulture, "{0:0.#}s", seconds);
+            return string.Format(CultureInfo.InvariantCulture, "{0:0.##}s", seconds);
         }
 
         /// <summary>First/last exposure start from solved frames (DATE-OBS / log timing), shown in local wall time.</summary>
