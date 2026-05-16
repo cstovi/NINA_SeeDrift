@@ -15,7 +15,13 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
         private const double AbsoluteSuspectFloorArcSec = 300.0;
         private const double SingleDitherSuspectFloorArcSec = 600.0;
-        private const double MedianMultiplier = 5.0;
+        private const double MedianMultiplier = 2.75;
+        private const double SinglePeerMoveMultiplier = 2.25;
+
+        private const double AbsoluteAxisSuspectFloorArcSec = 120.0;
+        private const double AxisMedianMultiplier = 4.0;
+        private const double AxisRelativeMultiplier = 3.0;
+        private const double StepMatchToleranceArcSec = 0.05;
 
         public static bool IsSuspectDitherInterval(
                 IReadOnlyList<DriftSample> group,
@@ -25,12 +31,35 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 out string reason) {
             reason = "";
             var move = Math.Sqrt(dRaArcSec * dRaArcSec + dDecArcSec * dDecArcSec);
+            var steps = CollectAnchoredDitherSteps(group);
+            var peers = ExcludeMatchingStep(steps, dRaArcSec, dDecArcSec);
 
-            var floor = CalculateSessionSuspectFloorArcSec(group);
-            if (move >= floor) {
-                reason =
-                    $"Likely tracking issue: measured {move:0.##}″ is far outside normal logged dither scale (floor {floor:0.##}″).";
-                return true;
+            if (peers.Count == 0) {
+                if (move >= SingleDitherSuspectFloorArcSec) {
+                    reason = FormattableString.Invariant(
+                        $"Likely tracking issue: measured {move:0.##}″ exceeds the single-dither suspect floor ({SingleDitherSuspectFloorArcSec:0.##}″).");
+                    return true;
+                }
+            } else {
+                var peerMoves = peers.Select(p => p.Move).OrderBy(v => v).ToList();
+                var vectorFloor = peers.Count >= 2
+                    ? Math.Max(AbsoluteSuspectFloorArcSec, Median(peerMoves) * MedianMultiplier)
+                    : Math.Max(AbsoluteSuspectFloorArcSec, peerMoves[0] * SinglePeerMoveMultiplier);
+                if (move >= vectorFloor) {
+                    reason = FormattableString.Invariant(
+                        $"Likely tracking issue: measured {move:0.##}″ is far outside other logged dithers on this target (floor {vectorFloor:0.##}″).");
+                    return true;
+                }
+
+                if (peers.Count >= 2) {
+                    var peerAbsRa = peers.Select(p => Math.Abs(p.Ra)).OrderBy(v => v).ToList();
+                    var peerAbsDec = peers.Select(p => Math.Abs(p.Dec)).OrderBy(v => v).ToList();
+                    if (IsAxisOutlier(Math.Abs(dRaArcSec), peerAbsRa, "RA", out var axisReason)
+                        || IsAxisOutlier(Math.Abs(dDecArcSec), peerAbsDec, "Dec", out axisReason)) {
+                        reason = axisReason;
+                        return true;
+                    }
+                }
             }
 
             if (TryGetCommandedPulsePixels(ditherMarker, out var commandedPx)
@@ -48,30 +77,67 @@ namespace NINA.Plugin.SeeDrift.Utility {
             return false;
         }
 
+        /// <summary>Session-wide vector floor using all logged dither moves (upper bound for reporting).</summary>
         public static double CalculateSessionSuspectFloorArcSec(IReadOnlyList<DriftSample> group) {
-            var moves = CollectAnchoredDitherMoveArcSec(group);
+            var moves = CollectAnchoredDitherSteps(group).Select(s => s.Move).ToList();
             if (moves.Count == 0)
                 return double.PositiveInfinity;
             moves.Sort();
-            var median = moves[(moves.Count - 1) / 2];
             return moves.Count > 1
-                ? Math.Max(AbsoluteSuspectFloorArcSec, median * MedianMultiplier)
+                ? Math.Max(AbsoluteSuspectFloorArcSec, Median(moves) * MedianMultiplier)
                 : SingleDitherSuspectFloorArcSec;
         }
 
-        private static List<double> CollectAnchoredDitherMoveArcSec(IReadOnlyList<DriftSample> group) {
-            var moves = new List<double>();
+        private static bool IsAxisOutlier(double absComponent, IReadOnlyList<double> peerAbsSorted, string axisLabel, out string reason) {
+            reason = "";
+            var median = Median(peerAbsSorted);
+            var floor = Math.Max(AbsoluteAxisSuspectFloorArcSec, median * AxisMedianMultiplier);
+            if (absComponent >= floor && absComponent >= median * AxisRelativeMultiplier) {
+                reason = FormattableString.Invariant(
+                    $"Likely tracking issue: |Δ{axisLabel}| {absComponent:0.##}″ is far outside other logged dithers (median |Δ{axisLabel}| {median:0.##}″ on this target).");
+                return true;
+            }
+            return false;
+        }
+
+        private static double Median(IReadOnlyList<double> sortedValues) {
+            return sortedValues[(sortedValues.Count - 1) / 2];
+        }
+
+        private static List<DitherStep> ExcludeMatchingStep(IReadOnlyList<DitherStep> steps, double dRaArcSec, double dDecArcSec) {
+            var peers = new List<DitherStep>(steps.Count);
+            foreach (var step in steps) {
+                if (Math.Abs(step.Ra - dRaArcSec) <= StepMatchToleranceArcSec
+                    && Math.Abs(step.Dec - dDecArcSec) <= StepMatchToleranceArcSec)
+                    continue;
+                peers.Add(step);
+            }
+            return peers;
+        }
+
+        private readonly struct DitherStep {
+            public double Ra { get; init; }
+            public double Dec { get; init; }
+            public double Move { get; init; }
+        }
+
+        private static List<DitherStep> CollectAnchoredDitherSteps(IReadOnlyList<DriftSample> group) {
+            var steps = new List<DitherStep>();
             if (group.Count < 2)
-                return moves;
+                return steps;
 
             for (var i = 1; i < group.Count; i++) {
                 if (group[i].EdgeSequencerMarkers?.Any(m => m.IsDither) != true)
                     continue;
                 StepAlongTrace(group, i, out var dRa, out var dDec);
-                moves.Add(Math.Sqrt(dRa * dRa + dDec * dDec));
+                steps.Add(new DitherStep {
+                    Ra = dRa,
+                    Dec = dDec,
+                    Move = Math.Sqrt(dRa * dRa + dDec * dDec)
+                });
             }
 
-            return moves;
+            return steps;
         }
 
         internal static void StepAlongTrace(IReadOnlyList<DriftSample> group, int toIndex, out double dRa, out double dDec) {

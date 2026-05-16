@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Suspect dither detection tightened:** Logged dither intervals are compared to **other** dithers on the same target (leave-one-out), the vector floor multiplier is **2.75×** (was **5×**), and a new **per-axis** rule flags |ΔRA| or |ΔDec| far outside peer medians (e.g. a ~420″ RA step when other RA steps are a few arcseconds). Honest Dec-heavy dithers at the same scale as their peers stay assessed.
+
 ### Fixed
 
 - **Target chart subtitle:** Under each **Target:** heading, the second line now shows **total integration** (sum of FITS `EXPTIME` across solved frames, e.g. `184 frames · 1h 1m 20s`) instead of a single exposure length.
