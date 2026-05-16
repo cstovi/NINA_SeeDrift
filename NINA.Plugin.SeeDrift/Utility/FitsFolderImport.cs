@@ -143,8 +143,22 @@ namespace NINA.Plugin.SeeDrift.Utility {
         /// <param name="onStatus">Optional human status lines (e.g. for plugin progress UI while headers are read).</param>
         public static IReadOnlyList<FitsReplayEntry> BuildEntriesFromLogSaveOrder(
                 IReadOnlyList<(string path, DateTime logLineUtc)> orderedSaves,
-                Action<string>? onStatus = null) {
+                Action<string>? onStatus = null) =>
+            BuildEntriesFromLogSaveOrder(
+                orderedSaves,
+                onStatus,
+                null,
+                null,
+                out _);
 
+        public static IReadOnlyList<FitsReplayEntry> BuildEntriesFromLogSaveOrder(
+                IReadOnlyList<(string path, DateTime logLineUtc)> orderedSaves,
+                Action<string>? onStatus,
+                string? alternativeMappingOriginalRoot,
+                string? alternativeMappingAlternativeRoot,
+                out int alternativeMappingResolvedCount) {
+
+            alternativeMappingResolvedCount = 0;
             var result = new List<FitsReplayEntry>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -165,14 +179,17 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (string.IsNullOrEmpty(ext) || Extensions.All(e => !ext.Equals(e, StringComparison.OrdinalIgnoreCase)))
                     continue;
 
-                try {
-                    if (!File.Exists(path))
-                        continue;
-                } catch {
+                if (!FitsPathResolver.TryResolveExistingFile(
+                        path,
+                        alternativeMappingOriginalRoot,
+                        alternativeMappingAlternativeRoot,
+                        out var resolvedPath))
                     continue;
-                }
 
-                if (!FitsCoordinates.TryReadPrimaryHeader(path, out var cards))
+                if (!string.Equals(path, resolvedPath, StringComparison.OrdinalIgnoreCase))
+                    alternativeMappingResolvedCount++;
+
+                if (!FitsCoordinates.TryReadPrimaryHeader(resolvedPath, out var cards))
                     continue;
 
                 if (!FitsCoordinates.PassesLightFilterForReplay(cards))
@@ -183,12 +200,14 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     obsUtc = parsedUtc;
 
                 var sortUtc = obsUtc ?? logUtc;
-                var exposureUtc = obsUtc ?? File.GetLastWriteTimeUtc(path);
+                var exposureUtc = obsUtc ?? File.GetLastWriteTimeUtc(resolvedPath);
 
                 cards.TryGetValue("OBJECT", out var obj);
-                var target = string.IsNullOrWhiteSpace(obj) ? Path.GetFileNameWithoutExtension(path) : obj.Trim();
+                var target = string.IsNullOrWhiteSpace(obj)
+                    ? Path.GetFileNameWithoutExtension(resolvedPath)
+                    : obj.Trim();
 
-                result.Add(new FitsReplayEntry(path, sortUtc, exposureUtc, target, cards));
+                result.Add(new FitsReplayEntry(resolvedPath, sortUtc, exposureUtc, target, cards));
             }
 
             return result;

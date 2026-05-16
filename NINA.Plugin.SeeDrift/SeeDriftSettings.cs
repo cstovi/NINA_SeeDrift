@@ -28,6 +28,12 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Before/after comparison: second saved SeeDrift HTML report.</summary>
         public string CompareAfterReportPath { get; set; } = "";
 
+        /// <summary>Log path prefix for capture location (e.g. C:\Users\…\N.I.N.A). Used with <see cref="AlternativeImageMappingAlternativeRoot"/>.</summary>
+        public string AlternativeImageMappingOriginalRoot { get; set; } = "";
+
+        /// <summary>Secondary root when FITS were moved (e.g. P:\Astro\Home).</summary>
+        public string AlternativeImageMappingAlternativeRoot { get; set; } = "";
+
         private static string SettingsPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "SeeDrift", "settings.json");

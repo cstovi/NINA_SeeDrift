@@ -302,7 +302,16 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             Report($"Found {orderedSaves.Count} saved paths — checking FITS headers (LIGHT vs calibration)…");
 
-            var windowed = FitsFolderImport.BuildEntriesFromLogSaveOrder(orderedSaves, msg => Report(msg));
+            var windowed = FitsFolderImport.BuildEntriesFromLogSaveOrder(
+                orderedSaves,
+                msg => Report(msg),
+                _plugin.AlternativeImageMappingOriginalRoot,
+                _plugin.AlternativeImageMappingAlternativeRoot,
+                out var alternativeMappingResolved);
+            if (alternativeMappingResolved > 0) {
+                SeeDriftLog.Info(
+                    $"SeeDrift: alternative image mapping resolved {alternativeMappingResolved} missing log path(s).");
+            }
 
             if (windowed.Count < 2) {
                 return FinishWithNoReportableTargets(

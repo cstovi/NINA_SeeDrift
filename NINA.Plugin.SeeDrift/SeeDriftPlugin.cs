@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using WinForms = System.Windows.Forms;
 using Application = System.Windows.Application;
 using NINA.Core.Model;
 using NINA.Core.Utility;
@@ -57,6 +58,11 @@ namespace NINA.Plugin.SeeDrift {
         public ICommand OpenCompareReportCommand { get; }
         public ICommand RefreshSavedReportsCommand { get; }
         public ICommand DeleteSelectedSavedReportCommand { get; }
+        public ICommand BrowseAlternativeMappingOriginalRootCommand { get; }
+        public ICommand BrowseAlternativeMappingAlternativeRootCommand { get; }
+        public ICommand ClearAlternativeMappingOriginalRootCommand { get; }
+        public ICommand ClearAlternativeMappingAlternativeRootCommand { get; }
+        public ICommand UseNinaImagePathForMappingOriginalRootCommand { get; }
 
         [ImportingConstructor]
         public SeeDriftPlugin(
@@ -76,9 +82,13 @@ namespace NINA.Plugin.SeeDrift {
             _compareBeforeReportPath = Settings.CompareBeforeReportPath ?? "";
             _compareAfterReportPath = Settings.CompareAfterReportPath ?? "";
             _discordWebhookUrl = Settings.DiscordWebhookUrl ?? "";
+            _alternativeMappingOriginalRoot = Settings.AlternativeImageMappingOriginalRoot ?? "";
+            _alternativeMappingAlternativeRoot = Settings.AlternativeImageMappingAlternativeRoot ?? "";
             _isInitializing = false;
             RaisePropertyChanged(nameof(TestReportLogFilePath));
             RaisePropertyChanged(nameof(DiscordWebhookUrl));
+            RaisePropertyChanged(nameof(AlternativeImageMappingOriginalRoot));
+            RaisePropertyChanged(nameof(AlternativeImageMappingAlternativeRoot));
 
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
             RefreshRecentLogSessionsCommand = new RelayCommand(_ => { _ = RefreshRecentLogSessionsAsync(); });
@@ -87,6 +97,11 @@ namespace NINA.Plugin.SeeDrift {
             OpenCompareReportCommand = new RelayCommand(_ => OpenCompareReport());
             RefreshSavedReportsCommand = new RelayCommand(_ => RefreshSavedReports());
             DeleteSelectedSavedReportCommand = new RelayCommand(_ => DeleteSelectedSavedReport());
+            BrowseAlternativeMappingOriginalRootCommand = new RelayCommand(_ => BrowseFolderInto(ref _alternativeMappingOriginalRoot, nameof(AlternativeImageMappingOriginalRoot)));
+            BrowseAlternativeMappingAlternativeRootCommand = new RelayCommand(_ => BrowseFolderInto(ref _alternativeMappingAlternativeRoot, nameof(AlternativeImageMappingAlternativeRoot)));
+            ClearAlternativeMappingOriginalRootCommand = new RelayCommand(_ => ClearMappingRoot(ref _alternativeMappingOriginalRoot, nameof(AlternativeImageMappingOriginalRoot)));
+            ClearAlternativeMappingAlternativeRootCommand = new RelayCommand(_ => ClearMappingRoot(ref _alternativeMappingAlternativeRoot, nameof(AlternativeImageMappingAlternativeRoot)));
+            UseNinaImagePathForMappingOriginalRootCommand = new RelayCommand(_ => ApplyNinaImagePathToMappingOriginalRoot());
 
             _ = RefreshRecentLogSessionsAsync();
             RefreshSavedReports();
@@ -775,6 +790,8 @@ namespace NINA.Plugin.SeeDrift {
                 Settings.DiscordWebhookUrl = _discordWebhookUrl;
                 Settings.PlateSolveParallelism = _plateSolveParallelism;
                 Settings.MinExposuresPerTarget = _minExposuresPerTarget;
+                Settings.AlternativeImageMappingOriginalRoot = _alternativeMappingOriginalRoot;
+                Settings.AlternativeImageMappingAlternativeRoot = _alternativeMappingAlternativeRoot;
                 Settings.Save();
             } finally {
                 _isSyncing = false;
@@ -837,6 +854,79 @@ namespace NINA.Plugin.SeeDrift {
             if (value < 1) return 1;
             if (value > 500) return 500;
             return value;
+        }
+
+        private string _alternativeMappingOriginalRoot = "";
+        private string _alternativeMappingAlternativeRoot = "";
+
+        /// <summary>Log path prefix when frames were saved (must match “Saved image to …” paths).</summary>
+        public string AlternativeImageMappingOriginalRoot {
+            get => _alternativeMappingOriginalRoot;
+            set {
+                var v = value ?? "";
+                if (v == _alternativeMappingOriginalRoot) return;
+                _alternativeMappingOriginalRoot = v;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        /// <summary>Secondary folder when FITS were moved off the original disk.</summary>
+        public string AlternativeImageMappingAlternativeRoot {
+            get => _alternativeMappingAlternativeRoot;
+            set {
+                var v = value ?? "";
+                if (v == _alternativeMappingAlternativeRoot) return;
+                _alternativeMappingAlternativeRoot = v;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+
+        private void BrowseFolderInto(ref string field, string propertyName) {
+            try {
+                using var dlg = new WinForms.FolderBrowserDialog {
+                    UseDescriptionForTitle = true,
+                    Description = "Select folder"
+                };
+                if (!string.IsNullOrWhiteSpace(field))
+                    dlg.SelectedPath = field.Trim();
+                if (dlg.ShowDialog() != WinForms.DialogResult.OK)
+                    return;
+                if (string.IsNullOrWhiteSpace(dlg.SelectedPath))
+                    return;
+                if (propertyName == nameof(AlternativeImageMappingOriginalRoot))
+                    AlternativeImageMappingOriginalRoot = dlg.SelectedPath;
+                else
+                    AlternativeImageMappingAlternativeRoot = dlg.SelectedPath;
+            } catch (Exception ex) {
+                MessageBox.Show(
+                    $"Could not open folder picker:\n{ex.Message}",
+                    "SeeDrift",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+
+        private void ClearMappingRoot(ref string field, string propertyName) {
+            if (propertyName == nameof(AlternativeImageMappingOriginalRoot))
+                AlternativeImageMappingOriginalRoot = "";
+            else
+                AlternativeImageMappingAlternativeRoot = "";
+        }
+
+        private void ApplyNinaImagePathToMappingOriginalRoot() {
+            var dir = NinaPaths.TryGetDefaultImageDirectory(ProfileService);
+            if (string.IsNullOrWhiteSpace(dir)) {
+                MessageBox.Show(
+                    "No image file path in the active NINA profile, or the folder does not exist.",
+                    "SeeDrift",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
+            AlternativeImageMappingOriginalRoot = dir;
         }
     }
 }

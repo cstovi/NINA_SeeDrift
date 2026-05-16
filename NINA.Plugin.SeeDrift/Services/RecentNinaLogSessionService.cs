@@ -45,7 +45,13 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return Empty(logPath, localStart);
             }
 
-            var entries = FitsFolderImport.BuildEntriesFromLogSaveOrder(saves);
+            var mapping = SeeDriftSettings.Load();
+            var entries = FitsFolderImport.BuildEntriesFromLogSaveOrder(
+                saves,
+                null,
+                mapping.AlternativeImageMappingOriginalRoot,
+                mapping.AlternativeImageMappingAlternativeRoot,
+                out _);
             if (entries.Count == 0) {
                 return new RecentNinaLogSession {
                     LogPath = logPath,

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.30] — 2026-05-16
+
+### Added
+
+- **Alternative image location mapping:** Plugins → SeeDrift can map an **original image root** to an **alternative image root** when FITS were moved after capture (e.g. `C:\Users\…\N.I.N.A` → `P:\Astro\Home`). SeeDrift always uses the full path from the NINA log when that file still exists; only missing paths under the original root are tried under the alternative root with the same subfolders and filename. **Use NINA path** fills the original root from the active profile as a convenience. Applies to **Stop**, **Run report**, and recent-log summaries.
+
 ## [0.8.29] — 2026-05-16
 
 ### Added

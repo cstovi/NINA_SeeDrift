@@ -83,6 +83,55 @@
                          MaxLength="3"/>
             </Grid>
 
+            <TextBlock Text="Alternative image location mapping" FontWeight="Bold" Margin="0,0,0,4"/>
+            <TextBlock Text="When FITS were moved after capture, map the log path prefix to a secondary folder."
+                       Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+            <Grid Margin="0,0,0,12" ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="400">
+                <Grid.ToolTip>
+                    <ToolTip>
+                        <TextBlock MaxWidth="420" TextWrapping="Wrap"
+                                   Text="Secondary location for FITS files. SeeDrift always plate-solves using the full path from the NINA log (“Saved image to …”) when that file still exists on disk.&#x0a;&#x0a;If the file is missing—for example you moved the session to another drive after capture—SeeDrift can look under a second root: when the log path starts with Original image root, the same subfolders and filename are tried under Alternative image root.&#x0a;&#x0a;Example: logs point to C:\Users\…\N.I.N.A\M42\lights\2026-05-15\img.fits but files now live under P:\Astro\Home\…. Set original root to C:\Users\…\N.I.N.A and alternative root to P:\Astro\Home. Leave both empty to disable.&#x0a;&#x0a;Original root should match what your logs show, not necessarily today’s NINA Options → Imaging image path (that may have changed since the session)."/>
+                    </ToolTip>
+                </Grid.ToolTip>
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="160"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Original image root:" VerticalAlignment="Center" Margin="0,0,8,0"
+                                   ToolTip="Prefix from the log paths NINA wrote when frames were saved."/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding AlternativeImageMappingOriginalRoot, UpdateSourceTrigger=PropertyChanged}"
+                                 VerticalAlignment="Center" Margin="0,0,8,0" FontFamily="Consolas"/>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <Button Content="Browse" Command="{Binding BrowseAlternativeMappingOriginalRootCommand}" Padding="8,4" Margin="0,0,6,0"/>
+                            <Button Content="Clear" Command="{Binding ClearAlternativeMappingOriginalRootCommand}" Padding="8,4" Margin="0,0,6,0"/>
+                            <Button Content="Use NINA path" Command="{Binding UseNinaImagePathForMappingOriginalRootCommand}" Padding="8,4"
+                                    ToolTip="Convenience only—confirm it matches the paths in your log file."/>
+                        </StackPanel>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="160"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Alternative image root:" VerticalAlignment="Center" Margin="0,0,8,0"
+                                   ToolTip="Secondary folder where the same relative tree was moved; used only when the logged path is missing."/>
+                        <TextBox Grid.Column="1"
+                                 Text="{Binding AlternativeImageMappingAlternativeRoot, UpdateSourceTrigger=PropertyChanged}"
+                                 VerticalAlignment="Center" Margin="0,0,8,0" FontFamily="Consolas"/>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <Button Content="Browse" Command="{Binding BrowseAlternativeMappingAlternativeRootCommand}" Padding="8,4" Margin="0,0,6,0"/>
+                            <Button Content="Clear" Command="{Binding ClearAlternativeMappingAlternativeRootCommand}" Padding="8,4"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Grid>
+
             <Separator Margin="0,0,0,12"/>
 
             <TextBlock Text="Create report" FontWeight="Bold" Margin="0,0,0,4"/>
