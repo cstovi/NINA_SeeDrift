@@ -110,6 +110,15 @@ namespace NINA.Plugin.SeeDrift.Utility {
             @"CenterAfterDriftTrigger\.cs\|PlatesolvingImageFollower_PropertyChanged\|\d+\|Drift:\s*([-0-9.eE]+)\s*/\s*([-0-9.eE]+)\s*arc\s*minutes?",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary>NINA Target Scheduler <c>NewTargetStart</c> (return to a target panel).</summary>
+        private static readonly Regex RxTargetSchedulerNewTarget = new Regex(
+            @"TargetScheduler-NewTargetStart",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex RxTargetLabelInSchedulerLine = new Regex(
+            @"(?:TargetName|target\s*name|Target)\s*[=:]\s*[""']?([^""'|,;\]]+)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         /// <summary>
         /// Ordered strict→loose: NINA builds vary (<c>BaseImageData</c> vs generic SaveToDisk, spacing, optional colon).
         /// </summary>
@@ -283,7 +292,16 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 List<DriftSample> samples,
                 out SessionLogObservations observations,
                 IReadOnlyList<string>? explicitLogPaths = null) {
+            return AnnotateWithLogEvents(samples, out observations, out _, explicitLogPaths);
+        }
+
+        public static (int MatchedJumps, bool LogFound, int TriggersLoaded, int SequencerEdges, int TraceDitherTriggers, int TraceCenterTriggers) AnnotateWithLogEvents(
+                List<DriftSample> samples,
+                out SessionLogObservations observations,
+                out List<TargetSchedulerStartEvent> schedulerStarts,
+                IReadOnlyList<string>? explicitLogPaths = null) {
             observations = new SessionLogObservations();
+            schedulerStarts = new List<TargetSchedulerStartEvent>();
             if (samples.Count == 0) return (0, false, 0, 0, 0, 0);
             try {
                 foreach (var s in samples) {
@@ -307,14 +325,16 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         if (!File.Exists(path))
                             continue;
                         loaded = true;
-                        ParseLogLines(path, triggers, pulses, centerDriftLines, imageSaves);
+                        ParseLogLines(path, triggers, pulses, centerDriftLines, imageSaves, schedulerStarts);
                     }
                     if (!loaded)
                         return (0, false, 0, 0, 0, 0);
                 } else {
-                    if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses, centerDriftLines, imageSaves))
+                    if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses, centerDriftLines, imageSaves, schedulerStarts))
                         return (0, false, 0, 0, 0, 0);
                 }
+
+                schedulerStarts.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
 
                 triggers.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
                 pulses.Sort((a, b) => a.UtcTime.CompareTo(b.UtcTime));
@@ -672,7 +692,8 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 List<TimedTrigger> triggers,
                 List<DitherPulse> pulses,
                 List<CenterDriftLogLine> centerDriftLines,
-                List<ImageSaveEvent> imageSaves) {
+                List<ImageSaveEvent> imageSaves,
+                List<TargetSchedulerStartEvent> schedulerStarts) {
             if (!Directory.Exists(LogFolder))
                 return false;
 
@@ -683,7 +704,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 foreach (var path in FindAllLogFilesForDate(sessionDate.AddDays(offset))) {
                     if (!seen.Add(path)) continue;
                     logFound = true;
-                    ParseLogLines(path, triggers, pulses, centerDriftLines, imageSaves);
+                    ParseLogLines(path, triggers, pulses, centerDriftLines, imageSaves, schedulerStarts);
                 }
             }
 
@@ -713,13 +734,19 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 List<TimedTrigger> triggers,
                 List<DitherPulse> pulses,
                 List<CenterDriftLogLine> centerDriftLines,
-                List<ImageSaveEvent> imageSaves) {
+                List<ImageSaveEvent> imageSaves,
+                List<TargetSchedulerStartEvent> schedulerStarts) {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var sr = new StreamReader(fs);
             string? line;
             while ((line = sr.ReadLine()) != null) {
                 if (!TryParseLogLineUtc(line, out var ts))
                     continue;
+
+                if (TryParseTargetSchedulerNewTarget(line, ts, out var schedEv)) {
+                    schedulerStarts.Add(schedEv);
+                    continue;
+                }
 
                 if (TryExtractSavedImagePath(line, out var rawPath)
                     && !string.IsNullOrEmpty(rawPath)
@@ -786,6 +813,23 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     });
                 }
             }
+        }
+
+        private static bool TryParseTargetSchedulerNewTarget(string line, DateTime utc, out TargetSchedulerStartEvent ev) {
+            ev = null!;
+            if (!RxTargetSchedulerNewTarget.IsMatch(line))
+                return false;
+
+            string? targetLabel = null;
+            var mName = RxTargetLabelInSchedulerLine.Match(line);
+            if (mName.Success)
+                targetLabel = mName.Groups[1].Value.Trim();
+
+            ev = new TargetSchedulerStartEvent {
+                UtcTime = utc,
+                TargetLabel = string.IsNullOrWhiteSpace(targetLabel) ? null : targetLabel
+            };
+            return true;
         }
 
         /// <summary>NINA file logs are usually local wall time without <c>Z</c>; FITS <c>DATE-OBS</c> may be UT — pairing uses interval logic within a session.</summary>

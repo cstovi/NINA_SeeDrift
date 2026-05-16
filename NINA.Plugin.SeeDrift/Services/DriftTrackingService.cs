@@ -46,6 +46,14 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             /// <summary>NINA log observations (configured threshold, dither pulse magnitudes / durations, cadence hints) for this batch.</summary>
             public SessionLogObservations? LogObservations { get; init; }
+
+            /// <summary>All LIGHT saves from the log (pre-solve), for exposure-sequence / return-visit gap analysis.</summary>
+            public IReadOnlyList<LightSaveCatalogEntry> LightSaveCatalog { get; init; } =
+                Array.Empty<LightSaveCatalogEntry>();
+
+            /// <summary>Target Scheduler <c>NewTargetStart</c> events from the same log pass.</summary>
+            public IReadOnlyList<TargetSchedulerStartEvent> TargetSchedulerStarts { get; init; } =
+                Array.Empty<TargetSchedulerStartEvent>();
         }
 
         private sealed class TraceState {
@@ -517,6 +525,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             var maxSolvedPerTarget = MaxSolvedSamplesPerBestTarget(built);
             var skipLogCorrelation = maxSolvedPerTarget < minExpTarget;
+            var lightCatalog = BuildLightSaveCatalog(windowed);
             if (skipLogCorrelation) {
                 SeeDriftLog.Info(
                     $"SeeDrift: skipping NINA log correlation — no target has ≥{minExpTarget} solved frames (best target={maxSolvedPerTarget}).");
@@ -524,7 +533,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     $"Skipping sequencer log correlation — best target has only {maxSolvedPerTarget} solved frame(s) (need ≥{minExpTarget}). Writing HTML…",
                     100,
                     100);
-                JumpDetector.AnnotateJumps(built);
+                AnnotateJumpsPerTargetVisit(built, lightCatalog, Array.Empty<TargetSchedulerStartEvent>());
                 JumpCount = JumpDetector.CountJumps(built);
                 LogCorrelatedCount = 0;
                 LogWasFound = false;
@@ -532,11 +541,11 @@ namespace NINA.Plugin.SeeDrift.Services {
                 LogSequencerEdgeCount = 0;
                 LogTraceDitherTriggerCount = 0;
                 LogTraceCenterTriggerCount = 0;
+                LatestTargetSchedulerStarts = Array.Empty<TargetSchedulerStartEvent>();
             } else {
                 Report("Correlating sequencer lines and writing HTML…", 100, 100);
-                ApplyJumpAndLogAnnotation(built, sourceLogsForBatch);
+                ApplyJumpAndLogAnnotation(built, sourceLogsForBatch, lightCatalog);
             }
-
             var targetName = HtmlReportExporter.SummarizeTargetsForBatch(built);
 
             string? nightSavedPath = null;
@@ -549,7 +558,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                     SourceLogPaths = sourceLogsForBatch,
                     SeestarDevice = SeestarDeviceInfoService.FromLogFiles(sourceLogsForBatch),
                     RunDuration = runStopwatch.Elapsed,
-                    LogObservations = LatestLogObservations
+                    LogObservations = LatestLogObservations,
+                    LightSaveCatalog = lightCatalog,
+                    TargetSchedulerStarts = LatestTargetSchedulerStarts
                 });
                 if (!TryWriteNightReport(out nightSavedPath, out nightSaveError)) {
                     // Avoid leaving a batch in memory that never reached disk.
@@ -585,10 +596,13 @@ namespace NINA.Plugin.SeeDrift.Services {
             return true;
         }
 
-        private void ApplyJumpAndLogAnnotation(List<DriftSample> frames, IReadOnlyList<string>? correlatorLogPaths) {
-            JumpDetector.AnnotateJumps(frames);
+        private void ApplyJumpAndLogAnnotation(
+                List<DriftSample> frames,
+                IReadOnlyList<string>? correlatorLogPaths,
+                IReadOnlyList<LightSaveCatalogEntry> lightCatalog) {
             var (logMatched, logFound, triggersLoaded, sequencerEdges, traceDithers, traceCenters) =
-                NinaLogCorrelator.AnnotateWithLogEvents(frames, out var observations, correlatorLogPaths);
+                NinaLogCorrelator.AnnotateWithLogEvents(frames, out var observations, out var schedulerStarts, correlatorLogPaths);
+            AnnotateJumpsPerTargetVisit(frames, lightCatalog, schedulerStarts);
             JumpCount = JumpDetector.CountJumps(frames);
             LogCorrelatedCount = logMatched;
             LogWasFound = logFound;
@@ -597,10 +611,55 @@ namespace NINA.Plugin.SeeDrift.Services {
             LogTraceDitherTriggerCount = traceDithers;
             LogTraceCenterTriggerCount = traceCenters;
             LatestLogObservations = observations;
+            LatestTargetSchedulerStarts = schedulerStarts;
+        }
+
+        private static void AnnotateJumpsPerTargetVisit(
+                List<DriftSample> frames,
+                IReadOnlyList<LightSaveCatalogEntry> lightCatalog,
+                IReadOnlyList<TargetSchedulerStartEvent> schedulerStarts) {
+            foreach (var s in frames) {
+                s.IsJump = false;
+                s.JumpReason = null;
+            }
+
+            var byTarget = frames
+                .GroupBy(s => string.IsNullOrWhiteSpace(s.TargetName) ? "Unknown" : s.TargetName.Trim(),
+                    StringComparer.OrdinalIgnoreCase);
+            foreach (var tg in byTarget) {
+                var ordered = tg.OrderBy(s => s.FrameIndex).ToList();
+                var plan = TargetVisitSegmentation.BuildPlan(
+                    tg.Key, ordered, frames, lightCatalog, schedulerStarts);
+                foreach (var visit in plan.Visits) {
+                    if (visit.Count < 3)
+                        continue;
+                    var visitList = visit as List<DriftSample> ?? visit.ToList();
+                    JumpDetector.AnnotateJumps(visitList);
+                }
+            }
+        }
+
+        private static List<LightSaveCatalogEntry> BuildLightSaveCatalog(IReadOnlyList<FitsReplayEntry> windowed) {
+            var list = new List<LightSaveCatalogEntry>(windowed.Count);
+            foreach (var entry in windowed) {
+                int? seq = FitsFolderImport.TryExposureSequenceFromFileName(Path.GetFileName(entry.Path), out var n)
+                    ? n
+                    : null;
+                list.Add(new LightSaveCatalogEntry {
+                    ExposureSequence = seq,
+                    TargetName = entry.TargetLabel,
+                    ExposureUtc = entry.ExposureUtc,
+                    FileName = Path.GetFileName(entry.Path)
+                });
+            }
+            return list;
         }
 
         /// <summary>Last <see cref="SessionLogObservations"/> built by the correlator for this batch (null before the first run).</summary>
         public SessionLogObservations? LatestLogObservations { get; private set; }
+
+        public IReadOnlyList<TargetSchedulerStartEvent> LatestTargetSchedulerStarts { get; private set; } =
+            Array.Empty<TargetSchedulerStartEvent>();
 
         /// <summary>
         /// Writes all <see cref="CompletedTargets"/> to the rolling night HTML file

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.29] — 2026-05-16
+
+### Added
+
+- **Return-visit gap detection:** When NINA Target Scheduler logs **`TargetScheduler-NewTargetStart`** between two solved frames of the same target (exposure numbering may jump), the HTML drift chart shows **↻** (return visit) instead of **?** (possibly missing/unsolved). The chart draws **one trace per visit** (re-anchored to each visit’s first frame; no line across visits), with per-visit frame counts and exposure times under the target heading while night-wide totals remain. Drift/dither analytics and movement sums **exclude** stop→return edges; jump detection runs **per visit**.
+
 ### Fixed
 
 - **Logged dither table frame labels:** The per-target **Frames A→B** column now uses the same exposure numbers as chart hover tooltips (parsed from NINA `$$EXPOSURENUMBER$$` file-name suffixes, e.g. `_0011.fits` → 11), not `FrameIndex + 1` from the solved-trace order.

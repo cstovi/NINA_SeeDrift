@@ -10,16 +10,24 @@ namespace NINA.Plugin.SeeDrift.Services {
 
     internal static class SessionAnalysisService {
 
-        public static TargetAnalysis AnalyzeTarget(string targetName, IReadOnlyList<DriftSample> samples) {
+        public static TargetAnalysis AnalyzeTarget(
+                string targetName,
+                IReadOnlyList<DriftSample> samples,
+                TargetVisitPlan? visitPlan = null) {
             var ordered = samples.OrderBy(s => s.FrameIndex).ToList();
+            var boundaryEdges = visitPlan?.ReturnVisitBoundaryEdges ?? Array.Empty<int>();
+            var boundarySet = boundaryEdges.Count > 0
+                ? new HashSet<int>(boundaryEdges)
+                : null;
             var analysis = new TargetAnalysis {
                 TargetName = string.IsNullOrWhiteSpace(targetName) ? "Unknown" : targetName.Trim(),
                 FrameCount = ordered.Count,
+                VisitCount = visitPlan?.Visits.Count ?? 1,
                 DriftRate = BuildDriftRate(ordered),
-                DriftRisk = BuildDriftRisk(ordered)
+                DriftRisk = BuildDriftRisk(ordered, boundarySet)
             };
 
-            analysis.Dithers.AddRange(BuildDitherAnalyses(ordered));
+            analysis.Dithers.AddRange(BuildDitherAnalyses(ordered, boundarySet));
             analysis.SuspectDitherCount = analysis.Dithers.Count(d => d.IsSuspect);
             analysis.SuspectDitherDiscountedAbsRaArcSec = analysis.Dithers.Where(d => d.IsSuspect).Sum(d => Math.Abs(d.DeltaRaArcSec));
             analysis.SuspectDitherDiscountedAbsDecArcSec = analysis.Dithers.Where(d => d.IsSuspect).Sum(d => Math.Abs(d.DeltaDecArcSec));
@@ -282,7 +290,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             };
         }
 
-        private static DriftRiskSummary BuildDriftRisk(IReadOnlyList<DriftSample> ordered) {
+        private static DriftRiskSummary BuildDriftRisk(IReadOnlyList<DriftSample> ordered, HashSet<int>? returnVisitBoundaryEdges) {
             if (ordered.Count < 3) {
                 return new DriftRiskSummary {
                     Status = "Not enough data",
@@ -297,6 +305,8 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             var intervals = new List<(int EdgeIndex, double Dx, double Dy, double Step, double Minutes)>();
             for (var i = 1; i < ordered.Count; i++) {
+                if (returnVisitBoundaryEdges != null && returnVisitBoundaryEdges.Contains(i))
+                    continue;
                 var markers = ordered[i].EdgeSequencerMarkers ?? new List<SequencerEdgeMarker>();
                 if (markers.Any())
                     continue;
@@ -724,14 +734,19 @@ namespace NINA.Plugin.SeeDrift.Services {
             return cur.Count > best.Count ? cur : best;
         }
 
-        private static IEnumerable<DitherEventAnalysis> BuildDitherAnalyses(IReadOnlyList<DriftSample> ordered) {
-            var medianStep = MedianNonEventStep(ordered);
+        private static IEnumerable<DitherEventAnalysis> BuildDitherAnalyses(
+                IReadOnlyList<DriftSample> ordered,
+                HashSet<int>? returnVisitBoundaryEdges) {
+            var medianStep = MedianNonEventStep(ordered, returnVisitBoundaryEdges);
             var weakFloor = Math.Max(2.0, medianStep * 1.25);
             var byIndex = ordered.ToDictionary(s => s.FrameIndex);
             double? prevRa = null;
             double? prevDec = null;
 
-            foreach (var cur in ordered.Skip(1)) {
+            for (var i = 1; i < ordered.Count; i++) {
+                if (returnVisitBoundaryEdges != null && returnVisitBoundaryEdges.Contains(i))
+                    continue;
+                var cur = ordered[i];
                 var markers = cur.EdgeSequencerMarkers;
                 if (markers == null) continue;
                 foreach (var marker in markers.Where(m => m.IsDither)) {
@@ -1000,9 +1015,11 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
         }
 
-        private static double MedianNonEventStep(IReadOnlyList<DriftSample> ordered) {
+        private static double MedianNonEventStep(IReadOnlyList<DriftSample> ordered, HashSet<int>? returnVisitBoundaryEdges) {
             var steps = new List<double>();
             for (var i = 1; i < ordered.Count; i++) {
+                if (returnVisitBoundaryEdges != null && returnVisitBoundaryEdges.Contains(i))
+                    continue;
                 if (ordered[i].EdgeSequencerMarkers is { Count: > 0 })
                     continue;
                 GetAnchoredPoint(ordered, ordered[i - 1], out var x0, out var y0);

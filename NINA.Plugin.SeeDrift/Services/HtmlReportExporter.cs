@@ -134,11 +134,14 @@ namespace NINA.Plugin.SeeDrift.Services {
             var preBuiltAnalyses = new Dictionary<(int BatchIndex, string TargetKey), TargetAnalysis>();
             var allAnalyses = new List<TargetAnalysis>();
             for (var t0 = 0; t0 < targets.Count; t0++) {
-                var orderedFull0 = targets[t0].Samples.OrderBy(s => s.FrameIndex).ToList();
+                var batch0 = targets[t0];
+                var orderedFull0 = batch0.Samples.OrderBy(s => s.FrameIndex).ToList();
                 var groups0 = SplitBatchByTargetInOrder(orderedFull0);
                 var filtered0 = groups0.Where(g => g.Samples.Count >= min).ToList();
                 foreach (var (name0, grp0) in filtered0) {
-                    var analysis0 = SessionAnalysisService.AnalyzeTarget(name0, grp0);
+                    var plan0 = TargetVisitSegmentation.BuildPlan(
+                        name0, grp0, orderedFull0, batch0.LightSaveCatalog, batch0.TargetSchedulerStarts);
+                    var analysis0 = SessionAnalysisService.AnalyzeTarget(name0, grp0, plan0);
                     preBuiltAnalyses[(t0, name0)] = analysis0;
                     allAnalyses.Add(analysis0);
                 }
@@ -151,6 +154,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             for (var t = 0; t < targets.Count; t++) {
                 var batch = targets[t];
                 var samples = batch.Samples;
+                var lightCatalog = batch.LightSaveCatalog;
+                var schedulerStarts = batch.TargetSchedulerStarts;
                 var orderedFull = samples.OrderBy(s => s.FrameIndex).ToList();
                 var sectionClass = t < targets.Count - 1
                     ? "mb-12 border-b border-slate-800 pb-12"
@@ -193,38 +198,40 @@ namespace NINA.Plugin.SeeDrift.Services {
                     var (targetName, grp) = filteredGroups[g];
                     var canvasId = $"c{t}_{g}";
                     var labelJson = JsonSerializer.Serialize($"{targetName} — drift path");
+                    var visitPlan = TargetVisitSegmentation.BuildPlan(
+                        targetName, grp, orderedFull, lightCatalog, schedulerStarts);
                     var analysis = preBuiltAnalyses.TryGetValue((t, targetName), out var preBuilt)
                         ? preBuilt
-                        : SessionAnalysisService.AnalyzeTarget(targetName, grp);
+                        : SessionAnalysisService.AnalyzeTarget(targetName, grp, visitPlan);
 
                     sb.AppendLine($"  <div class=\"{(g > 0 ? "mt-12 border-t border-slate-800 pt-10" : "mt-8")}\">");
                     sb.AppendLine("    <div class=\"flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between\">");
                     sb.AppendLine("      <div class=\"min-w-0 flex-1\">");
                     sb.AppendLine($"        <h3 class=\"text-base font-semibold text-sky-200\">Target: {Escape(targetName)}</h3>");
                     sb.AppendLine(
-                        $"        <p class=\"mt-1 text-xs text-slate-500\">{Escape(FormatTargetFramesSubtitle(grp))}</p>");
+                        $"        <div class=\"mt-1 space-y-0.5 text-xs text-slate-500\">{FormatTargetVisitSubtitleHtml(visitPlan, grp)}</div>");
                     sb.AppendLine("      </div>");
                     sb.AppendLine(
-                        $"      <div class=\"shrink-0 text-xs leading-snug text-slate-400 sm:max-w-[min(100%,20rem)] sm:text-right\">{FormatTargetExposureRangeHtml(grp)}</div>");
+                        $"      <div class=\"shrink-0 text-xs leading-snug text-slate-400 sm:max-w-[min(100%,20rem)] sm:text-right\">{FormatTargetVisitExposureRangeHtml(visitPlan)}</div>");
                     sb.AppendLine("    </div>");
                     sb.AppendLine($"    <div class=\"seedrift-chart-box mt-4 rounded-lg border border-slate-700 bg-slate-900/60 p-2\">");
                     sb.AppendLine($"      <canvas id=\"{canvasId}\"></canvas>");
                     sb.AppendLine("    </div>");
-                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither (tip toward next frame) · <span class=\"text-pink-400\">□</span> center. <span class=\"text-amber-300\">?</span> marks possibly missing/unsolved frames between plotted points. Hover path, △/□, or ? markers for detail.</p>");
-                    sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{Escape(FormatMovementTotalsLine(grp))}</p>");
-                    var ditherSegHtml = FormatDitherIntervalMovementHtml(grp);
+                    sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end per visit (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center. <span class=\"text-amber-300\">↻</span> return visit · <span class=\"text-amber-300\">?</span> possibly missing/unsolved. Hover for detail.</p>");
+                    sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{Escape(FormatMovementTotalsLine(visitPlan, grp))}</p>");
+                    var ditherSegHtml = FormatDitherIntervalMovementHtml(visitPlan, grp);
                     if (!string.IsNullOrEmpty(ditherSegHtml))
                         sb.Append(ditherSegHtml);
                     sb.Append(FormatAnalysisSummaryHtml(analysis));
                     sb.Append(FormatTimelineHtml(analysis));
 
-                    var ptsJson = FormatScatterPointsJsonAnchored(grp);
-                    var edgeJson = FormatEdgeMidpointMarkersJson(grp);
-                    var gapJson = FormatPossibleGapMarkersJson(grp);
+                    var visitDatasetsJson = FormatVisitChartDatasetsJson(visitPlan);
+                    var edgeJson = FormatEdgeMidpointMarkersJson(visitPlan, grp);
+                    var gapJson = FormatGapMarkersJson(visitPlan, grp);
 
                     sb.AppendLine("<script>");
                     sb.AppendLine("(function(){");
-                    sb.AppendLine($"  const pts = {ptsJson};");
+                    sb.AppendLine($"  const visitDatasets = {visitDatasetsJson};");
                     sb.AppendLine($"  const edgeMarkers = {edgeJson};");
                     sb.AppendLine($"  const gapMarkers = {gapJson};");
                     sb.AppendLine($"  const datasetLabel = {labelJson};");
@@ -261,14 +268,18 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("    if (dx === 0 && dy === 0) return 0;");
                     sb.AppendLine("    return (Math.atan2(dy, dx) * 180 / Math.PI) + 90;");
                     sb.AppendLine("  }");
-                    sb.AppendLine("  var datasets = [{");
-                    sb.AppendLine("      label: datasetLabel,");
-                    sb.AppendLine("      data: pts, borderColor: '#38bdf8',");
+                    sb.AppendLine("  var datasets = [];");
+                    sb.AppendLine("  for (var vi = 0; vi < visitDatasets.length; vi++) {");
+                    sb.AppendLine("    var vd = visitDatasets[vi];");
+                    sb.AppendLine("    datasets.push({");
+                    sb.AppendLine("      label: vi === 0 ? datasetLabel : ('Visit ' + (vi + 1)),");
+                    sb.AppendLine("      data: vd.data, borderColor: '#38bdf8',");
                     sb.AppendLine("      backgroundColor: pointBgFn,");
                     sb.AppendLine("      pointBorderColor: pointBorderFn,");
                     sb.AppendLine("      pointBorderWidth: 2,");
                     sb.AppendLine("      showLine: true, tension: 0.12, pointRadius: pointRadiusFn, borderWidth: 1.5");
-                    sb.AppendLine("    }];");
+                    sb.AppendLine("    });");
+                    sb.AppendLine("  }");
                     sb.AppendLine("  if (edgeMarkers.length > 0) {");
                     sb.AppendLine("    datasets.push({");
                     sb.AppendLine("      label: 'Sequencer (between frames)',");
@@ -295,7 +306,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("  }");
                     sb.AppendLine("  if (gapMarkers.length > 0) {");
                     sb.AppendLine("    datasets.push({");
-                    sb.AppendLine("      label: 'Possibly missing/unsolved frames',");
+                    sb.AppendLine("      label: 'Gaps / return visits',");
                     sb.AppendLine("      data: gapMarkers,");
                     sb.AppendLine("      showLine: false,");
                     sb.AppendLine("      borderColor: '#fbbf24',");
@@ -310,7 +321,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("  }");
                     sb.AppendLine("  function seedriftEqualArcsecBounds(mainPts, edgePts) {");
                     sb.AppendLine("    var xs = [], ys = [];");
-                    sb.AppendLine("    for (var i = 0; i < mainPts.length; i++) { xs.push(mainPts[i].x); ys.push(mainPts[i].y); }");
+                    sb.AppendLine("    if (mainPts && mainPts.length) { for (var i = 0; i < mainPts.length; i++) { xs.push(mainPts[i].x); ys.push(mainPts[i].y); } }");
+                    sb.AppendLine("    else if (visitDatasets && visitDatasets.length) { for (var v = 0; v < visitDatasets.length; v++) { var vd = visitDatasets[v].data; for (var i = 0; i < vd.length; i++) { xs.push(vd[i].x); ys.push(vd[i].y); } } }");
                     sb.AppendLine("    if (edgePts && edgePts.length) {");
                     sb.AppendLine("      for (var j = 0; j < edgePts.length; j++) { xs.push(edgePts[j].x); ys.push(edgePts[j].y); }");
                     sb.AppendLine("    }");
@@ -329,14 +341,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("    var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;");
                     sb.AppendLine("    return { xMin: cx - half, xMax: cx + half, yMin: cy - half, yMax: cy + half };");
                     sb.AppendLine("  }");
-                    sb.AppendLine("  var eq = seedriftEqualArcsecBounds(pts, edgeMarkers);");
+                    sb.AppendLine("  var eq = seedriftEqualArcsecBounds(null, edgeMarkers);");
                     sb.AppendLine("  const chart = new Chart(el, {");
                     sb.AppendLine("    type: 'scatter',");
                     sb.AppendLine("    data: { datasets: datasets },");
                     sb.AppendLine("    plugins: [{");
                     sb.AppendLine("      id: 'seedriftGapLabels',");
                     sb.AppendLine("      afterDatasetsDraw: function(chart) {");
-                    sb.AppendLine("        var dsIndex = chart.data.datasets.findIndex(function(ds) { return ds.label === 'Possibly missing/unsolved frames'; });");
+                    sb.AppendLine("        var dsIndex = chart.data.datasets.findIndex(function(ds) { return ds.label === 'Gaps / return visits'; });");
                     sb.AppendLine("        if (dsIndex < 0) return;");
                     sb.AppendLine("        var meta = chart.getDatasetMeta(dsIndex);");
                     sb.AppendLine("        var ctx = chart.ctx;");
@@ -347,7 +359,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("        ctx.fillStyle = '#fbbf24';");
                     sb.AppendLine("        for (var i = 0; i < meta.data.length; i++) {");
                     sb.AppendLine("          var p = meta.data[i];");
-                    sb.AppendLine("          if (p && !p.hidden) ctx.fillText('?', p.x, p.y);");
+                    sb.AppendLine("          if (p && !p.hidden) { var raw = chart.data.datasets[dsIndex].data[i]; ctx.fillText(raw && raw.gapGlyph ? raw.gapGlyph : '?', p.x, p.y); }");
                     sb.AppendLine("        }");
                     sb.AppendLine("        ctx.restore();");
                     sb.AppendLine("      }");
@@ -538,12 +550,75 @@ namespace NINA.Plugin.SeeDrift.Services {
             return true;
         }
 
+        private static string FormatTargetVisitSubtitleHtml(TargetVisitPlan plan, IReadOnlyList<DriftSample> grp) {
+            var night = FormatTargetFramesSubtitle(grp);
+            if (plan.Visits.Count <= 1)
+                return Escape(night);
+            var sb = new StringBuilder();
+            sb.Append(Escape(night));
+            for (var v = 0; v < plan.Visits.Count; v++) {
+                var visit = plan.Visits[v];
+                sb.Append(FormattableString.Invariant(
+                    $"<br/>Visit {v + 1}: {FormatTargetFramesSubtitle(visit)}"));
+            }
+            return sb.ToString();
+        }
+
+        private static string FormatTargetVisitExposureRangeHtml(TargetVisitPlan plan) {
+            if (plan.Visits.Count <= 1)
+                return FormatTargetExposureRangeHtml(plan.Visits[0]);
+            var sb = new StringBuilder();
+            for (var v = 0; v < plan.Visits.Count; v++) {
+                if (v > 0)
+                    sb.Append("<br/>");
+                sb.Append(FormattableString.Invariant(
+                    $"<span class=\"text-slate-500\">Visit {v + 1}</span> "));
+                sb.Append(FormatTargetExposureRangeHtml(plan.Visits[v]));
+            }
+            return sb.ToString();
+        }
+
+        private static string FormatVisitChartDatasetsJson(TargetVisitPlan plan) {
+            var datasets = new List<object>();
+            for (var v = 0; v < plan.Visits.Count; v++) {
+                var visit = plan.Visits[v];
+                var points = new List<object>(visit.Count);
+                for (var i = 0; i < visit.Count; i++) {
+                    GetAnchoredPlotPoint(visit, i, out var px, out var py);
+                    points.Add(new { x = px, y = py, filename = visit[i].FileName ?? "" });
+                }
+                datasets.Add(new { visitIndex = v + 1, data = points });
+            }
+            return JsonSerializer.Serialize(datasets);
+        }
+
+        private static (IReadOnlyList<DriftSample> Visit, int LocalIndex)? FindSampleInVisits(
+                TargetVisitPlan plan,
+                DriftSample sample) {
+            for (var v = 0; v < plan.Visits.Count; v++) {
+                var visit = plan.Visits[v];
+                for (var j = 0; j < visit.Count; j++) {
+                    if (ReferenceEquals(visit[j], sample))
+                        return (visit, j);
+                }
+            }
+            return null;
+        }
+
+        private static bool IsReturnVisitBoundary(TargetVisitPlan plan, int edgeIndex) {
+            foreach (var b in plan.ReturnVisitBoundaryEdges) {
+                if (b == edgeIndex)
+                    return true;
+            }
+            return false;
+        }
+
         /// <summary>
         /// HTML body (already safe: generated labels + numeric formatting only).
         /// Lists plate-solved segment ΔRA/ΔDec for each frame pair whose logs include a dither trigger on that edge,
         /// then Σ|Δ| totals across those intervals only.
         /// </summary>
-        private static string FormatDitherIntervalMovementHtml(IReadOnlyList<DriftSample> group) {
+        private static string FormatDitherIntervalMovementHtml(TargetVisitPlan plan, IReadOnlyList<DriftSample> group) {
             if (group.Count < 2)
                 return "";
             var rows = new List<(string Label, string DeltaRa, string DeltaDec, string Pixel, string Note)>();
@@ -562,12 +637,20 @@ namespace NINA.Plugin.SeeDrift.Services {
             var assessedMovesPx = new List<double>();
 
             for (var i = 1; i < group.Count; i++) {
+                if (IsReturnVisitBoundary(plan, i))
+                    continue;
                 var markers = group[i].EdgeSequencerMarkers;
                 if (markers == null || !markers.Any(m => m.IsDither))
                     continue;
 
-                GetAnchoredPlotPoint(group, i - 1, out var x0, out var y0);
-                GetAnchoredPlotPoint(group, i, out var x1, out var y1);
+                var prev = group[i - 1];
+                var cur = group[i];
+                var loc0 = FindSampleInVisits(plan, prev);
+                var loc1 = FindSampleInVisits(plan, cur);
+                if (!loc0.HasValue || !loc1.HasValue)
+                    continue;
+                GetAnchoredPlotPoint(loc0.Value.Visit, loc0.Value.LocalIndex, out var x0, out var y0);
+                GetAnchoredPlotPoint(loc1.Value.Visit, loc1.Value.LocalIndex, out var x1, out var y1);
                 var dRa = x1 - x0;
                 var dDec = y1 - y0;
                 var move = Math.Sqrt(dRa * dRa + dDec * dDec);
@@ -586,8 +669,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sumAbsDec += Math.Abs(dDec);
                     assessedMovesArc.Add(move);
                 }
-                var prev = group[i - 1];
-                var cur = group[i];
                 var label = FitsFolderImport.FormatBetweenFramesLabel(
                     prev.FileName, prev.FrameIndex, cur.FileName, cur.FrameIndex);
                 var pxText = "";
@@ -887,15 +968,30 @@ namespace NINA.Plugin.SeeDrift.Services {
             return SeestarDeviceInfo.FromId(devices[0]);
         }
 
-        private static string FormatMovementTotalsLine(IReadOnlyList<DriftSample> group) {
+        private static string FormatMovementTotalsLine(TargetVisitPlan plan, IReadOnlyList<DriftSample> group) {
             if (group.Count < 2)
                 return "Single frame — no frame-to-frame movement to sum.";
-            SumAbsoluteSegmentMovementAlongTrace(group, out var sumRa, out var sumDec);
+            double sumRa = 0;
+            double sumDec = 0;
+            double sumPx = 0;
+            double sumPy = 0;
+            var anyPx = group.All(s => s.IsPixelPath);
+            foreach (var visit in plan.Visits) {
+                if (visit.Count < 2)
+                    continue;
+                SumAbsoluteSegmentMovementAlongTrace(visit, out var ra, out var dec);
+                sumRa += ra;
+                sumDec += dec;
+                if (anyPx) {
+                    SumAbsoluteSegmentMovementInPixels(visit, out var px, out var py);
+                    sumPx += px;
+                    sumPy += py;
+                }
+            }
             var arc = FormattableString.Invariant($"ΔRA {sumRa:0.###}″ · ΔDec {sumDec:0.###}″");
 
-            if (group.All(s => s.IsPixelPath)) {
-                SumAbsoluteSegmentMovementInPixels(group, out var spx, out var spy);
-                var px = FormattableString.Invariant($" · detector Σ|Δx| {spx:0.##} px · Σ|Δy| {spy:0.##} px");
+            if (anyPx) {
+                var px = FormattableString.Invariant($" · detector Σ|Δx| {sumPx:0.##} px · Σ|Δy| {sumPy:0.##} px");
                 return arc + px;
             }
 
@@ -927,17 +1023,23 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <summary>
         /// Midpoints along each consecutive pair (in plot space), spaced along the chord when multiple markers share one edge.
         /// </summary>
-        private static string FormatEdgeMidpointMarkersJson(IReadOnlyList<DriftSample> group) {
+        private static string FormatEdgeMidpointMarkersJson(TargetVisitPlan plan, IReadOnlyList<DriftSample> group) {
             if (group.Count < 2)
                 return "[]";
             var list = new List<object>();
             for (var i = 1; i < group.Count; i++) {
+                if (IsReturnVisitBoundary(plan, i))
+                    continue;
                 var markers = group[i].EdgeSequencerMarkers;
                 if (markers == null || markers.Count == 0)
                     continue;
 
-                GetAnchoredPlotPoint(group, i - 1, out var px, out var py);
-                GetAnchoredPlotPoint(group, i, out var cx, out var cy);
+                var loc0 = FindSampleInVisits(plan, group[i - 1]);
+                var loc1 = FindSampleInVisits(plan, group[i]);
+                if (!loc0.HasValue || !loc1.HasValue)
+                    continue;
+                GetAnchoredPlotPoint(loc0.Value.Visit, loc0.Value.LocalIndex, out var px, out var py);
+                GetAnchoredPlotPoint(loc1.Value.Visit, loc1.Value.LocalIndex, out var cx, out var cy);
                 var n = markers.Count;
                 for (var j = 0; j < n; j++) {
                     var t = (j + 1.0) / (n + 1.0);
@@ -959,29 +1061,35 @@ namespace NINA.Plugin.SeeDrift.Services {
             return JsonSerializer.Serialize(list);
         }
 
-        private static string FormatPossibleGapMarkersJson(IReadOnlyList<DriftSample> group) {
-            if (group.Count < 2)
+        private static string FormatGapMarkersJson(TargetVisitPlan plan, IReadOnlyList<DriftSample> group) {
+            if (group.Count < 2 || plan.GapAssessments.Count != group.Count - 1)
                 return "[]";
             var list = new List<object>();
             for (var i = 1; i < group.Count; i++) {
-                var prev = group[i - 1];
-                var cur = group[i];
-                if (!FitsFolderImport.TryExposureSequenceFromFileName(prev.FileName, out var a)
-                    || !FitsFolderImport.TryExposureSequenceFromFileName(cur.FileName, out var b))
-                    continue;
-                var missing = b - a - 1;
-                if (missing <= 0)
+                var assessment = plan.GapAssessments[i - 1];
+                if (assessment.Kind == ExposureGapKind.None)
                     continue;
 
-                GetAnchoredPlotPoint(group, i - 1, out var px, out var py);
-                GetAnchoredPlotPoint(group, i, out var cx, out var cy);
-                var label = $"Possibly missing/unsolved frames ({missing})";
-                var tooltip =
-                    $"Possibly missing or unsolved frames: {missing} logged exposure(s) fall between {prev.FileName} and {cur.FileName} but are not in the solved trace. This jump may span more than one exposure.";
+                var prev = group[i - 1];
+                var cur = group[i];
+                var loc0 = FindSampleInVisits(plan, prev);
+                var loc1 = FindSampleInVisits(plan, cur);
+                if (!loc0.HasValue || !loc1.HasValue)
+                    continue;
+                GetAnchoredPlotPoint(loc0.Value.Visit, loc0.Value.LocalIndex, out var px, out var py);
+                GetAnchoredPlotPoint(loc1.Value.Visit, loc1.Value.LocalIndex, out var cx, out var cy);
+
+                var isReturn = assessment.Kind == ExposureGapKind.ReturnVisit;
+                var label = isReturn
+                    ? "Return visit"
+                    : FormattableString.Invariant($"Possibly missing/unsolved ({assessment.MissingSequenceCount})");
+                var tooltip = assessment.Detail;
                 list.Add(new {
                     x = Math.Round((px + cx) / 2.0, 4),
                     y = Math.Round((py + cy) / 2.0, 4),
                     isGap = true,
+                    isReturnVisit = isReturn,
+                    gapGlyph = isReturn ? "↻" : "?",
                     label,
                     tooltip
                 });

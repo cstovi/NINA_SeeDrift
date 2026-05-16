@@ -135,6 +135,7 @@ namespace NINA.Plugin.SeeDrift.Models {
     public sealed class TargetAnalysis {
         public string TargetName { get; init; } = "";
         public int FrameCount { get; init; }
+        public int VisitCount { get; init; } = 1;
         public DriftRateSummary DriftRate { get; init; } = new();
         public DriftRiskSummary DriftRisk { get; init; } = new();
         public List<DitherEventAnalysis> Dithers { get; init; } = new();
