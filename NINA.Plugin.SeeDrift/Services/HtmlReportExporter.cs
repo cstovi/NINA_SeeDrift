@@ -588,8 +588,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 }
                 var prev = group[i - 1];
                 var cur = group[i];
-                var label = FormattableString.Invariant(
-                    $"Frames {prev.FrameIndex + 1}→{cur.FrameIndex + 1}");
+                var label = FitsFolderImport.FormatBetweenFramesLabel(
+                    prev.FileName, prev.FrameIndex, cur.FileName, cur.FrameIndex);
                 var pxText = "";
 
                 if (pixelPath

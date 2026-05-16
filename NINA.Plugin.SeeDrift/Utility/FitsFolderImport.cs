@@ -304,6 +304,47 @@ namespace NINA.Plugin.SeeDrift.Utility {
             return true;
         }
 
+        /// <summary>
+        /// Display numbers for an inter-frame interval (chart tooltips, dither table, etc.).
+        /// Prefers NINA <c>$$EXPOSURENUMBER$$</c> from file names; otherwise 1-based position in the solved trace.
+        /// </summary>
+        internal static void ResolveBetweenFramesDisplay(
+                string? prevFileName,
+                int prevFrameIndex,
+                string? curFileName,
+                int curFrameIndex,
+                out int fromDisplay,
+                out int toDisplay) {
+            if (TryExposureSequenceFromFileName(prevFileName, out var a)
+                && TryExposureSequenceFromFileName(curFileName, out var b)) {
+                fromDisplay = a;
+                toDisplay = b;
+                return;
+            }
+            fromDisplay = prevFrameIndex + 1;
+            toDisplay = curFrameIndex + 1;
+        }
+
+        /// <summary>e.g. <c>Frames 11→12</c> — same numbering as chart hover tooltips.</summary>
+        internal static string FormatBetweenFramesLabel(
+                string? prevFileName,
+                int prevFrameIndex,
+                string? curFileName,
+                int curFrameIndex) {
+            ResolveBetweenFramesDisplay(prevFileName, prevFrameIndex, curFileName, curFrameIndex, out var a, out var b);
+            return FormattableString.Invariant($"Frames {a}→{b}");
+        }
+
+        /// <summary>e.g. <c>Between frames 11 → 12</c> — first line of dither/center hover text.</summary>
+        internal static string FormatBetweenFramesHoverRange(
+                string? prevFileName,
+                int prevFrameIndex,
+                string? curFileName,
+                int curFrameIndex) {
+            ResolveBetweenFramesDisplay(prevFileName, prevFrameIndex, curFileName, curFrameIndex, out var a, out var b);
+            return FormattableString.Invariant($"Between frames {a} → {b}");
+        }
+
         /// <summary>Sort key: exposure sequence, or <see cref="int.MaxValue"/> if not parseable.</summary>
         private static int ExposureSequenceTieBreak(string fullPath) {
             var fn = Path.GetFileName(fullPath);

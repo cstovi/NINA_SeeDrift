@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Logged dither table frame labels:** The per-target **Frames A→B** column now uses the same exposure numbers as chart hover tooltips (parsed from NINA `$$EXPOSURENUMBER$$` file-name suffixes, e.g. `_0011.fits` → 11), not `FrameIndex + 1` from the solved-trace order.
+
 ### Changed
 
 - **Suspect dither detection tightened:** Logged dither intervals are compared to **other** dithers on the same target (leave-one-out), the vector floor multiplier is **2.75×** (was **5×**), and a new **per-axis** rule flags |ΔRA| or |ΔDec| far outside peer medians (e.g. a ~420″ RA step when other RA steps are a few arcseconds). Honest Dec-heavy dithers at the same scale as their peers stay assessed.
