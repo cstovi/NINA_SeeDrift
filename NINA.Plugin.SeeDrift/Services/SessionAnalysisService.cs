@@ -19,15 +19,16 @@ namespace NINA.Plugin.SeeDrift.Services {
             var boundarySet = boundaryEdges.Count > 0
                 ? new HashSet<int>(boundaryEdges)
                 : null;
+            var dithers = BuildDitherAnalyses(ordered, boundarySet).ToList();
             var analysis = new TargetAnalysis {
                 TargetName = string.IsNullOrWhiteSpace(targetName) ? "Unknown" : targetName.Trim(),
                 FrameCount = ordered.Count,
                 VisitCount = visitPlan?.Visits.Count ?? 1,
                 DriftRate = BuildDriftRate(ordered),
-                DriftRisk = BuildDriftRisk(ordered, boundarySet)
+                DriftRisk = BuildDriftRisk(ordered, boundarySet, dithers),
             };
 
-            analysis.Dithers.AddRange(BuildDitherAnalyses(ordered, boundarySet));
+            analysis.Dithers.AddRange(dithers);
             analysis.SuspectDitherCount = analysis.Dithers.Count(d => d.IsSuspect);
             analysis.SuspectDitherDiscountedAbsRaArcSec = analysis.Dithers.Where(d => d.IsSuspect).Sum(d => Math.Abs(d.DeltaRaArcSec));
             analysis.SuspectDitherDiscountedAbsDecArcSec = analysis.Dithers.Where(d => d.IsSuspect).Sum(d => Math.Abs(d.DeltaDecArcSec));
@@ -290,7 +291,15 @@ namespace NINA.Plugin.SeeDrift.Services {
             };
         }
 
-        private static DriftRiskSummary BuildDriftRisk(IReadOnlyList<DriftSample> ordered, HashSet<int>? returnVisitBoundaryEdges) {
+        private const double WalkingFallbackConsistencyCaution = 0.40;
+        private const double WalkingLowConsistencyCeiling = 0.25;
+        private const double WalkingBurstRatioModerate = 1.5;
+        private const double WalkingBurstRatioCaution = 2.0;
+
+        private static DriftRiskSummary BuildDriftRisk(
+                IReadOnlyList<DriftSample> ordered,
+                HashSet<int>? returnVisitBoundaryEdges,
+                IReadOnlyList<DitherEventAnalysis> dithers) {
             if (ordered.Count < 3) {
                 return new DriftRiskSummary {
                     Status = "Not enough data",
@@ -361,13 +370,23 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             var (starStatus, starTone) = ClassifyStarShape(driftPerExposure, driftPerExposurePx, consistency);
 
-            ComputeBetweenDitherDrift(ordered, hasScale, scale,
+            var assessedDithers = dithers.Where(d => !d.IsSuspect).ToList();
+            var assessedMovesArc = assessedDithers.Select(d => d.MoveArcSec).OrderBy(v => v).ToList();
+            double? medianAssessedDitherArc = assessedMovesArc.Count > 0
+                ? assessedMovesArc[(assessedMovesArc.Count - 1) / 2]
+                : null;
+            double? medianAssessedDitherPx = medianAssessedDitherArc.HasValue && hasScale
+                ? medianAssessedDitherArc.Value / scale
+                : null;
+
+            ComputeBetweenDitherDrift(ordered, hasScale, scale, assessedMovesArc,
                 out var medianDitherArc, out var medianDitherPx,
                 out var betweenArc, out var betweenPx, out var ditherWindowCount);
             var headroom = ComputeHeadroom(medianDitherPx, betweenPx, medianDitherArc, betweenArc);
 
             var (walkStatus, walkTone, walkReason) = ClassifyWalkingNoise(
-                consistency, headroom, betweenPx, betweenArc, windowDrift, windowPx, ditherWindowCount);
+                consistency, headroom, betweenPx, betweenArc, windowDrift, windowPx, ditherWindowCount,
+                assessedDithers.Count, medianAssessedDitherPx);
 
             var (headlineStatus, headlineTone) = HeadlineOf(starStatus, starTone, walkStatus, walkTone);
 
@@ -459,7 +478,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                 double? betweenDriftArcSec,
                 double? worstWindowArcSec,
                 double? worstWindowPx,
-                int ditherWindowCount) {
+                int ditherWindowCount,
+                int assessedDitherCount,
+                double? medianAssessedDitherPx) {
+            if (assessedDitherCount >= 2 && consistency < WalkingLowConsistencyCeiling) {
+                return ("Low", "good", FormattableString.Invariant(
+                    $"{consistency:P0} directional drift — not coherent enough for walking-noise concern despite short-window movement."));
+            }
+
             if (ditherWindowCount >= 1 && headroom.HasValue) {
                 var pxFloorCaution = betweenDriftPx.HasValue
                     ? betweenDriftPx.Value >= 0.5
@@ -480,7 +506,29 @@ namespace NINA.Plugin.SeeDrift.Services {
                     $"dither headroom {headroom.Value:0.0}× clears the between-dither drift."));
             }
 
-            // Fallback: no logged dithers (or no plate scale and arcsec data) — use the short-window check.
+            if (assessedDitherCount >= 2
+                && medianAssessedDitherPx.HasValue
+                && worstWindowPx.HasValue) {
+                var burstRatio = worstWindowPx.Value / Math.Max(0.05, medianAssessedDitherPx.Value);
+                if (burstRatio < WalkingBurstRatioModerate) {
+                    return ("Low", "good", FormattableString.Invariant(
+                        $"worst 5-frame drift {worstWindowPx.Value:0.##} px is below {WalkingBurstRatioModerate:0.0}× the median assessed dither ({medianAssessedDitherPx.Value:0.##} px)."));
+                }
+                if (burstRatio >= WalkingBurstRatioCaution
+                    && consistency >= WalkingFallbackConsistencyCaution) {
+                    return ("Caution", "warn", FormattableString.Invariant(
+                        $"short-window drift {worstWindowPx.Value:0.##} px is {burstRatio:0.0}× the median assessed dither with {consistency:P0} directional drift."));
+                }
+                if (burstRatio >= WalkingBurstRatioModerate
+                    && consistency >= WalkingFallbackConsistencyCaution) {
+                    return ("Moderate", "ok", FormattableString.Invariant(
+                        $"short-window drift {worstWindowPx.Value:0.##} px is {burstRatio:0.0}× the median assessed dither."));
+                }
+                return ("Low", "good", FormattableString.Invariant(
+                    $"short-window drift is elevated but dither size ({medianAssessedDitherPx.Value:0.##} px median) still dominates."));
+            }
+
+            // Fallback: no assessed dithers for a ratio comparison — use the short-window check with a consistency gate.
             var level = 0;
             if (worstWindowPx.HasValue) {
                 if (worstWindowPx.Value >= 5.0) level = 2;
@@ -489,13 +537,16 @@ namespace NINA.Plugin.SeeDrift.Services {
                 if (worstWindowArcSec.Value >= 20.0) level = 2;
                 else if (worstWindowArcSec.Value >= 4.0) level = 1;
             }
-            // Without dithers we can't compare to headroom; consistency still informs but only when window size also clears a floor.
+            if (level >= 2 && consistency < WalkingFallbackConsistencyCaution)
+                level = 1;
             if (level == 1 && consistency >= 0.75) level = 2;
             else if (level == 0 && consistency >= 0.85) level = 1;
 
-            var reason = ditherWindowCount == 0
+            var reason = assessedDitherCount == 0
                 ? "no logged dithers in this run — using worst short-window drift instead"
-                : "only one logged dither — using worst short-window drift instead";
+                : ditherWindowCount == 0
+                    ? "could not separate drift between logged dithers — using worst short-window drift instead"
+                    : "only one logged dither — using worst short-window drift instead";
             if (level >= 2)
                 return ("Caution", "warn", reason);
             if (level == 1)
@@ -542,6 +593,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         private static void ComputeBetweenDitherDrift(
                 IReadOnlyList<DriftSample> ordered,
                 bool hasScale, double scale,
+                IReadOnlyList<double> assessedDitherMovesArc,
                 out double? medianDitherArc, out double? medianDitherPx,
                 out double? betweenArc, out double? betweenPx,
                 out int windowCount) {
@@ -570,6 +622,12 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (ditherMagsArc.Count > 0) {
                 ditherMagsArc.Sort();
                 medianDitherArc = ditherMagsArc[(ditherMagsArc.Count - 1) / 2];
+                if (hasScale)
+                    medianDitherPx = medianDitherArc.Value / scale;
+            }
+
+            if (assessedDitherMovesArc.Count > 0) {
+                medianDitherArc = assessedDitherMovesArc[(assessedDitherMovesArc.Count - 1) / 2];
                 if (hasScale)
                     medianDitherPx = medianDitherArc.Value / scale;
             }
@@ -911,7 +969,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var headBit = analysis.DriftRisk.DitherHeadroomRatio.HasValue
                     ? FormattableString.Invariant($"Dither headroom is {analysis.DriftRisk.DitherHeadroomRatio.Value:0.0}× ")
                     : "";
-                var consBit = FormattableString.Invariant($"with {analysis.DriftRisk.DirectionConsistency:P0} directional drift between dithers");
+                var consBit = analysis.DriftRisk.DirectionConsistency >= WalkingFallbackConsistencyCaution
+                    ? FormattableString.Invariant($" with {analysis.DriftRisk.DirectionConsistency:P0} directional drift in natural intervals")
+                    : "";
                 yield return new SessionRecommendation {
                     Level = "warn",
                     Text = $"{headBit}{consBit}. Coherent drift can correlate fixed-pattern noise across stacked subs (walking noise). Consider increasing Mount Dither Pixels in NINA, dithering more often, or addressing field drift (polar alignment / differential flexure)."

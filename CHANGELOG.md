@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.31] — 2026-05-18
+
+### Fixed
+
+- **Walking-noise advisory false positives** on sessions with large measured dithers but low directional consistency (e.g. RA zigzag + Dec dithers): dither headroom now uses the **median assessed plate-solve dither magnitude** (not log-marker header deltas alone). Walking-noise **Caution** no longer comes from the short-window fallback when direction consistency is **&lt; 25%**, or when the worst 5-frame burst is **&lt; 1.5×** the median assessed dither (with **≥ 2** assessed dithers). The legacy short-window fallback (no dithers) now requires **≥ 40%** consistency before a **≥ 5 px** burst can reach Caution.
+
+### Added
+
+- Unit tests for walking-noise classification (`SessionAnalysisDriftRiskTests`).
+
 ## [0.8.30] — 2026-05-16
 
 ### Added
