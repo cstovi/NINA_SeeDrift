@@ -365,7 +365,11 @@ namespace NINA.Plugin.SeeDrift.Services {
                     $"(best target: {maxLightsAnyTarget}); plate solving was skipped. " +
                     "Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
                     $"{presolveNightPath}";
-                _plugin.NotifyNightReportSaved(presolveNightPath!, completeDetail, postDiscordAfterSave, sourceLogsForBatch);
+                _plugin.NotifyNightReportSaved(presolveNightPath!, completeDetail, false, sourceLogsForBatch);
+                if (postDiscordAfterSave)
+                    _plugin.NotifyStopFinishedWithoutReport(
+                        $"SeeDrift — report not sent, no qualifying targets (>50 exposures).",
+                        postDiscordIfConfigured: true);
                 Report(completeDetail, 100, 100);
                 SeeDriftLog.Info($"SeeDrift: run finished without plate solve in {dur} — HTML → {presolveNightPath}");
                 return true;
