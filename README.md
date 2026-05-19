@@ -55,3 +55,7 @@ See **[CHANGELOG.md](CHANGELOG.md)**.
 ## Repository
 
 <https://github.com/cstovi/NINA_SeeDrift>
+
+## Support
+
+If you use and like anything I've done, support on [Ko-fi](https://ko-fi.com/turnpike47298) is appreciated to encourage me to keep going!

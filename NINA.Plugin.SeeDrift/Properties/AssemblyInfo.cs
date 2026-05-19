@@ -14,11 +14,13 @@ using System.Windows;
 [assembly: AssemblyMetadata("ShortDescription", "Seestar-identified drift report library with recent-log picker and analytics.")]
 [assembly: AssemblyMetadata("LongDescription", @"SeeDrift reads NINA session logs (%LocalAppData%\NINA\Logs): Saved image to … lines give the FITS paths to solve. Start→Stop keeps lines between arm and disarm times; Run report on the options page plate-solves every LIGHT in the NINA log you choose. Each frame is plate-solved using your NINA plate-solve profile; drift is shown as ΔRA/ΔDec arcseconds vs the first solved frame.
 
-When log lines correlate between exposures, dither and center-after-drift triggers appear in the HTML report with advisory effectiveness metrics and settings hints. Recent NINA logs can be selected from the options UI. Reports are stored in a stable library by default, Seestar model/serial identity is shown when NINA logged a connected Alpaca telescope, star-shape and walking-noise drift risk are summarized separately from logged dithers, possible missing/unsolved frame gaps are marked, suspect tracking jumps are excluded from dither scoring, and schema-compatible saved reports can be compared by whole-report averages.")]
+When log lines correlate between exposures, dither and center-after-drift triggers appear in the HTML report with advisory effectiveness metrics and settings hints. Recent NINA logs can be selected from the options UI. Reports are stored in a stable library by default, Seestar model/serial identity is shown when NINA logged a connected Alpaca telescope, star-shape and walking-noise drift risk are summarized separately from logged dithers, possible missing/unsolved frame gaps are marked, suspect tracking jumps are excluded from dither scoring, and schema-compatible saved reports can be compared by whole-report averages.
+
+If you use and like anything I've done, support on Ko-fi (https://ko-fi.com/turnpike47298) is appreciated to encourage me to keep going!")]
 [assembly: AssemblyCompany("Carl Stovell")]
 [assembly: AssemblyProduct("NINA.Plugin.SeeDrift")]
-[assembly: AssemblyVersion("0.9.0.0")]
-[assembly: AssemblyFileVersion("0.9.0.0")]
+[assembly: AssemblyVersion("0.10.0.0")]
+[assembly: AssemblyFileVersion("0.10.0.0")]
 [assembly: InternalsVisibleTo("NINA.Plugin.SeeDrift.Tests")]
 [assembly: AssemblyMetadata("id", "E8D4C2F1-6B7A-4E9D-8C3F-1A2B5D7E9F0C")]
 [assembly: Guid("E8D4C2F1-6B7A-4E9D-8C3F-1A2B5D7E9F0C")]
