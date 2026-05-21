@@ -10,6 +10,7 @@ using System.Windows;
 [assembly: AssemblyMetadata("MinimumApplicationVersion", "3.2.0.9001")]
 [assembly: AssemblyMetadata("FeaturedImageURL", "https://i.ibb.co/PsM1CDGS/Screenshot-2026-05-08-203201.png")]
 [assembly: AssemblyMetadata("ChangelogURL", "https://github.com/cstovi/NINA_SeeDrift/releases")]
+[assembly: AssemblyMetadata("Homepage", "https://ko-fi.com/turnpike47298")]
 [assembly: AssemblyDescription("Plate-solves LIGHT frames referenced by NINA session logs and writes Seestar-identified drift HTML to a report library with star-shape, walking-noise, dither, center, gap, and before/after analytics.")]
 [assembly: AssemblyMetadata("ShortDescription", "Seestar-identified drift report library with recent-log picker and analytics.")]
 [assembly: AssemblyMetadata("LongDescription", @"SeeDrift reads NINA session logs (%LocalAppData%\NINA\Logs): Saved image to … lines give the FITS paths to solve. Start→Stop keeps lines between arm and disarm times; Run report on the options page plate-solves every LIGHT in the NINA log you choose. Each frame is plate-solved using your NINA plate-solve profile; drift is shown as ΔRA/ΔDec arcseconds vs the first solved frame.
