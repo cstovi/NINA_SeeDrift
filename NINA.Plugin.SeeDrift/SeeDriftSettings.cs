@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Newtonsoft.Json;
+using NINA.Core.Utility;
 using NINA.Plugin.SeeDrift.Utility;
 
 namespace NINA.Plugin.SeeDrift {
@@ -45,10 +46,10 @@ namespace NINA.Plugin.SeeDrift {
                     try {
                         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
                         File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(s, Formatting.Indented));
-                    } catch { }
+                    } catch (Exception ex) { Logger.Warning($"[SeeDrift] Settings rewrite failed: {ex.Message}"); }
                     return s;
                 }
-            } catch { }
+            } catch (Exception ex) { Logger.Warning($"[SeeDrift] Settings load failed: {ex.Message}"); }
             return new SeeDriftSettings();
         }
 
@@ -56,7 +57,7 @@ namespace NINA.Plugin.SeeDrift {
             try {
                 Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
                 File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(this, Formatting.Indented));
-            } catch { }
+            } catch (Exception ex) { Logger.Warning($"[SeeDrift] Settings save failed: {ex.Message}"); }
         }
     }
 }

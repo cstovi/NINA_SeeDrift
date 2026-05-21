@@ -357,7 +357,8 @@ namespace NINA.Plugin.SeeDrift {
                 return null;
             try {
                 return Path.GetFullPath(p.Trim());
-            } catch {
+            } catch (Exception ex) {
+                Logger.Warning($"[SeeDrift] NormalizeLogPath failed for '{p}': {ex.Message}");
                 return p.Trim();
             }
         }
