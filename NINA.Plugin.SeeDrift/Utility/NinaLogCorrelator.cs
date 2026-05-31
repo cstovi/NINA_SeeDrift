@@ -93,16 +93,31 @@ namespace NINA.Plugin.SeeDrift.Utility {
         private static readonly Regex RxTriggerDither = new Regex(
             @"Starting\s+Trigger:.*DitherAfterExposures", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary>SeeDither plugin trigger (custom Category / Item line).</summary>
+        private static readonly Regex RxSeeDitherTrigger = new Regex(
+            @"Starting\s+Category:\s*SeeDither.*SeeDitherAfterExposuresTrigger",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         /// <summary>
         /// AfterExposures = N (DitherAfterExposures cadence) or EveryExposures = N (CenterAfterDrift cadence)
         /// that some NINA builds emit on or near the <c>Starting Trigger</c> line.
         /// </summary>
         private static readonly Regex RxAfterExposuresInline = new Regex(
-            @"After\s*Exposures\s*[=:]\s*(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            @"(?:After\s*Exposures|Every)\s*[=:]\s*(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>NINA guider commanded dither: full line includes from→to and optional guide durations (seconds).</summary>
         private static readonly Regex RxDitherPulse = new Regex(
             @"DirectGuider\.cs\|SelectDitherPulse\|.*\|Dither target from \(([-0-9.eE]+)\s*,\s*([-0-9.eE]+)\) to \(([-0-9.eE]+)\s*,\s*([-0-9.eE]+)\)(?: using guide durations of ([-0-9.eE]+) and ([-0-9.eE]+) seconds)?",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>SeeDither log line (message tail captured after the bracketed tag).</summary>
+        private static readonly Regex RxSeeDitherLogLine = new Regex(
+            @"\[SeeDither\]\s+(.*)$",
+            RegexOptions.Compiled);
+
+        /// <summary>SeeDither commanded move in arc-seconds (ΔRA / ΔDec).</summary>
+        private static readonly Regex RxSeeDitherDelta = new Regex(
+            @"\[SeeDither\]\s+Dithering\s+by\s+RA\s*=\s*([-0-9.eE]+)""\s+Dec\s*=\s*([-0-9.eE]+)""",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>Center-after-drift plate-solve follower: reported drift vs threshold (arc minutes).</summary>
@@ -136,7 +151,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
         // NINA 3.x log line timestamp — prefix before first | or INFO field (include fractional seconds).
         private static readonly Regex[] _tsPatterns = {
-            new Regex(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)", RegexOptions.Compiled),
+            new Regex(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)", RegexOptions.Compiled),
             new Regex(@"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)", RegexOptions.Compiled),
             new Regex(@"^\[?(\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\]?", RegexOptions.Compiled),
         };
@@ -157,6 +172,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
             public DateTime UtcTime { get; set; }
             public TriggerKind Kind { get; set; }
             public string Label { get; set; } = "";
+            public bool IsSeeDither { get; set; }
 
             /// <summary>
             /// When the NINA build prints <c>AfterExposures = N</c> on or near the trigger line, captured here.
@@ -175,6 +191,13 @@ namespace NINA.Plugin.SeeDrift.Utility {
             public double Dy { get; set; }
             public double? GuideDurationFirstSec { get; set; }
             public double? GuideDurationSecondSec { get; set; }
+        }
+
+        private sealed class SeeDitherLogEntry {
+            public DateTime UtcTime { get; set; }
+            public string Message { get; set; } = "";
+            public double? DeltaRaArcSec { get; set; }
+            public double? DeltaDecArcSec { get; set; }
         }
 
         private sealed class CenterDriftLogLine {
@@ -317,6 +340,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 var pulses = new List<DitherPulse>();
                 var centerDriftLines = new List<CenterDriftLogLine>();
                 var imageSaves = new List<ImageSaveEvent>();
+                var seeDitherEntries = new List<SeeDitherLogEntry>();
 
                 bool loaded;
                 if (explicitLogPaths != null && explicitLogPaths.Count > 0) {
@@ -325,12 +349,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         if (!File.Exists(path))
                             continue;
                         loaded = true;
-                        ParseLogLines(path, triggers, pulses, centerDriftLines, imageSaves, schedulerStarts);
+                        ParseLogLines(path, triggers, pulses, centerDriftLines, imageSaves, seeDitherEntries, schedulerStarts);
                     }
                     if (!loaded)
                         return (0, false, 0, 0, 0, 0);
                 } else {
-                    if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses, centerDriftLines, imageSaves, schedulerStarts))
+                    if (!LoadAndParseSessionLogs(sessionDate, triggers, pulses, centerDriftLines, imageSaves, seeDitherEntries, schedulerStarts))
                         return (0, false, 0, 0, 0, 0);
                 }
 
@@ -343,7 +367,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
                 SeeDriftLog.Debug(
                     $"SeeDrift: log correlator — triggers={triggers.Count}, dither pulses={pulses.Count}, center drift lines={centerDriftLines.Count}, image saves={imageSaves.Count}");
-                AssignInterFrameEdges(samples, triggers, pulses, centerDriftLines, imageSaves);
+                AssignInterFrameEdges(samples, triggers, pulses, centerDriftLines, imageSaves, seeDitherEntries);
 
                 observations = BuildSessionLogObservations(samples, triggers, pulses, centerDriftLines);
 
@@ -538,10 +562,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 List<TimedTrigger> triggers,
                 List<DitherPulse> pulses,
                 List<CenterDriftLogLine> centerDriftLines,
-                List<ImageSaveEvent> imageSaves) {
+                List<ImageSaveEvent> imageSaves,
+                List<SeeDitherLogEntry> seeDitherEntries) {
 
             var saveByFileName = BuildSaveUtcByFileName(imageSaves);
             var ordered = samples.OrderBy(s => s.FrameIndex).ToList();
+            var usedSeeDitherEntries = new HashSet<SeeDitherLogEntry>();
             for (var i = 1; i < ordered.Count; i++) {
                 var prev = ordered[i - 1];
                 var cur = ordered[i];
@@ -585,24 +611,42 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     var eventLines = new List<string> { BetweenFramesHoverLine(prev, cur) };
                     DitherPulse? pulse = null;
                     if (tr.Kind == TriggerKind.Dither) {
-                        eventLines.Add($"DitherAfterExposures @ {tr.UtcTime.ToLocalTime():HH:mm:ss}");
-                        pulse = pulses
-                            .Where(p => p.UtcTime >= tr.UtcTime && p.UtcTime < t1Log && !usedPulses.Contains(p))
-                            .OrderBy(p => p.UtcTime)
-                            .FirstOrDefault();
-                        if (pulse == null) {
+                        var label = tr.IsSeeDither ? "SeeDither" : "DitherAfterExposures";
+                        eventLines.Add($"{label} @ {tr.UtcTime.ToLocalTime():HH:mm:ss}");
+                        if (tr.IsSeeDither) {
+                            var seeLines = seeDitherEntries
+                                .Where(e => e.UtcTime >= tr.UtcTime && e.UtcTime < t1Log && !usedSeeDitherEntries.Contains(e))
+                                .OrderBy(e => e.UtcTime)
+                                .ToList();
+                            foreach (var entry in seeLines) {
+                                var message = string.IsNullOrWhiteSpace(entry.Message)
+                                    ? "[SeeDither] (log line)"
+                                    : entry.Message;
+                                eventLines.Add(message);
+                                if (entry.DeltaRaArcSec.HasValue && entry.DeltaDecArcSec.HasValue) {
+                                    eventLines.Add($"SeeDither commanded offset: ΔRA {entry.DeltaRaArcSec.Value:0.##}″, ΔDec {entry.DeltaDecArcSec.Value:0.##}″");
+                                }
+                                usedSeeDitherEntries.Add(entry);
+                            }
+                        } else {
                             pulse = pulses
-                                .Where(p => p.UtcTime > t0 && p.UtcTime < t1Log && !usedPulses.Contains(p))
+                                .Where(p => p.UtcTime >= tr.UtcTime && p.UtcTime < t1Log && !usedPulses.Contains(p))
                                 .OrderBy(p => p.UtcTime)
                                 .FirstOrDefault();
-                        }
-                        if (pulse != null) {
-                            usedPulses.Add(pulse);
-                            eventLines.Add(
-                                $"NINA dither target (guider): ({pulse.FromX:F2}, {pulse.FromY:F2}) → ({pulse.ToX:F2}, {pulse.ToY:F2}); move Δx {pulse.Dx:F2}, Δy {pulse.Dy:F2}");
-                            if (pulse.GuideDurationFirstSec.HasValue && pulse.GuideDurationSecondSec.HasValue) {
+                            if (pulse == null) {
+                                pulse = pulses
+                                    .Where(p => p.UtcTime > t0 && p.UtcTime < t1Log && !usedPulses.Contains(p))
+                                    .OrderBy(p => p.UtcTime)
+                                    .FirstOrDefault();
+                            }
+                            if (pulse != null) {
+                                usedPulses.Add(pulse);
                                 eventLines.Add(
-                                    $"NINA dither guide durations (log): {pulse.GuideDurationFirstSec.Value:F2} s, {pulse.GuideDurationSecondSec.Value:F2} s");
+                                    $"NINA dither target (guider): ({pulse.FromX:F2}, {pulse.FromY:F2}) → ({pulse.ToX:F2}, {pulse.ToY:F2}); move Δx {pulse.Dx:F2}, Δy {pulse.Dy:F2}");
+                                if (pulse.GuideDurationFirstSec.HasValue && pulse.GuideDurationSecondSec.HasValue) {
+                                    eventLines.Add(
+                                        $"NINA dither guide durations (log): {pulse.GuideDurationFirstSec.Value:F2} s, {pulse.GuideDurationSecondSec.Value:F2} s");
+                                }
                             }
                         }
                         eventLines.AddRange(measuredTail);
@@ -693,6 +737,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 List<DitherPulse> pulses,
                 List<CenterDriftLogLine> centerDriftLines,
                 List<ImageSaveEvent> imageSaves,
+                List<SeeDitherLogEntry> seeDitherEntries,
                 List<TargetSchedulerStartEvent> schedulerStarts) {
             if (!Directory.Exists(LogFolder))
                 return false;
@@ -704,7 +749,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 foreach (var path in FindAllLogFilesForDate(sessionDate.AddDays(offset))) {
                     if (!seen.Add(path)) continue;
                     logFound = true;
-                    ParseLogLines(path, triggers, pulses, centerDriftLines, imageSaves, schedulerStarts);
+                    ParseLogLines(path, triggers, pulses, centerDriftLines, imageSaves, seeDitherEntries, schedulerStarts);
                 }
             }
 
@@ -735,6 +780,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 List<DitherPulse> pulses,
                 List<CenterDriftLogLine> centerDriftLines,
                 List<ImageSaveEvent> imageSaves,
+                List<SeeDitherLogEntry> seeDitherEntries,
                 List<TargetSchedulerStartEvent> schedulerStarts) {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var sr = new StreamReader(fs);
@@ -764,12 +810,35 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     });
                     continue;
                 }
-                if (RxTriggerDither.IsMatch(line)) {
+                var isSeeDitherTrigger = RxSeeDitherTrigger.IsMatch(line);
+                if (RxTriggerDither.IsMatch(line) || isSeeDitherTrigger) {
                     triggers.Add(new TimedTrigger {
                         UtcTime = ts,
                         Kind = TriggerKind.Dither,
-                        Label = "Dither (after exposures)",
-                        AfterExposuresFromLog = TryParseAfterExposures(line)
+                        Label = isSeeDitherTrigger ? "SeeDither (after exposures)" : "Dither (after exposures)",
+                        AfterExposuresFromLog = TryParseAfterExposures(line),
+                        IsSeeDither = isSeeDitherTrigger
+                    });
+                    continue;
+                }
+
+                var seeMsgMatch = RxSeeDitherLogLine.Match(line);
+                if (seeMsgMatch.Success) {
+                    double? deltaRa = null;
+                    double? deltaDec = null;
+                    var deltaMatch = RxSeeDitherDelta.Match(line);
+                    if (deltaMatch.Success
+                        && double.TryParse(deltaMatch.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var dRa)
+                        && double.TryParse(deltaMatch.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var dDec)) {
+                        deltaRa = dRa;
+                        deltaDec = dDec;
+                    }
+
+                    seeDitherEntries.Add(new SeeDitherLogEntry {
+                        UtcTime = ts,
+                        Message = seeMsgMatch.Groups[1].Value.Trim(),
+                        DeltaRaArcSec = deltaRa,
+                        DeltaDecArcSec = deltaDec
                     });
                     continue;
                 }
@@ -845,6 +914,14 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         DateTimeStyles.RoundtripKind,
                         out var dtRoundtrip) && dtRoundtrip.Kind == DateTimeKind.Utc) {
                     utc = dtRoundtrip;
+                    return true;
+                }
+
+                if (DateTimeOffset.TryParse(raw,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                        out var dto)) {
+                    utc = dto.UtcDateTime;
                     return true;
                 }
 

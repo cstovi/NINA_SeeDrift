@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **SeeDither plugin support:** SeeDrift now recognizes `SeeDitherAfterExposuresTrigger` runs and the corresponding `[SeeDither] …` log lines. Custom SeeDither slews are treated as dither markers (cadence, drift headroom, tooltips) even when NINA never logs the built-in `DitherAfterExposures` trigger or `DirectGuider.SelectDitherPulse` entries.
+
 ## [0.8.31] — 2026-05-18
 
 ### Fixed
