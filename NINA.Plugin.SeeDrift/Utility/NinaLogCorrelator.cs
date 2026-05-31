@@ -573,11 +573,13 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 var cur = ordered[i];
                 var t0 = prev.ExposureStartUtc;
                 var t1 = cur.ExposureStartUtc;
+                var hasSaveBounds = false;
                 if (TryGetLogSaveUtc(prev, saveByFileName, out var save0)
                     && TryGetLogSaveUtc(cur, saveByFileName, out var save1)
                     && save1 > save0) {
                     t0 = save0;
                     t1 = save1;
+                    hasSaveBounds = true;
                     // End window at next exposure start when FITS time is sane — avoids classifying the
                     // following gap's trigger inside (save_prev, save_cur) when save_cur is very late.
                     var expCur = cur.ExposureStartUtc;
@@ -587,10 +589,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (t1 <= t0)
                     continue;
 
-                var t1Log = t1 + InterFrameLogUpperSlop;
+                var upperBound = hasSaveBounds ? t1 : t1 + InterFrameLogUpperSlop;
 
                 var inGap = triggers
-                    .Where(t => t.UtcTime > t0 && t.UtcTime < t1Log)
+                    .Where(t =>
+                        (hasSaveBounds ? t.UtcTime >= t0 : t.UtcTime > t0)
+                        && t.UtcTime < upperBound)
                     .OrderBy(t => t.UtcTime)
                     .ToList();
                 if (inGap.Count == 0)
@@ -615,7 +619,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         eventLines.Add($"{label} @ {tr.UtcTime.ToLocalTime():HH:mm:ss}");
                         if (tr.IsSeeDither) {
                             var seeLines = seeDitherEntries
-                                .Where(e => e.UtcTime >= tr.UtcTime && e.UtcTime < t1Log && !usedSeeDitherEntries.Contains(e))
+                                .Where(e => e.UtcTime >= tr.UtcTime && e.UtcTime < upperBound && !usedSeeDitherEntries.Contains(e))
                                 .OrderBy(e => e.UtcTime)
                                 .ToList();
                             foreach (var entry in seeLines) {
@@ -630,12 +634,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
                             }
                         } else {
                             pulse = pulses
-                                .Where(p => p.UtcTime >= tr.UtcTime && p.UtcTime < t1Log && !usedPulses.Contains(p))
+                                .Where(p => p.UtcTime >= tr.UtcTime && p.UtcTime < upperBound && !usedPulses.Contains(p))
                                 .OrderBy(p => p.UtcTime)
                                 .FirstOrDefault();
                             if (pulse == null) {
                                 pulse = pulses
-                                    .Where(p => p.UtcTime > t0 && p.UtcTime < t1Log && !usedPulses.Contains(p))
+                                    .Where(p => p.UtcTime > t0 && p.UtcTime < upperBound && !usedPulses.Contains(p))
                                     .OrderBy(p => p.UtcTime)
                                     .FirstOrDefault();
                             }
@@ -666,12 +670,12 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     } else {
                         eventLines.Add($"CenterAfterDrift @ {tr.UtcTime.ToLocalTime():HH:mm:ss}");
                         var centerDrift = centerDriftLines
-                            .Where(d => d.UtcTime >= tr.UtcTime && d.UtcTime < t1Log)
+                            .Where(d => d.UtcTime >= tr.UtcTime && d.UtcTime < upperBound)
                             .OrderBy(d => d.UtcTime)
                             .LastOrDefault();
                         if (centerDrift == null) {
                             centerDrift = centerDriftLines
-                                .Where(d => d.UtcTime > t0 && d.UtcTime < t1Log)
+                                .Where(d => d.UtcTime > t0 && d.UtcTime < upperBound)
                                 .OrderBy(d => d.UtcTime)
                                 .LastOrDefault();
                         }
