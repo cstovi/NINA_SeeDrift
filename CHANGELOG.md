@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **SeeDither plugin support:** SeeDrift now recognizes `SeeDitherAfterExposuresTrigger` runs and the corresponding `[SeeDither] …` log lines. Custom SeeDither slews are treated as dither markers (cadence, drift headroom, tooltips) even when NINA never logs the built-in `DitherAfterExposures` trigger or `DirectGuider.SelectDitherPulse` entries.
 
+### Changed
+
+- **Recent log picker:** The **Create report → Recent NINA logs** dropdown now shows the **last ten** log files (most recent first) instead of filtering to a 14-day window, so older-but-relevant sessions remain selectable without browsing for the path manually.
+- **Create report panel:** Added a **Log file path** textbox plus **Browse…** button so you can run a report from any `.log` file directly, even when it is not in the recent-log dropdown.
+- **Drift rate labels:** Added plain-English explanations under each drift rate on the report — net drift rate ("Overall drift from the first frame to the last"), natural drift rate ("Average drift between dithers and center corrections — your mount's raw performance"), and per-exposure drift ("Typical star movement within a single exposure").
+
 ## [0.8.31] — 2026-05-18
 
 ### Fixed

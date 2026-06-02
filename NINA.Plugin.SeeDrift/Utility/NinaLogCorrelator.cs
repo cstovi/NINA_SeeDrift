@@ -581,11 +581,6 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     t0 = save0;
                     t1 = save1;
                     hasSaveBounds = true;
-                    // End window at next exposure start when FITS time is sane — avoids classifying the
-                    // following gap's trigger inside (save_prev, save_cur) when save_cur is very late.
-                    var expCur = cur.ExposureStartUtc;
-                    if (expCur > t0 && expCur < t1)
-                        t1 = expCur;
                 }
                 if (t1 <= t0)
                     continue;
@@ -598,6 +593,16 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         && t.UtcTime < upperBound)
                     .OrderBy(t => t.UtcTime)
                     .ToList();
+
+                if (inGap.Count > 0) {
+                    var ditherCnt = inGap.Count(t => t.Kind == TriggerKind.Dither);
+                    var centerCnt = inGap.Count(t => t.Kind == TriggerKind.Center);
+                    SeeDriftLog.Debug(
+                        $"GapDebug: frames {prev.FrameIndex}→{cur.FrameIndex} hasSaveBounds={hasSaveBounds} " +
+                        $"t0={t0:HH:mm:ss.fff} t1={t1:HH:mm:ss.fff} upper={upperBound:HH:mm:ss.fff} " +
+                        $"triggersInGap={inGap.Count} (dither={ditherCnt} center={centerCnt}) " +
+                        $"(prevExp={prev.ExposureStartUtc:HH:mm:ss.fff} curExp={cur.ExposureStartUtc:HH:mm:ss.fff})");
+                }
                 var combinedTriggers = new List<TimedTrigger>();
                 if (deferredSeeDithers.Count > 0) {
                     SeeDriftLog.Debug($"NinaLogCorrelator: Adding {deferredSeeDithers.Count} deferred SeeDither(s) to frame pair {i-1}→{i} (frames {prev.FrameIndex}→{cur.FrameIndex})");

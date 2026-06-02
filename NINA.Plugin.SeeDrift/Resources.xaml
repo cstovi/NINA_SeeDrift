@@ -152,7 +152,7 @@
                           VerticalAlignment="Center"
                           Margin="0,0,8,0"
                           MinWidth="320"
-                          ToolTip="Recent NINA logs from the last 14 days. Selecting one fills the log path below. Unknown scope means SeeDrift did not find Alpaca telescope discovery, Telephoto Camera connect, or Telephoto disconnect (Disconnecting from … Seestar … Telephoto Camera) in that log — it does not affect solving."/>
+                          ToolTip="Recent NINA logs — the dropdown shows the last ten sessions. Selecting one fills the log path below. Unknown scope means SeeDrift did not find Alpaca telescope discovery, Telephoto Camera connect, or Telephoto disconnect (Disconnecting from … Seestar … Telephoto Camera) in that log — it does not affect solving."/>
                 <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshRecentLogSessionsCommand}" Padding="10,4" MinWidth="88"/>
             </Grid>
 
@@ -162,6 +162,25 @@
                 <TextBlock Text="{Binding SelectedRecentLogSessionDetailText, Mode=OneWay}"
                            Foreground="#94a3b8" FontSize="11" TextWrapping="Wrap" LineHeight="16"/>
             </Border>
+
+            <TextBlock Text="Log file path" FontWeight="SemiBold" Foreground="#e2e8f0" Margin="0,0,0,4"/>
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         Text="{Binding TestReportLogFilePath, UpdateSourceTrigger=PropertyChanged}"
+                         FontFamily="Consolas"
+                         VerticalAlignment="Center"
+                         Margin="0,0,8,0"
+                         ToolTip="Type or paste any NINA .log path here. This overrides the dropdown above when you click Run report."/>
+                <Button Grid.Column="1"
+                        Content="Browse…"
+                        Command="{Binding BrowseTestReportLogCommand}"
+                        Padding="10,4"
+                        MinWidth="88"/>
+            </Grid>
 
             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                 <Button Content="Run report" Command="{Binding RunTestReportCommand}" Padding="12,6"

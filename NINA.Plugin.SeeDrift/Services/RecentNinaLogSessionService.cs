@@ -8,10 +8,9 @@ using NINA.Plugin.SeeDrift.Utility;
 namespace NINA.Plugin.SeeDrift.Services {
 
     internal static class RecentNinaLogSessionService {
-        private static readonly TimeSpan RecentWindow = TimeSpan.FromDays(14);
+        private const int RecentSessionLimit = 10;
 
         public static IReadOnlyList<RecentNinaLogSession> LoadRecentSessions() {
-            var cutoff = DateTime.Now.Subtract(RecentWindow).Date;
             var logs = NinaLogCorrelator.GetAllNinaLogFiles()
                 .Select(p => new {
                     Path = p,
@@ -19,18 +18,20 @@ namespace NINA.Plugin.SeeDrift.Services {
                         ? start
                         : File.GetLastWriteTime(p)
                 })
-                .Where(x => x.Start >= cutoff)
                 .OrderByDescending(x => x.Start)
                 .ToList();
 
             var sessions = new List<RecentNinaLogSession>();
             foreach (var log in logs) {
-                sessions.Add(BuildSummary(log.Path, log.Start));
+                var summary = BuildSummary(log.Path, log.Start);
+                if (summary.TargetCount == 0)
+                    continue;
+                sessions.Add(summary);
+                if (sessions.Count >= RecentSessionLimit)
+                    break;
             }
 
-            return sessions
-                .Where(s => s.TargetCount > 0)
-                .ToList();
+            return sessions;
         }
 
         private static RecentNinaLogSession BuildSummary(string logPath, DateTime localStart) {

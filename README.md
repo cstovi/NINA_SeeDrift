@@ -36,7 +36,7 @@ Set **Options → Imaging → image file path** in NINA so saved lights land whe
 
 ### Create report (options panel)
 
-Under **Plugins → SeeDrift**, choose a NINA session log from the last 14 days (or **Browse** / paste any **`.log`** path), then click **Run report**. The recent list hides logs with zero detected targets and summarizes each candidate session by detected Seestar identity, target count, usable image count, and duration; the entire selected log file is used for the report. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving). When the run finishes successfully, **Open** appears as an underlined **file name** you can click to launch the night HTML.
+Under **Plugins → SeeDrift**, choose one of the last ten NINA session logs (or **Browse…** / paste any **`.log`** path), then click **Run report**. The recent list hides logs with zero detected targets and summarizes each candidate session by detected Seestar identity, target count, usable image count, and duration; the entire selected log file is used for the report. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving). When the run finishes successfully, **Open** appears as an underlined **file name** you can click to launch the night HTML.
 
 Successful runs show **processing time** (log read through plate solves and HTML save) in the **night HTML** batch line and in the **completion** line (**NINA status bar** after **Stop**; **Report status** in the plugin panel).
 

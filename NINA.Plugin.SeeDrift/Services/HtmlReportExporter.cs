@@ -718,6 +718,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("    <div class=\"mt-4 grid gap-3 sm:grid-cols-2\">");
             sb.AppendLine("      <div class=\"rounded-lg border border-slate-700 bg-slate-900/40 p-3\">");
             sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-sky-400\">Net drift rate</p>");
+            sb.AppendLine("        <p class=\"text-xs text-slate-500\">Overall drift from the first frame to the last</p>");
             var rate = analysis.DriftRate;
             var px = rate.TotalPixelsPerMinute.HasValue
                 ? FormattableString.Invariant($" · ≈ {rate.TotalPixelsPerMinute.Value:0.##} px/min")
@@ -770,14 +771,18 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             if (risk.IntervalCount > 0) {
                 sb.AppendLine(
-                    $"      <p class=\"mt-3 text-sm text-slate-200\">{risk.NaturalDriftArcSecPerMinute:0.##}″/min{Escape(px)} (between corrections)</p>");
+                    $"      <p class=\"mt-3 text-xs text-slate-500\">Average drift between dithers and center corrections — your mount's raw performance</p>");
+                sb.AppendLine(
+                    $"      <p class=\"mt-1 text-sm text-slate-200\">{risk.NaturalDriftArcSecPerMinute:0.##}″/min{Escape(px)} (between corrections)</p>");
                 if (risk.EstimatedDriftPerExposurePixels.HasValue) {
                     var assessment = risk.EstimatedDriftPerExposurePixels.Value < 1.0 ? "excellent"
                         : risk.EstimatedDriftPerExposurePixels.Value < 2.0 ? "acceptable"
                         : "may show elongation";
+                    sb.AppendLine("      <p class=\"mt-3 text-xs text-slate-500\">Typical star movement within a single exposure</p>");
                     sb.AppendLine(
                         $"      <p class=\"mt-1 text-xs text-slate-400\">Per-exposure drift: ~{risk.EstimatedDriftPerExposurePixels.Value:0.#} px ({assessment} for round stars)</p>");
                 } else if (risk.EstimatedDriftPerExposureArcSec.HasValue) {
+                    sb.AppendLine("      <p class=\"mt-3 text-xs text-slate-500\">Typical star movement within a single exposure</p>");
                     sb.AppendLine(
                         $"      <p class=\"mt-1 text-xs text-slate-400\">Per-exposure drift: ~{risk.EstimatedDriftPerExposureArcSec.Value:0.#}″</p>");
                 }

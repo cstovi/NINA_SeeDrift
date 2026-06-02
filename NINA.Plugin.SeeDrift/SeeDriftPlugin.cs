@@ -54,6 +54,7 @@ namespace NINA.Plugin.SeeDrift {
         public ICommand RunTestReportCommand { get; }
         public ICommand RefreshRecentLogSessionsCommand { get; }
         public ICommand OpenNightReportCommand { get; }
+        public ICommand BrowseTestReportLogCommand { get; }
         public ICommand RunCompareReportsCommand { get; }
         public ICommand OpenCompareReportCommand { get; }
         public ICommand RefreshSavedReportsCommand { get; }
@@ -91,6 +92,7 @@ namespace NINA.Plugin.SeeDrift {
             RaisePropertyChanged(nameof(AlternativeImageMappingAlternativeRoot));
 
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
+            BrowseTestReportLogCommand = new RelayCommand(_ => BrowseTestReportLog());
             RefreshRecentLogSessionsCommand = new RelayCommand(_ => { _ = RefreshRecentLogSessionsAsync(); });
             OpenNightReportCommand = new RelayCommand(_ => OpenNightReport());
             RunCompareReportsCommand = new RelayCommand(_ => RunCompareReports());
@@ -132,6 +134,43 @@ namespace NINA.Plugin.SeeDrift {
 
                 RaisePropertyChanged(nameof(TestReportStatusDisplayText));
                 RaisePropertyChanged(nameof(TestReportChromeVisibility));
+            }
+        }
+
+        private void BrowseTestReportLog() {
+            try {
+                using var dialog = new WinForms.OpenFileDialog {
+                    Title = "Select NINA log file",
+                    Filter = "NINA log files (*.log)|*.log|All files (*.*)|*.*",
+                    CheckFileExists = true,
+                    Multiselect = false
+                };
+                var currentPath = TestReportLogFilePath?.Trim() ?? "";
+                if (!string.IsNullOrWhiteSpace(currentPath)) {
+                    dialog.InitialDirectory = Path.GetDirectoryName(currentPath);
+                    dialog.FileName = Path.GetFileName(currentPath);
+                } else {
+                    var logsDir = GetDefaultNinaLogsDirectory();
+                    if (!string.IsNullOrWhiteSpace(logsDir))
+                        dialog.InitialDirectory = logsDir;
+                }
+
+                if (dialog.ShowDialog() == WinForms.DialogResult.OK)
+                    TestReportLogFilePath = dialog.FileName;
+            } catch (Exception ex) {
+                SeeDriftLog.Warning($"SeeDrift: choosing log file failed — {ex.Message}");
+            }
+        }
+
+        private static string GetDefaultNinaLogsDirectory() {
+            try {
+                var path = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "NINA",
+                    "Logs");
+                return Directory.Exists(path) ? path : "";
+            } catch {
+                return "";
             }
         }
 
@@ -180,8 +219,8 @@ namespace NINA.Plugin.SeeDrift {
 
                     RaisePropertyChanged(nameof(SelectedRecentLogSession));
                     RecentLogSessionsStatusText = sessions.Count == 0
-                        ? "No NINA logs found from the last 14 days."
-                        : $"Recent NINA logs — last 14 days ({sessions.Count}).";
+                        ? "No recent NINA logs found."
+                        : $"Recent NINA logs — latest {sessions.Count} (max 10).";
                     ScheduleRefreshResolvedReportForSelectedLog();
                 });
             } catch (Exception ex) {
