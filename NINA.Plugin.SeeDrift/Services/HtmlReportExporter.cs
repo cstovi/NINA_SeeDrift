@@ -791,7 +791,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                         : risk.DitherHeadroomRatio.Value >= 2.0 ? "acceptable"
                         : "tight";
                     sb.AppendLine(
-                        $"      <p class=\"mt-1 text-xs text-slate-400\">Dither headroom: <span class=\"font-semibold text-slate-200\">{risk.DitherHeadroomRatio.Value:0.1}×</span> ({assessment}) — Drift between dithers: ~{risk.BetweenDitherDriftPixels.Value:0.#} px</p>");
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Dither headroom: <span class=\"font-semibold text-slate-200\">{risk.DitherHeadroomRatio.Value:0.0}×</span> ({assessment}) — Drift between dithers: ~{risk.BetweenDitherDriftPixels.Value:0.#} px</p>");
                 } else if (risk.BetweenDitherDriftArcSec.HasValue) {
                     sb.AppendLine(
                         $"      <p class=\"mt-1 text-xs text-slate-400\">Drift between dithers: ~{risk.BetweenDitherDriftArcSec.Value:0.#}″</p>");
