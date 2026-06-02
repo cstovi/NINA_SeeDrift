@@ -904,10 +904,13 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (group.Count < 2)
                 return "[]";
             var list = new List<object>();
+            var markerCount = 0;
             for (var i = 1; i < group.Count; i++) {
                 if (IsReturnVisitBoundary(plan, i))
                     continue;
                 var markers = group[i].EdgeSequencerMarkers;
+                if (markers != null && markers.Count > 0)
+                    markerCount += markers.Count;
                 if (markers == null || markers.Count == 0)
                     continue;
 
@@ -936,6 +939,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 }
             }
 
+            SeeDriftLog.Debug($"FormatEdgeMidpointMarkersJson: group.Count={group.Count}, markerCount={markerCount}, outputCount={list.Count}");
             return JsonSerializer.Serialize(list);
         }
 

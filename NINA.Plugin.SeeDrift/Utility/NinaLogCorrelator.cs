@@ -599,13 +599,20 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     .OrderBy(t => t.UtcTime)
                     .ToList();
                 var combinedTriggers = new List<TimedTrigger>();
-                if (deferredSeeDithers.Count > 0)
+                if (deferredSeeDithers.Count > 0) {
+                    SeeDriftLog.Debug($"NinaLogCorrelator: Adding {deferredSeeDithers.Count} deferred SeeDither(s) to frame pair {i-1}→{i} (frames {prev.FrameIndex}→{cur.FrameIndex})");
                     combinedTriggers.AddRange(deferredSeeDithers);
+                }
                 var isLastGap = i == ordered.Count - 1;
+                var isTargetBoundary = !string.Equals(
+                    prev.TargetName?.Trim() ?? "",
+                    cur.TargetName?.Trim() ?? "",
+                    StringComparison.OrdinalIgnoreCase);
                 deferredSeeDithers = new List<TimedTrigger>();
 
                 foreach (var tr in inGap) {
-                    if (tr.IsSeeDither && !isLastGap) {
+                    if (tr.IsSeeDither && !isLastGap && !isTargetBoundary) {
+                        SeeDriftLog.Debug($"NinaLogCorrelator: Deferring SeeDither from frame pair {i-1}→{i} (frames {prev.FrameIndex}→{cur.FrameIndex}) to next pair");
                         deferredSeeDithers.Add(tr);
                     } else {
                         combinedTriggers.Add(tr);
