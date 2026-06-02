@@ -604,14 +604,14 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     combinedTriggers.AddRange(deferredSeeDithers);
                 }
                 var isLastGap = i == ordered.Count - 1;
-                var isTargetBoundary = !string.Equals(
-                    prev.TargetName?.Trim() ?? "",
-                    cur.TargetName?.Trim() ?? "",
-                    StringComparison.OrdinalIgnoreCase);
+                // Check if NEXT frame (where we'd defer TO) is a different target
+                var nextTargetName = (i < ordered.Count - 1) ? ordered[i + 1].TargetName?.Trim() ?? "" : "";
+                var curTargetName = cur.TargetName?.Trim() ?? "";
+                var wouldCrossTargetBoundary = !isLastGap && !string.Equals(curTargetName, nextTargetName, StringComparison.OrdinalIgnoreCase);
                 deferredSeeDithers = new List<TimedTrigger>();
 
                 foreach (var tr in inGap) {
-                    if (tr.IsSeeDither && !isLastGap && !isTargetBoundary) {
+                    if (tr.IsSeeDither && !isLastGap && !wouldCrossTargetBoundary) {
                         SeeDriftLog.Debug($"NinaLogCorrelator: Deferring SeeDither from frame pair {i-1}→{i} (frames {prev.FrameIndex}→{cur.FrameIndex}) to next pair");
                         deferredSeeDithers.Add(tr);
                     } else {
