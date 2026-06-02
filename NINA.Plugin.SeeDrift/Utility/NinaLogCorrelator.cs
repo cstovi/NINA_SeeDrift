@@ -568,6 +568,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
             var saveByFileName = BuildSaveUtcByFileName(imageSaves);
             var ordered = samples.OrderBy(s => s.FrameIndex).ToList();
             var usedSeeDitherEntries = new HashSet<SeeDitherLogEntry>();
+            var deferredSeeDithers = new List<TimedTrigger>();
             for (var i = 1; i < ordered.Count; i++) {
                 var prev = ordered[i - 1];
                 var cur = ordered[i];
@@ -597,7 +598,27 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         && t.UtcTime < upperBound)
                     .OrderBy(t => t.UtcTime)
                     .ToList();
-                if (inGap.Count == 0)
+                var combinedTriggers = new List<TimedTrigger>();
+                if (deferredSeeDithers.Count > 0) {
+                    SeeDriftLog.Debug($"NinaLogCorrelator: Adding {deferredSeeDithers.Count} deferred SeeDither(s) to frame pair {i-1}→{i} (frames {prev.FrameIndex}→{cur.FrameIndex})");
+                    combinedTriggers.AddRange(deferredSeeDithers);
+                }
+                var isLastGap = i == ordered.Count - 1;
+                var isTargetBoundary = !string.Equals(
+                    prev.TargetName?.Trim() ?? "",
+                    cur.TargetName?.Trim() ?? "",
+                    StringComparison.OrdinalIgnoreCase);
+                deferredSeeDithers = new List<TimedTrigger>();
+
+                foreach (var tr in inGap) {
+                    if (tr.IsSeeDither && !isLastGap && !isTargetBoundary) {
+                        SeeDriftLog.Debug($"NinaLogCorrelator: Deferring SeeDither from frame pair {i-1}→{i} (frames {prev.FrameIndex}→{cur.FrameIndex}) to next pair");
+                        deferredSeeDithers.Add(tr);
+                    } else {
+                        combinedTriggers.Add(tr);
+                    }
+                }
+                if (combinedTriggers.Count == 0)
                     continue;
 
                 var measuredTail = BuildMeasuredFrameToFrameLines(prev, cur);
@@ -611,7 +632,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 var usedPulses = new HashSet<DitherPulse>();
                 var markers = new List<SequencerEdgeMarker>();
 
-                foreach (var tr in inGap) {
+                foreach (var tr in combinedTriggers) {
                     var eventLines = new List<string> { BetweenFramesHoverLine(prev, cur) };
                     DitherPulse? pulse = null;
                     if (tr.Kind == TriggerKind.Dither) {
