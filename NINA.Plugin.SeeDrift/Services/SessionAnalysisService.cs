@@ -913,11 +913,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 } else if (markers.Any(m => m.IsDither)) {
                     label = "dither";
                     tone = "dither";
-                } else if (step > Math.Max(5.0, analysis.DriftRate.TotalArcSecPerMinute)) {
-                    label = "drifting";
-                    tone = "warn";
                 } else {
-                    label = "tracking";
+                    label = "imaging";
                     tone = "good";
                 }
                 yield return new QualityTimelineSegment {
