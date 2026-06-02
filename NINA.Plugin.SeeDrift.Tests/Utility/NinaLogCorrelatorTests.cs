@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using NINA.Plugin.SeeDrift.Models;
@@ -117,6 +118,46 @@ namespace NINA.Plugin.SeeDrift.Tests.Utility {
                 if (File.Exists(logPath)) {
                     File.Delete(logPath);
                 }
+            }
+        }
+
+        [Fact]
+        public void TryCollectSavedImagePaths_respects_local_clock_window_when_log_has_no_offset() {
+            var armLocal = new DateTime(2026, 6, 1, 22, 0, 0, DateTimeKind.Local);
+            var utcOffset = TimeZoneInfo.Local.GetUtcOffset(armLocal);
+            if (utcOffset == TimeSpan.Zero && !TimeZoneInfo.Local.SupportsDaylightSavingTime)
+                return; // Environment already UTC — no difference to assert.
+
+            var disarmLocal = armLocal.AddHours(6);
+            var logPath = Path.Combine(Path.GetTempPath(), "SeeDriftTest_" + Guid.NewGuid().ToString("N") + ".log");
+
+            static string FormatLocal(DateTime dt) => dt.ToString("yyyy-MM-ddTHH:mm:ss.ffff", CultureInfo.InvariantCulture);
+
+            var logLines = new[] {
+                $"{FormatLocal(armLocal.AddMinutes(-5))}|INFO|BaseImageData.cs|SaveToDisk|0|Saved image to C\\temp\\before_arm.fits",
+                $"{FormatLocal(armLocal.AddMinutes(5))}|INFO|BaseImageData.cs|SaveToDisk|0|Saved image to C\\temp\\within_window_1.fits",
+                $"{FormatLocal(disarmLocal.AddMinutes(-5))}|INFO|BaseImageData.cs|SaveToDisk|0|Saved image to C\\temp\\within_window_2.fits"
+            };
+            File.WriteAllLines(logPath, logLines);
+
+            try {
+                var success = NinaLogCorrelator.TryCollectSavedImagePathsFromLogs(
+                    new[] { logPath },
+                    armLocal.ToUniversalTime(),
+                    disarmLocal.ToUniversalTime(),
+                    out var ordered,
+                    out _,
+                    out _);
+
+                Assert.True(success);
+                Assert.Equal(new[] {
+                        "C\\temp\\within_window_1.fits",
+                        "C\\temp\\within_window_2.fits"
+                    },
+                    ordered.Select(o => o.path).ToArray());
+            } finally {
+                if (File.Exists(logPath))
+                    File.Delete(logPath);
             }
         }
     }

@@ -930,14 +930,26 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 if (DateTime.TryParse(raw,
                         CultureInfo.InvariantCulture,
                         DateTimeStyles.RoundtripKind,
-                        out var dtRoundtrip) && dtRoundtrip.Kind == DateTimeKind.Utc) {
-                    utc = dtRoundtrip;
-                    return true;
+                        out var dtRoundtrip)) {
+                    if (dtRoundtrip.Kind == DateTimeKind.Utc) {
+                        utc = dtRoundtrip;
+                        return true;
+                    }
+
+                    if (dtRoundtrip.Kind == DateTimeKind.Local) {
+                        utc = dtRoundtrip.ToUniversalTime();
+                        return true;
+                    }
+
+                    if (dtRoundtrip.Kind == DateTimeKind.Unspecified) {
+                        utc = DateTime.SpecifyKind(dtRoundtrip, DateTimeKind.Local).ToUniversalTime();
+                        return true;
+                    }
                 }
 
                 if (DateTimeOffset.TryParse(raw,
                         CultureInfo.InvariantCulture,
-                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                        DateTimeStyles.AssumeLocal | DateTimeStyles.AdjustToUniversal,
                         out var dto)) {
                     utc = dto.UtcDateTime;
                     return true;
@@ -961,7 +973,10 @@ namespace NINA.Plugin.SeeDrift.Utility {
             if (!m.Success)
                 return false;
             var raw = m.Value;
-            if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto)) {
+            if (DateTimeOffset.TryParse(raw,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeLocal | DateTimeStyles.AdjustToUniversal,
+                    out var dto)) {
                 utc = dto.UtcDateTime;
                 return true;
             }
