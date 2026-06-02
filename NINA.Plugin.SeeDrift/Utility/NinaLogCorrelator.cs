@@ -603,21 +603,23 @@ namespace NINA.Plugin.SeeDrift.Utility {
                     SeeDriftLog.Debug($"NinaLogCorrelator: Adding {deferredSeeDithers.Count} deferred SeeDither(s) to frame pair {i-1}→{i} (frames {prev.FrameIndex}→{cur.FrameIndex})");
                     combinedTriggers.AddRange(deferredSeeDithers);
                 }
+
+                var nextDeferredSeeDithers = new List<TimedTrigger>();
                 var isLastGap = i == ordered.Count - 1;
                 // Check if NEXT frame (where we'd defer TO) is a different target
                 var nextTargetName = (i < ordered.Count - 1) ? ordered[i + 1].TargetName?.Trim() ?? "" : "";
                 var curTargetName = cur.TargetName?.Trim() ?? "";
                 var wouldCrossTargetBoundary = !isLastGap && !string.Equals(curTargetName, nextTargetName, StringComparison.OrdinalIgnoreCase);
-                deferredSeeDithers = new List<TimedTrigger>();
 
                 foreach (var tr in inGap) {
                     if (tr.IsSeeDither && !isLastGap && !wouldCrossTargetBoundary) {
                         SeeDriftLog.Debug($"NinaLogCorrelator: Deferring SeeDither from frame pair {i-1}→{i} (frames {prev.FrameIndex}→{cur.FrameIndex}) to next pair");
-                        deferredSeeDithers.Add(tr);
+                        nextDeferredSeeDithers.Add(tr);
                     } else {
                         combinedTriggers.Add(tr);
                     }
                 }
+                deferredSeeDithers = nextDeferredSeeDithers;
                 if (combinedTriggers.Count == 0)
                     continue;
 
