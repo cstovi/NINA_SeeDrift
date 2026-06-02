@@ -36,7 +36,6 @@ namespace NINA.Plugin.SeeDrift.Services {
             FillRealizedDitherStats(analysis);
             analysis.Centers.AddRange(BuildCenterAnalyses(ordered));
             analysis.Timeline.AddRange(BuildTimeline(ordered, analysis));
-            analysis.Recommendations.AddRange(BuildRecommendations(analysis));
             return analysis;
         }
 
@@ -388,17 +387,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                 consistency, headroom, betweenPx, betweenArc, windowDrift, windowPx, ditherWindowCount,
                 assessedDithers.Count, medianAssessedDitherPx);
 
-            var (headlineStatus, headlineTone) = HeadlineOf(starStatus, starTone, walkStatus, walkTone);
-
             var detail = BuildDriftRiskDetail(
                 intervals.Count, rate, consistency,
                 starStatus, walkStatus, walkReason,
-                driftPerExposurePx, driftPerExposure, headroom,
-                headlineStatus);
+                driftPerExposurePx, driftPerExposure, headroom);
 
             return new DriftRiskSummary {
-                Status = headlineStatus,
-                Tone = headlineTone,
+                Status = "",
+                Tone = "",
                 IntervalCount = intervals.Count,
                 DurationMinutes = duration,
                 NaturalDriftArcSecPerMinute = rate,
@@ -554,35 +550,20 @@ namespace NINA.Plugin.SeeDrift.Services {
             return ("Low", "good", reason);
         }
 
-        private static (string Status, string Tone) HeadlineOf(
-                string starStatus, string starTone,
-                string walkStatus, string walkTone) {
-            int Rank(string tone) => tone switch { "warn" => 2, "ok" => 1, "good" => 0, _ => -1 };
-            return Rank(walkTone) >= Rank(starTone)
-                ? (walkStatus, walkTone)
-                : (starStatus, starTone);
-        }
-
         private static string BuildDriftRiskDetail(
                 int intervalCount, double rate, double consistency,
                 string starStatus, string walkStatus, string walkReason,
-                double? perExposurePixels, double? perExposureArcSec, double? headroom,
-                string headlineStatus) {
+                double? perExposurePixels, double? perExposureArcSec, double? headroom) {
             var perSub = perExposurePixels.HasValue
                 ? FormattableString.Invariant($"per-exposure motion {perExposurePixels.Value:0.##} px")
                 : perExposureArcSec.HasValue
                     ? FormattableString.Invariant($"per-exposure motion {perExposureArcSec.Value:0.##}\"")
                     : "per-exposure motion unknown";
-            var which = headlineStatus == starStatus && headlineStatus != walkStatus
-                ? "Star-shape signal drives the headline"
-                : headlineStatus == walkStatus && headlineStatus != starStatus
-                    ? "Walking-noise signal drives the headline"
-                    : "Star-shape and walking-noise signals agree";
             var head = headroom.HasValue
                 ? FormattableString.Invariant($" Dither headroom {headroom.Value:0.0}×.")
                 : "";
             return FormattableString.Invariant(
-                $"Advisory: {intervalCount} natural-drift intervals; {rate:0.##}\"/min, {consistency:P0} directional, {perSub}.{head} {which}: {walkReason}.");
+                $"Advisory: {intervalCount} natural-drift intervals; {rate:0.##}\"/min, {consistency:P0} directional, {perSub}.{head} {walkReason}.");
         }
 
         /// <summary>
@@ -921,156 +902,27 @@ namespace NINA.Plugin.SeeDrift.Services {
                 GetAnchoredPoint(ordered, cur, out var x1, out var y1);
                 var step = Math.Sqrt(Math.Pow(x1 - x0, 2) + Math.Pow(y1 - y0, 2));
                 var markers = cur.EdgeSequencerMarkers ?? new List<SequencerEdgeMarker>();
-                var label = markers.Any(m => !m.IsDither)
-                    ? "center recovery"
-                    : markers.Any(m => m.IsDither)
-                        ? "dither recovery"
-                        : step > Math.Max(5.0, analysis.DriftRate.TotalArcSecPerMinute)
-                            ? "drifting"
-                            : "stable";
-                var tone = label == "stable" ? "good" : label == "drifting" ? "warn" : "event";
+                string label;
+                string tone;
+                if (markers.Any(m => !m.IsDither)) {
+                    label = "center";
+                    tone = "center";
+                } else if (markers.Any(m => m.IsDither)) {
+                    label = "dither";
+                    tone = "dither";
+                } else if (step > Math.Max(5.0, analysis.DriftRate.TotalArcSecPerMinute)) {
+                    label = "drifting";
+                    tone = "warn";
+                } else {
+                    label = "tracking";
+                    tone = "good";
+                }
                 yield return new QualityTimelineSegment {
                     StartUtc = prev.ExposureStartUtc,
                     EndUtc = cur.ExposureStartUtc,
                     Label = label,
                     Tone = tone,
                     Detail = FormattableString.Invariant($"Frame {prev.FrameIndex + 1}->{cur.FrameIndex + 1}: {step:0.##}\" step.")
-                };
-            }
-        }
-
-        private static IEnumerable<SessionRecommendation> BuildRecommendations(TargetAnalysis analysis) {
-            if (analysis.FrameCount < 3) {
-                yield return new SessionRecommendation { Level = "info", Text = "Need more solved frames before giving reliable setting hints." };
-                yield break;
-            }
-
-            var emitted = false;
-
-            // Star-shape: per-exposure motion concern. References put round stars at < 1-2 px/exposure.
-            if (analysis.DriftRisk.StarShapeTone == "warn") {
-                emitted = true;
-                var pxBit = analysis.DriftRisk.EstimatedDriftPerExposurePixels.HasValue
-                    ? FormattableString.Invariant($" ({analysis.DriftRisk.EstimatedDriftPerExposurePixels.Value:0.##} px/exposure)")
-                    : analysis.DriftRisk.EstimatedDriftPerExposureArcSec.HasValue
-                        ? FormattableString.Invariant($" ({analysis.DriftRisk.EstimatedDriftPerExposureArcSec.Value:0.#}\"/exposure)")
-                        : "";
-                yield return new SessionRecommendation {
-                    Level = "warn",
-                    Text = FormattableString.Invariant($"Per-exposure motion is large enough{pxBit} that single subs may show elongated stars. Shorter exposures, better polar alignment, or guiding (if applicable) help here.")
-                };
-            }
-
-            // Walking-noise: cumulative coherent drift vs the dither magnitude — different concern from star shape.
-            var assessedDithersAll = analysis.Dithers.Where(d => !d.IsSuspect).ToList();
-            var repeatedDirection = assessedDithersAll.Count(d => d.Assessment == "Repeated direction");
-            if (analysis.DriftRisk.WalkingNoiseTone == "warn") {
-                emitted = true;
-                var headBit = analysis.DriftRisk.DitherHeadroomRatio.HasValue
-                    ? FormattableString.Invariant($"Dither headroom is {analysis.DriftRisk.DitherHeadroomRatio.Value:0.0}× ")
-                    : "";
-                var consBit = analysis.DriftRisk.DirectionConsistency >= WalkingFallbackConsistencyCaution
-                    ? FormattableString.Invariant($" with {analysis.DriftRisk.DirectionConsistency:P0} directional drift in natural intervals")
-                    : "";
-                yield return new SessionRecommendation {
-                    Level = "warn",
-                    Text = $"{headBit}{consBit}. Coherent drift can correlate fixed-pattern noise across stacked subs (walking noise). Consider increasing Mount Dither Pixels in NINA, dithering more often, or addressing field drift (polar alignment / differential flexure)."
-                };
-                if (analysis.DriftRisk.StarShapeTone == "good") {
-                    yield return new SessionRecommendation {
-                        Level = "info",
-                        Text = "Stars in single exposures should still look fine — the walking-noise advisory is about correlated FPN across the stack, not elongation in any one frame."
-                    };
-                }
-                if (repeatedDirection > 0) {
-                    yield return new SessionRecommendation {
-                        Level = "warn",
-                        Text = FormattableString.Invariant($"{repeatedDirection} logged dither(s) repeated the same direction as the natural drift; the dither pattern is not randomizing the FPN. Check that NINA's dither randomization is enabled and dither size exceeds your drift between dithers.")
-                    };
-                }
-            } else if (analysis.DriftRisk.WalkingNoiseTone == "ok"
-                       && analysis.DriftRisk.DitherHeadroomRatio.HasValue
-                       && analysis.DriftRisk.DitherHeadroomRatio.Value < 3.0) {
-                emitted = true;
-                yield return new SessionRecommendation {
-                    Level = "info",
-                    Text = FormattableString.Invariant($"Dither headroom is {analysis.DriftRisk.DitherHeadroomRatio.Value:0.0}× — workable, but a larger Mount Dither Pixels (or fixing slow field drift) widens the margin against walking noise.")
-                };
-            }
-
-            if (analysis.DriftRate.TotalArcSecPerMinute > 1.0) {
-                emitted = true;
-                yield return new SessionRecommendation {
-                    Level = "warn",
-                    Text = FormattableString.Invariant($"Baseline drift is {analysis.DriftRate.TotalArcSecPerMinute:0.##}\"/min; compare altitude, stability, wind, and polar/framing setup between sessions.")
-                };
-            }
-
-            var assessedDithers = assessedDithersAll;
-            if (analysis.SuspectDitherCount > 0) {
-                emitted = true;
-                yield return new SessionRecommendation {
-                    Level = "warn",
-                    Text = FormattableString.Invariant($"Excluded {analysis.SuspectDitherCount} suspect dither interval(s) from dither assessment; discounted {analysis.SuspectDitherDiscountedAbsRaArcSec:0.#}\" RA and {analysis.SuspectDitherDiscountedAbsDecArcSec:0.#}\" Dec as likely tracking issues.")
-                };
-            }
-
-            var weak = assessedDithers.Count(d => d.Assessment == "Weak");
-            if (assessedDithers.Count > 0 && weak * 2 >= assessedDithers.Count) {
-                emitted = true;
-                yield return new SessionRecommendation {
-                    Level = "warn",
-                    Text = "At least half of logged dithers measured low movement; consider increasing dither size or checking guider dither response."
-                };
-            }
-
-            // Realized vs commanded magnitude shortfall — independent of "Weak" because the floor there
-            // is set from frame-to-frame noise, not the commanded slew. The pulse runs to completion
-            // before settle starts in NINA's normal flow, so a low ratio is more often mount mechanics
-            // (backlash on direction reversals, guide-rate calibration) than settle-time related; settle
-            // can still bias the measured centroid via residual motion during the next exposure.
-            if (analysis.RealizedDitherSampleCount >= 3
-                && analysis.MedianRealizedDitherRatio.HasValue
-                && analysis.MedianRealizedDitherPixels.HasValue
-                && analysis.MedianCommandedDitherPixels.HasValue
-                && analysis.MedianRealizedDitherRatio.Value < 0.8) {
-                emitted = true;
-                var pct = analysis.MedianRealizedDitherRatio.Value * 100.0;
-                yield return new SessionRecommendation {
-                    Level = "warn",
-                    Text = FormattableString.Invariant(
-                        $"Logged dithers measured roughly {pct:0.#}% of the commanded magnitude (median {analysis.MedianRealizedDitherPixels.Value:0.#} px measured vs {analysis.MedianCommandedDitherPixels.Value:0.#} px commanded across {analysis.RealizedDitherSampleCount} pulses). On small EQ mounts this is most often Dec backlash on direction-reversing dithers or a small guide-rate calibration offset; a too-short settle time can also bias the measured centroid via residual mount motion during the next exposure. Worth checking the Seestar Alpaca RA/Dec guide rates and, if the shortfall persists, raising settle time.")
-                };
-            }
-
-            var repeated = assessedDithers.Count(d => d.Assessment == "Repeated direction");
-            if (repeated > 0) {
-                emitted = true;
-                yield return new SessionRecommendation {
-                    Level = "info",
-                    Text = "Some dithers repeated the same direction; randomization may be spreading walking-noise patterns less than expected."
-                };
-            }
-
-            var ineffectiveCenters = analysis.Centers.Count(c => c.Assessment == "Ineffective");
-            if (analysis.Centers.Count > 0 && ineffectiveCenters * 2 >= analysis.Centers.Count) {
-                emitted = true;
-                yield return new SessionRecommendation {
-                    Level = "warn",
-                    Text = "Most center-after-drift events showed limited residual-drift reduction; threshold may be too low, or recenters may not settle before the next exposure."
-                };
-            } else if (analysis.Centers.Count == 0) {
-                emitted = true;
-                yield return new SessionRecommendation {
-                    Level = "info",
-                    Text = "No center-after-drift events correlated in this target; if drift is high, consider a lower center threshold."
-                };
-            }
-
-            if (!emitted && assessedDithers.Count > 0) {
-                yield return new SessionRecommendation {
-                    Level = "good",
-                    Text = "Dither and center behaviour looks broadly consistent in this session."
                 };
             }
         }

@@ -218,7 +218,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine($"      <canvas id=\"{canvasId}\"></canvas>");
                     sb.AppendLine("    </div>");
                     sb.AppendLine("    <p class=\"mt-2 text-xs text-slate-500\">Path: <span class=\"text-emerald-400\">●</span> start · <span class=\"text-orange-400\">●</span> end per visit (<span class=\"text-amber-400\">●</span> if one frame). Log triggers: <span class=\"text-purple-400\">△</span> dither · <span class=\"text-pink-400\">□</span> center. <span class=\"text-amber-300\">↻</span> return visit · <span class=\"text-amber-300\">?</span> possibly missing/unsolved. Hover for detail.</p>");
-                    sb.AppendLine($"    <p class=\"mt-2 text-xs text-slate-400\">{Escape(FormatMovementTotalsLine(visitPlan, grp))}</p>");
                     var ditherSegHtml = FormatDitherIntervalMovementHtml(visitPlan, grp);
                     if (!string.IsNullOrEmpty(ditherSegHtml))
                         sb.Append(ditherSegHtml);
@@ -411,7 +410,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("})();");
                     sb.AppendLine("</script>");
 
-                    AppendSequencerSection(sb, orderedFull, targetName);
                     sb.AppendLine("  </div>");
                 }
 
@@ -491,63 +489,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                 out var dRa, out var dDec);
             x = Math.Round(dRa, 4);
             y = Math.Round(dDec, 4);
-        }
-
-        /// <summary>
-        /// Sums absolute ΔRA and ΔDec step sizes between consecutive plotted points (same geometry as the chart).
-        /// </summary>
-        private static void SumAbsoluteSegmentMovementAlongTrace(IReadOnlyList<DriftSample> group, out double sumAbsRa, out double sumAbsDec) {
-            sumAbsRa = 0;
-            sumAbsDec = 0;
-            if (group.Count < 2)
-                return;
-
-            GetAnchoredPlotPoint(group, 0, out var prevX, out var prevY);
-            for (var i = 1; i < group.Count; i++) {
-                GetAnchoredPlotPoint(group, i, out var x, out var y);
-                sumAbsRa += Math.Abs(x - prevX);
-                sumAbsDec += Math.Abs(y - prevY);
-                prevX = x;
-                prevY = y;
-            }
-        }
-
-        /// <summary>Sums absolute cumulative-pixel steps between consecutive frames (detector axes).</summary>
-        private static void SumAbsoluteSegmentMovementInPixels(IReadOnlyList<DriftSample> group, out double sumAbsPx, out double sumAbsPy) {
-            sumAbsPx = 0;
-            sumAbsPy = 0;
-            if (group.Count < 2)
-                return;
-            var p0 = group[0];
-            if (!p0.CumulativePixelX.HasValue || !p0.CumulativePixelY.HasValue)
-                return;
-            var prevX = p0.CumulativePixelX!.Value;
-            var prevY = p0.CumulativePixelY!.Value;
-            for (var i = 1; i < group.Count; i++) {
-                var s = group[i];
-                if (!s.CumulativePixelX.HasValue || !s.CumulativePixelY.HasValue)
-                    return;
-                sumAbsPx += Math.Abs(s.CumulativePixelX!.Value - prevX);
-                sumAbsPy += Math.Abs(s.CumulativePixelY!.Value - prevY);
-                prevX = s.CumulativePixelX.Value;
-                prevY = s.CumulativePixelY.Value;
-            }
-        }
-
-        /// <summary>Median nominal arcsec/px among samples that have FITS scale (for pixel-equivalent caption).</summary>
-        private static bool TryMedianNominalPlateScale(IReadOnlyList<DriftSample> group, out double medianArcSecPerPx) {
-            medianArcSecPerPx = 0;
-            var list = new List<double>();
-            foreach (var s in group) {
-                if (s.NominalPlateScaleArcSecPerPx is double v && v > 0)
-                    list.Add(v);
-            }
-
-            if (list.Count == 0)
-                return false;
-            list.Sort();
-            medianArcSecPerPx = list[list.Count / 2];
-            return true;
         }
 
         private static string FormatTargetVisitSubtitleHtml(TargetVisitPlan plan, IReadOnlyList<DriftSample> grp) {
@@ -774,9 +715,9 @@ namespace NINA.Plugin.SeeDrift.Services {
         private static string FormatAnalysisSummaryHtml(TargetAnalysis analysis) {
             var sb = new StringBuilder();
             sb.Append(FormatDriftRiskHtml(analysis.DriftRisk));
-            sb.AppendLine("    <div class=\"mt-4 grid gap-3 sm:grid-cols-3\">");
+            sb.AppendLine("    <div class=\"mt-4 grid gap-3 sm:grid-cols-2\">");
             sb.AppendLine("      <div class=\"rounded-lg border border-slate-700 bg-slate-900/40 p-3\">");
-            sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-sky-400\">Drift rate</p>");
+            sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-sky-400\">Net drift rate</p>");
             var rate = analysis.DriftRate;
             var px = rate.TotalPixelsPerMinute.HasValue
                 ? FormattableString.Invariant($" · ≈ {rate.TotalPixelsPerMinute.Value:0.##} px/min")
@@ -784,80 +725,42 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine(
                 $"        <p class=\"mt-1 text-sm text-slate-200\">{rate.TotalArcSecPerMinute:0.###}″/min{Escape(px)}</p>");
             sb.AppendLine(
-                $"        <p class=\"mt-1 text-xs text-slate-500\">ΔRA {FmtSignedArcSec(rate.DeltaRaArcSecPerMinute)}″/min · ΔDec {FmtSignedArcSec(rate.DeltaDecArcSecPerMinute)}″/min</p>");
-            sb.AppendLine("      </div>");
-            sb.AppendLine("      <div class=\"rounded-lg border border-slate-700 bg-slate-900/40 p-3\">");
-            sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-purple-400\">Dither effectiveness</p>");
-            if (analysis.Dithers.Count == 0) {
-                sb.AppendLine("        <p class=\"mt-1 text-sm text-slate-300\">No logged dithers on this target.</p>");
-            } else {
-                var assessed = analysis.Dithers.Where(d => !d.IsSuspect).ToList();
-                var weak = assessed.Count(d => d.Assessment == "Weak");
-                var repeated = assessed.Count(d => d.Assessment == "Repeated direction");
-                var med = assessed.Count == 0
-                    ? 0
-                    : assessed.Select(d => d.MoveArcSec).OrderBy(v => v).ElementAt(assessed.Count / 2);
-                sb.AppendLine(
-                    $"        <p class=\"mt-1 text-sm text-slate-200\">{assessed.Count} assessed dither{(assessed.Count == 1 ? "" : "s")} · median {med:0.##}″</p>");
-                sb.AppendLine(
-                    $"        <p class=\"mt-1 text-xs text-slate-500\">Weak {weak} · repeated direction {repeated}</p>");
-                if (analysis.SuspectDitherCount > 0) {
-                    sb.AppendLine(
-                        $"        <p class=\"mt-1 text-xs text-amber-300\">Excluded suspect tracking intervals: {analysis.SuspectDitherCount}; discounted RA {analysis.SuspectDitherDiscountedAbsRaArcSec:0.#}″ · Dec {analysis.SuspectDitherDiscountedAbsDecArcSec:0.#}″.</p>");
-                }
-            }
+                $"        <p class=\"mt-1 text-xs text-slate-500\">First → last frame · ΔRA {FmtSignedArcSec(rate.DeltaRaArcSecPerMinute)}″/min · ΔDec {FmtSignedArcSec(rate.DeltaDecArcSecPerMinute)}″/min</p>");
             sb.AppendLine("      </div>");
             sb.AppendLine("      <div class=\"rounded-lg border border-slate-700 bg-slate-900/40 p-3\">");
             sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-pink-400\">Center-after-drift</p>");
             if (analysis.Centers.Count == 0) {
-                sb.AppendLine("        <p class=\"mt-1 text-sm text-slate-300\">No correlated center events.</p>");
+                sb.AppendLine("        <p class=\"mt-1 text-sm text-slate-300\">No correlated center events</p>");
             } else {
-                var helpful = analysis.Centers.Count(c => c.Assessment == "Helpful");
-                var partial = analysis.Centers.Count(c => c.Assessment == "Partial");
-                var ineffective = analysis.Centers.Count(c => c.Assessment == "Ineffective");
                 sb.AppendLine(
                     $"        <p class=\"mt-1 text-sm text-slate-200\">{analysis.Centers.Count} center event{(analysis.Centers.Count == 1 ? "" : "s")}</p>");
-                sb.AppendLine(
-                    $"        <p class=\"mt-1 text-xs text-slate-500\">Helpful {helpful} · partial {partial} · ineffective {ineffective}</p>");
             }
             sb.AppendLine("      </div>");
             sb.AppendLine("    </div>");
-
-            if (analysis.Recommendations.Count > 0) {
-                sb.AppendLine("    <div class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/30 p-3\">");
-                sb.AppendLine("      <p class=\"text-[10px] font-semibold uppercase tracking-wide text-amber-300\">Settings hints from this session</p>");
-                sb.AppendLine("      <ul class=\"mt-2 list-disc space-y-1 pl-5 text-xs text-slate-300\">");
-                foreach (var rec in analysis.Recommendations.Take(4))
-                    sb.AppendLine($"        <li>{Escape(rec.Text)}</li>");
-                sb.AppendLine("      </ul>");
-                sb.AppendLine("    </div>");
-            }
 
             return sb.ToString();
         }
 
         private static string FormatDriftRiskHtml(DriftRiskSummary risk) {
-            if (string.IsNullOrWhiteSpace(risk.Status))
+            var hasData = risk.IntervalCount > 0
+                || !string.IsNullOrWhiteSpace(risk.StarShapeStatus)
+                || !string.IsNullOrWhiteSpace(risk.WalkingNoiseStatus);
+            if (!hasData)
                 return "";
 
-            var tone = ToneTriple(risk.Tone, risk.Status);
             var px = risk.NaturalDriftPixelsPerMinute.HasValue
                 ? FormattableString.Invariant($" · ≈ {risk.NaturalDriftPixelsPerMinute.Value:0.##} px/min")
                 : "";
-            var detail = string.IsNullOrWhiteSpace(risk.Detail)
-                ? "Advisory only. This is a walking-noise risk hint, not an image-quality verdict."
-                : risk.Detail;
 
             var sb = new StringBuilder();
-            sb.AppendLine($"    <div class=\"mt-4 rounded-lg border {tone.Item1} {tone.Item2} p-3\">");
-            sb.AppendLine("      <div class=\"flex flex-wrap items-center justify-between gap-2\">");
-            sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-slate-300\">Drift / walking-noise risk</p>");
-            sb.AppendLine($"        <span class=\"rounded-full border {tone.Item1} px-2 py-0.5 text-xs font-semibold {tone.Item3}\">{Escape(tone.Item4)}</span>");
+            sb.AppendLine("    <div class=\"mt-4 rounded-lg border border-slate-700 bg-slate-900/40 p-3\">");
+            sb.AppendLine("      <div>");
+            sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-slate-300\">Drift advisory</p>");
             sb.AppendLine("      </div>");
 
-            // Sub-tier chips: star shape + walking noise so the headline label never surprises.
+            // Sub-tier chips: independent star shape and walking noise ratings.
             if (!string.IsNullOrWhiteSpace(risk.StarShapeStatus) || !string.IsNullOrWhiteSpace(risk.WalkingNoiseStatus)) {
-                sb.AppendLine("      <div class=\"mt-2 flex flex-wrap gap-2\">");
+                sb.AppendLine("      <div class=\"mt-2 flex flex-wrap gap-3\">");
                 if (!string.IsNullOrWhiteSpace(risk.StarShapeStatus))
                     sb.AppendLine($"        {FormatSubTierChip("Star shape", risk.StarShapeStatus, risk.StarShapeTone)}");
                 if (!string.IsNullOrWhiteSpace(risk.WalkingNoiseStatus))
@@ -867,22 +770,26 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             if (risk.IntervalCount > 0) {
                 sb.AppendLine(
-                    $"      <p class=\"mt-2 text-sm {tone.Item3}\">{risk.NaturalDriftArcSecPerMinute:0.##}″/min natural drift{Escape(px)} · {risk.DirectionConsistency:P0} directional</p>");
-                sb.AppendLine(
-                    $"      <p class=\"mt-1 text-xs text-slate-400\">Net drift without logged dither/center intervals: {risk.NetNaturalDriftArcSec:0.#}″ across {risk.IntervalCount} interval{(risk.IntervalCount == 1 ? "" : "s")}.</p>");
-                if (risk.EstimatedDriftPerExposureArcSec.HasValue) {
-                    var perSubPx = risk.EstimatedDriftPerExposurePixels.HasValue
-                        ? FormattableString.Invariant($" · ≈ {risk.EstimatedDriftPerExposurePixels.Value:0.##} px")
-                        : "";
+                    $"      <p class=\"mt-3 text-sm text-slate-200\">{risk.NaturalDriftArcSecPerMinute:0.##}″/min{Escape(px)} (between corrections)</p>");
+                if (risk.EstimatedDriftPerExposurePixels.HasValue) {
+                    var assessment = risk.EstimatedDriftPerExposurePixels.Value < 1.0 ? "excellent"
+                        : risk.EstimatedDriftPerExposurePixels.Value < 2.0 ? "acceptable"
+                        : "may show elongation";
                     sb.AppendLine(
-                        $"      <p class=\"mt-1 text-xs text-slate-400\">Star-shape hint: estimated {risk.EstimatedDriftPerExposureArcSec.Value:0.#}″ drift during a typical exposure{Escape(perSubPx)}. Round stars typically tolerate &lt; 1–2 px of motion per exposure.</p>");
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Per-exposure drift: ~{risk.EstimatedDriftPerExposurePixels.Value:0.#} px ({assessment} for round stars)</p>");
+                } else if (risk.EstimatedDriftPerExposureArcSec.HasValue) {
+                    sb.AppendLine(
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Per-exposure drift: ~{risk.EstimatedDriftPerExposureArcSec.Value:0.#}″</p>");
                 }
-                if (risk.DitherHeadroomRatio.HasValue && risk.BetweenDitherDriftArcSec.HasValue) {
-                    var ditherPxBit = risk.BetweenDitherDriftPixels.HasValue
-                        ? FormattableString.Invariant($" · ≈ {risk.BetweenDitherDriftPixels.Value:0.##} px between dithers")
-                        : "";
+                if (risk.DitherHeadroomRatio.HasValue && risk.BetweenDitherDriftPixels.HasValue) {
+                    var assessment = risk.DitherHeadroomRatio.Value >= 3.0 ? "good"
+                        : risk.DitherHeadroomRatio.Value >= 2.0 ? "acceptable"
+                        : "tight";
                     sb.AppendLine(
-                        $"      <p class=\"mt-1 text-xs text-slate-400\">Walking-noise hint: dither headroom <span class=\"font-semibold text-slate-200\">{risk.DitherHeadroomRatio.Value:0.0}×</span> (median dither magnitude vs cumulative drift between dithers — {risk.BetweenDitherDriftArcSec.Value:0.##}″ between dithers{Escape(ditherPxBit)}). Higher is safer.</p>");
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Dither headroom: <span class=\"font-semibold text-slate-200\">{risk.DitherHeadroomRatio.Value:0.1}×</span> ({assessment}) — Drift between dithers: ~{risk.BetweenDitherDriftPixels.Value:0.#} px</p>");
+                } else if (risk.BetweenDitherDriftArcSec.HasValue) {
+                    sb.AppendLine(
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Drift between dithers: ~{risk.BetweenDitherDriftArcSec.Value:0.#}″</p>");
                 } else if (risk.WorstWindowDriftArcSec.HasValue && risk.WorstWindowFrameCount > 0) {
                     var windowPx = risk.WorstWindowDriftPixels.HasValue
                         ? FormattableString.Invariant($" · ≈ {risk.WorstWindowDriftPixels.Value:0.##} px")
@@ -891,7 +798,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                         $"      <p class=\"mt-1 text-xs text-slate-400\">Walking-noise hint (no dither headroom data): worst short-window drift was {risk.WorstWindowDriftArcSec.Value:0.#}″ over {risk.WorstWindowFrameCount} frame{(risk.WorstWindowFrameCount == 1 ? "" : "s")}{Escape(windowPx)}.</p>");
                 }
             }
-            sb.AppendLine($"      <p class=\"mt-1 text-xs text-slate-500\">{Escape(detail)} Risk is advisory: star-shape is about single-exposure round stars (&lt; 1–2 px is typically acceptable), walking-noise is about cumulative drift between dithers vs the dither magnitude.</p>");
             sb.AppendLine("    </div>");
             return sb.ToString();
         }
@@ -908,7 +814,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         private static string FormatSubTierChip(string label, string status, string tone) {
             var t = ToneTriple(tone, status);
             return FormattableString.Invariant(
-                $"<span class=\"rounded-full border {t.Item1} {t.Item2} px-2 py-0.5 text-[11px] {t.Item3}\"><span class=\"font-semibold uppercase tracking-wide\">{Escape(label)}</span>: {Escape(status)}</span>");
+                $"<span class=\"rounded-full border {t.Item1} {t.Item2} px-3 py-1 text-xs {t.Item3}\"><span class=\"font-semibold uppercase tracking-wide\">{Escape(label)}</span>: {Escape(status)}</span>");
         }
 
         private static string FormatTimelineHtml(TargetAnalysis analysis) {
@@ -917,6 +823,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var sb = new StringBuilder();
             sb.AppendLine("    <div class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/30 p-3\">");
             sb.AppendLine("      <p class=\"text-[10px] font-semibold uppercase tracking-wide text-sky-400\">Session quality timeline</p>");
+            sb.AppendLine("      <p class=\"mt-1 text-xs text-slate-500\"><span class=\"text-emerald-400\">■</span> tracking · <span class=\"text-amber-400\">■</span> drifting · <span class=\"text-purple-400\">■</span> dither · <span class=\"text-pink-400\">■</span> center</p>");
             sb.AppendLine("      <div class=\"mt-2 flex h-3 overflow-hidden rounded bg-slate-800\">");
             var totalSeconds = analysis.Timeline.Sum(s => Math.Max(1.0, (s.EndUtc - s.StartUtc).TotalSeconds));
             foreach (var seg in analysis.Timeline) {
@@ -925,7 +832,11 @@ namespace NINA.Plugin.SeeDrift.Services {
                     ? "bg-emerald-500/80"
                     : seg.Tone == "warn"
                         ? "bg-amber-500/80"
-                        : "bg-sky-500/80";
+                        : seg.Tone == "dither"
+                            ? "bg-purple-500/80"
+                            : seg.Tone == "center"
+                                ? "bg-pink-500/80"
+                                : "bg-sky-500/80";
                 sb.AppendLine(
                     $"        <span class=\"{cls}\" style=\"width:{pct.ToString("0.###", CultureInfo.InvariantCulture)}%\" title=\"{Escape(seg.Label)}: {Escape(seg.Detail)}\"></span>");
             }
@@ -937,7 +848,11 @@ namespace NINA.Plugin.SeeDrift.Services {
                     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
                     : tone == "warn"
                         ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
-                        : "border-sky-500/40 bg-sky-500/10 text-sky-200";
+                        : tone == "dither"
+                            ? "border-purple-500/40 bg-purple-500/10 text-purple-200"
+                            : tone == "center"
+                                ? "border-pink-500/40 bg-pink-500/10 text-pink-200"
+                                : "border-sky-500/40 bg-sky-500/10 text-sky-200";
                 sb.AppendLine(
                     $"        <span class=\"rounded-full border px-2 py-0.5 {cls}\">{Escape(g.Key)} {g.Count()}</span>");
             }
@@ -966,44 +881,6 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (devices.Count > 1 || devices.Any(d => d.Equals(SeestarDeviceInfo.Mixed.DisplayName, StringComparison.OrdinalIgnoreCase)))
                 return SeestarDeviceInfo.Mixed;
             return SeestarDeviceInfo.FromId(devices[0]);
-        }
-
-        private static string FormatMovementTotalsLine(TargetVisitPlan plan, IReadOnlyList<DriftSample> group) {
-            if (group.Count < 2)
-                return "Single frame — no frame-to-frame movement to sum.";
-            double sumRa = 0;
-            double sumDec = 0;
-            double sumPx = 0;
-            double sumPy = 0;
-            var anyPx = group.All(s => s.IsPixelPath);
-            foreach (var visit in plan.Visits) {
-                if (visit.Count < 2)
-                    continue;
-                SumAbsoluteSegmentMovementAlongTrace(visit, out var ra, out var dec);
-                sumRa += ra;
-                sumDec += dec;
-                if (anyPx) {
-                    SumAbsoluteSegmentMovementInPixels(visit, out var px, out var py);
-                    sumPx += px;
-                    sumPy += py;
-                }
-            }
-            var arc = FormattableString.Invariant($"ΔRA {sumRa:0.###}″ · ΔDec {sumDec:0.###}″");
-
-            if (anyPx) {
-                var px = FormattableString.Invariant($" · detector Σ|Δx| {sumPx:0.##} px · Σ|Δy| {sumPy:0.##} px");
-                return arc + px;
-            }
-
-            if (TryMedianNominalPlateScale(group, out var scale)) {
-                var eqRa = sumRa / scale;
-                var eqDec = sumDec / scale;
-                var approx = FormattableString.Invariant(
-                    $" · ≈ Σ|Δx| {eqRa:0.##} px · Σ|Δy| {eqDec:0.##} px equivalent (÷ median {scale:0.###}″/px from FITS XPIXSZ+FOCALLEN)");
-                return arc + approx;
-            }
-
-            return arc;
         }
 
         private static string FormatScatterPointsJsonAnchored(IReadOnlyList<DriftSample> group) {
@@ -1096,77 +973,6 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             return JsonSerializer.Serialize(list);
-        }
-
-        private static bool SameSectionTarget(string? sampleTarget, string sectionTargetName) {
-            var a = string.IsNullOrWhiteSpace(sampleTarget) ? "Unknown" : sampleTarget.Trim();
-            return string.Equals(a, sectionTargetName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
-        /// Rows where both endpoints of the interval belong to <paramref name="sectionTargetName"/> (same-target consecutive frames in this batch).
-        /// </summary>
-        private static void AppendSequencerSection(StringBuilder sb, IReadOnlyList<DriftSample> fullBatchOrdered, string sectionTargetName) {
-            var rows = new List<(string fromFn, string toFn, string kind, string detail)>();
-            for (var i = 1; i < fullBatchOrdered.Count; i++) {
-                var prev = fullBatchOrdered[i - 1];
-                var cur = fullBatchOrdered[i];
-                if (!SameSectionTarget(prev.TargetName, sectionTargetName)
-                    || !SameSectionTarget(cur.TargetName, sectionTargetName))
-                    continue;
-
-                var m = cur.EdgeSequencerMarkers;
-                if (m == null || m.Count == 0)
-                    continue;
-
-                var prevFn = prev.FileName;
-                foreach (var e in m) {
-                    var kind = e.IsDither ? "DitherAfterExposures" : "CenterAfterDrift";
-                    rows.Add((prevFn, cur.FileName, kind, e.Tooltip));
-                }
-            }
-
-            sb.AppendLine("    <div class=\"mt-8\">");
-
-            if (rows.Count == 0) {
-                sb.AppendLine("      <h4 class=\"text-sm font-semibold uppercase tracking-wide text-sky-400\">Sequencer events (NINA logs)</h4>");
-                sb.AppendLine("      <div class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/40 p-4\">");
-                sb.AppendLine($"        <p class=\"text-sm text-slate-300\">No correlated dither or center-after-drift events between consecutive frames for target <span class=\"text-sky-300\">{Escape(sectionTargetName)}</span>.</p>");
-                sb.AppendLine("        <p class=\"mt-2 text-xs leading-relaxed text-slate-500\">SeeDrift reads the same NINA log(s) used for this run. Events attach only to intervals between two lights of the same target.</p>");
-                sb.AppendLine("      </div>");
-                sb.AppendLine("    </div>");
-                return;
-            }
-
-            sb.AppendLine("      <details class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/30\">");
-            sb.AppendLine(
-                $"        <summary class=\"cursor-pointer px-3 py-2.5 text-sm font-semibold uppercase tracking-wide text-sky-400 marker:text-sky-400 hover:bg-slate-900/50\">"
-                + $"Sequencer events (NINA logs) — {rows.Count} row{(rows.Count == 1 ? "" : "s")} (click to expand)</summary>");
-            sb.AppendLine("        <div class=\"border-t border-slate-700\">");
-            sb.AppendLine("          <p class=\"px-3 pt-3 text-xs text-slate-500\">Between-frame triggers for this target (same-target consecutive frames only).</p>");
-            sb.AppendLine("          <div class=\"mt-2 overflow-x-auto px-3 pb-3\">");
-            sb.AppendLine("            <table class=\"seedrift-seq-table min-w-full table-fixed divide-y divide-slate-700 text-left text-xs\">");
-            sb.AppendLine("              <thead class=\"bg-slate-900/80 text-sky-300\"><tr>");
-            sb.AppendLine("                <th class=\"w-[22%] px-3 py-2 font-medium\">From frame</th>");
-            sb.AppendLine("                <th class=\"w-[22%] px-3 py-2 font-medium\">To frame</th>");
-            sb.AppendLine("                <th class=\"w-[14%] whitespace-nowrap px-3 py-2 font-medium\">Kind</th>");
-            sb.AppendLine("                <th class=\"w-[42%] px-3 py-2 font-medium\">Detail</th>");
-            sb.AppendLine("              </tr></thead>");
-            sb.AppendLine("              <tbody class=\"divide-y divide-slate-800 bg-slate-950/40 text-slate-300\">");
-            foreach (var r in rows) {
-                sb.AppendLine("              <tr class=\"align-top\">");
-                sb.AppendLine($"                <td class=\"break-all px-3 py-2 font-mono text-[11px] leading-snug\">{Escape(r.fromFn)}</td>");
-                sb.AppendLine($"                <td class=\"break-all px-3 py-2 font-mono text-[11px] leading-snug\">{Escape(r.toFn)}</td>");
-                sb.AppendLine($"                <td class=\"whitespace-normal px-3 py-2 align-top\">{Escape(r.kind)}</td>");
-                sb.AppendLine($"                <td class=\"break-words px-3 py-2 text-[11px] leading-snug text-slate-400\">{Escape(r.detail)}</td>");
-                sb.AppendLine("              </tr>");
-            }
-            sb.AppendLine("              </tbody>");
-            sb.AppendLine("            </table>");
-            sb.AppendLine("          </div>");
-            sb.AppendLine("        </div>");
-            sb.AppendLine("      </details>");
-            sb.AppendLine("    </div>");
         }
 
         /// <summary>

@@ -127,11 +127,6 @@ namespace NINA.Plugin.SeeDrift.Models {
         public string Tone { get; init; } = "";
     }
 
-    public sealed class SessionRecommendation {
-        public string Level { get; init; } = "";
-        public string Text { get; init; } = "";
-    }
-
     public sealed class TargetAnalysis {
         public string TargetName { get; init; } = "";
         public int FrameCount { get; init; }
@@ -141,7 +136,6 @@ namespace NINA.Plugin.SeeDrift.Models {
         public List<DitherEventAnalysis> Dithers { get; init; } = new();
         public List<CenterEventAnalysis> Centers { get; init; } = new();
         public List<QualityTimelineSegment> Timeline { get; init; } = new();
-        public List<SessionRecommendation> Recommendations { get; init; } = new();
         public int SuspectDitherCount { get; set; }
         public double SuspectDitherDiscountedAbsRaArcSec { get; set; }
         public double SuspectDitherDiscountedAbsDecArcSec { get; set; }
