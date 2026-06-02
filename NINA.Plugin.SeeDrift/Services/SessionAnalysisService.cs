@@ -907,6 +907,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 if (markers.Any(m => !m.IsDither)) {
                     label = "center";
                     tone = "center";
+                } else if (markers.Any(m => m.IsDither && m.IsSeeDither)) {
+                    label = "seedither";
+                    tone = "seedither";
                 } else if (markers.Any(m => m.IsDither)) {
                     label = "dither";
                     tone = "dither";

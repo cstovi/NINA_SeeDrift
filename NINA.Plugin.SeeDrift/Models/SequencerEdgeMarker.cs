@@ -10,6 +10,9 @@ namespace NINA.Plugin.SeeDrift.Models {
         /// <summary>True = dither-after-exposures (triangle); false = center-after-drift (square).</summary>
         public bool IsDither { get; init; }
 
+        /// <summary>True when the dither originated from SeeDither plugin; false for built-in DitherAfterExposures.</summary>
+        public bool IsSeeDither { get; init; }
+
         public SequencerEventKind Kind => IsDither ? SequencerEventKind.Dither : SequencerEventKind.CenterAfterDrift;
 
         public DateTime EventUtc { get; init; }

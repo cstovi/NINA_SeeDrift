@@ -378,7 +378,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.AppendLine("                var raw = ctx.raw;");
                     sb.AppendLine("                if (raw && raw.isGap) return [raw.label || 'Possibly missing/unsolved frames', raw.tooltip || ''];");
                     sb.AppendLine("                var tip = raw && raw.tooltip ? String(raw.tooltip) : '';");
-                    sb.AppendLine("                var kind = raw && raw.isDither ? 'DitherAfterExposures / pulse' : 'CenterAfterDrift';");
+                    sb.AppendLine("                var kind = raw && raw.isDither ? (raw.isSeeDither ? 'SeeDither' : 'DitherAfterExposures') : 'CenterAfterDrift';");
                     sb.AppendLine("                var stepRa = (raw && raw.x1 != null && raw.x0 != null) ? (raw.x1 - raw.x0) : ctx.parsed.x;");
                     sb.AppendLine("                var stepDec = (raw && raw.y1 != null && raw.y0 != null) ? (raw.y1 - raw.y0) : ctx.parsed.y;");
                     sb.AppendLine("                var hdr = kind + ' · ΔRA ' + stepRa.toFixed(4) + '\" · ΔDec ' + stepDec.toFixed(4) + '\" (along trace)';");
@@ -823,7 +823,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var sb = new StringBuilder();
             sb.AppendLine("    <div class=\"mt-3 rounded-lg border border-slate-700 bg-slate-900/30 p-3\">");
             sb.AppendLine("      <p class=\"text-[10px] font-semibold uppercase tracking-wide text-sky-400\">Session quality timeline</p>");
-            sb.AppendLine("      <p class=\"mt-1 text-xs text-slate-500\"><span class=\"text-emerald-400\">■</span> tracking · <span class=\"text-amber-400\">■</span> drifting · <span class=\"text-purple-400\">■</span> dither · <span class=\"text-pink-400\">■</span> center</p>");
+            sb.AppendLine("      <p class=\"mt-1 text-xs text-slate-500\"><span class=\"text-emerald-400\">■</span> tracking · <span class=\"text-amber-400\">■</span> drifting · <span class=\"text-purple-400\">■</span> dither · <span class=\"text-violet-400\">■</span> seedither · <span class=\"text-pink-400\">■</span> center</p>");
             sb.AppendLine("      <div class=\"mt-2 flex h-3 overflow-hidden rounded bg-slate-800\">");
             var totalSeconds = analysis.Timeline.Sum(s => Math.Max(1.0, (s.EndUtc - s.StartUtc).TotalSeconds));
             foreach (var seg in analysis.Timeline) {
@@ -832,11 +832,13 @@ namespace NINA.Plugin.SeeDrift.Services {
                     ? "bg-emerald-500/80"
                     : seg.Tone == "warn"
                         ? "bg-amber-500/80"
-                        : seg.Tone == "dither"
-                            ? "bg-purple-500/80"
-                            : seg.Tone == "center"
-                                ? "bg-pink-500/80"
-                                : "bg-sky-500/80";
+                        : seg.Tone == "seedither"
+                            ? "bg-violet-500/80"
+                            : seg.Tone == "dither"
+                                ? "bg-purple-500/80"
+                                : seg.Tone == "center"
+                                    ? "bg-pink-500/80"
+                                    : "bg-sky-500/80";
                 sb.AppendLine(
                     $"        <span class=\"{cls}\" style=\"width:{pct.ToString("0.###", CultureInfo.InvariantCulture)}%\" title=\"{Escape(seg.Label)}: {Escape(seg.Detail)}\"></span>");
             }
@@ -848,11 +850,13 @@ namespace NINA.Plugin.SeeDrift.Services {
                     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
                     : tone == "warn"
                         ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
-                        : tone == "dither"
-                            ? "border-purple-500/40 bg-purple-500/10 text-purple-200"
-                            : tone == "center"
-                                ? "border-pink-500/40 bg-pink-500/10 text-pink-200"
-                                : "border-sky-500/40 bg-sky-500/10 text-sky-200";
+                        : tone == "seedither"
+                            ? "border-violet-500/40 bg-violet-500/10 text-violet-200"
+                            : tone == "dither"
+                                ? "border-purple-500/40 bg-purple-500/10 text-purple-200"
+                                : tone == "center"
+                                    ? "border-pink-500/40 bg-pink-500/10 text-pink-200"
+                                    : "border-sky-500/40 bg-sky-500/10 text-sky-200";
                 sb.AppendLine(
                     $"        <span class=\"rounded-full border px-2 py-0.5 {cls}\">{Escape(g.Key)} {g.Count()}</span>");
             }
@@ -930,6 +934,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                         x1 = cx,
                         y1 = cy,
                         isDither = markers[j].IsDither,
+                        isSeeDither = markers[j].IsSeeDither,
                         tooltip = markers[j].Tooltip ?? ""
                     });
                 }

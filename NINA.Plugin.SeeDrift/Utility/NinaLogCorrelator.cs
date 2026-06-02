@@ -670,6 +670,7 @@ namespace NINA.Plugin.SeeDrift.Utility {
                         eventLines.AddRange(measuredTail);
                         markers.Add(new SequencerEdgeMarker {
                             IsDither = true,
+                            IsSeeDither = tr.IsSeeDither,
                             EventUtc = tr.UtcTime,
                             FromFrameIndex = prev.FrameIndex,
                             ToFrameIndex = cur.FrameIndex,
