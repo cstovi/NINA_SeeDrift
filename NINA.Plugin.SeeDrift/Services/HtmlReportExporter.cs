@@ -228,9 +228,11 @@ namespace NINA.Plugin.SeeDrift.Services {
                     // Video preview button for this target
                     var videoSectionClass = g < filteredGroups.Count - 1 ? "mt-3" : "mt-3 mb-2";
                     var isMultiTarget = targets.Count > 1;
-                    var videoFileName = isMultiTarget
-                        ? $"{FitsVideoGenerator.SanitizeFileName(targetName)}_preview.mp4"
-                        : "preview.mp4";
+                    var reportBaseName = Path.GetFileNameWithoutExtension(path);
+                    var videoFileName = FitsVideoGenerator.BuildOutputPath(
+                        "", targetName, isMultiTarget, reportBaseName);
+                    // Extract just the filename (path is empty above)
+                    videoFileName = Path.GetFileName(videoFileName);
                     sb.AppendLine($"  <div class=\"{videoSectionClass}\">");
                     sb.AppendLine($"    <div class=\"video-preview-section\" data-target-name=\"{Escape(targetName)}\" data-video-path=\"{Escape(videoFileName)}\" style=\"display:none;\">");
                     sb.AppendLine($"      <button class=\"showVideoBtn text-xs rounded border border-slate-600 bg-slate-800/60 px-3 py-1.5 text-slate-300 hover:bg-slate-700/60 hover:text-white\" onclick=\"showVideo('{Escape(targetName)}')\">");

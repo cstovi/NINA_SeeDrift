@@ -727,6 +727,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (string.IsNullOrEmpty(reportDir)) return;
 
             var isMultiTarget = CompletedTargets.Count > 1;
+            var reportBaseName = Path.GetFileNameWithoutExtension(reportPath);
 
             foreach (var batch in CompletedTargets) {
                 var targetName = batch.Name;
@@ -753,7 +754,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                     SeeDriftLog.Info($"Generating preview video for target '{targetName}' ({fitsPaths.Count} frames)...");
                     var sw = System.Diagnostics.Stopwatch.StartNew();
-                    generator.GenerateVideoForTarget(targetName, fitsPaths, reportDir, isMultiTarget);
+                    generator.GenerateVideoForTarget(targetName, fitsPaths, reportDir, isMultiTarget, reportBaseName);
                     sw.Stop();
                     SeeDriftLog.Info($"Preview video for target '{targetName}' completed in {sw.Elapsed.TotalSeconds:F1}s");
                 } catch (Exception ex) {

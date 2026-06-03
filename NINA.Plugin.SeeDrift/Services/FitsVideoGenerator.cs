@@ -40,6 +40,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <param name="fitsPaths">Ordered list of FITS file paths for this target.</param>
         /// <param name="reportDirectory">Directory where the MP4 will be written.</param>
         /// <param name="isMultiTarget">True when the session has multiple targets (uses "{target}_preview.mp4" naming).</param>
+        /// <param name="reportBaseName">Report filename base (e.g. "SeeDrift_v1_0_0_ran20260603_sess20260603") to uniquify output filenames.</param>
         /// <param name="progress">Progress reporter (0-100).</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>The path to the generated MP4 file.</returns>
@@ -49,7 +50,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             string reportDirectory,
             bool isMultiTarget,
             IProgress<int>? progress,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken,
+            string? reportBaseName = null) {
 
             if (string.IsNullOrWhiteSpace(targetName))
                 throw new ArgumentException("Target name is required", nameof(targetName));
@@ -62,9 +64,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var totalFrames = fitsPaths.Count;
 
             // Determine output filename
-            var sanitized = SanitizeFileName(targetName);
-            var outputFilename = isMultiTarget ? $"{sanitized}_preview.mp4" : "preview.mp4";
-            var outputPath = Path.Combine(reportDirectory, outputFilename);
+            var outputPath = BuildOutputPath(reportDirectory, targetName, isMultiTarget, reportBaseName);
 
             // Read the first FITS to determine dimensions
             var firstImage = FitsImageReader.TryReadImageData(fitsPaths[0]);
@@ -185,19 +185,29 @@ namespace NINA.Plugin.SeeDrift.Services {
             string targetName,
             IReadOnlyList<string> fitsPaths,
             string reportDirectory,
-            bool isMultiTarget) {
+            bool isMultiTarget,
+            string? reportBaseName = null) {
 
             try {
                 var task = GenerateVideoForTargetAsync(
-                    targetName, fitsPaths, reportDirectory, isMultiTarget, null, CancellationToken.None);
+                    targetName, fitsPaths, reportDirectory, isMultiTarget, null, CancellationToken.None, reportBaseName);
                 task.GetAwaiter().GetResult();
-                var sanitized = SanitizeFileName(targetName);
-                return isMultiTarget
-                    ? Path.Combine(reportDirectory, $"{sanitized}_preview.mp4")
-                    : Path.Combine(reportDirectory, "preview.mp4");
+                return BuildOutputPath(reportDirectory, targetName, isMultiTarget, reportBaseName);
             } catch (AggregateException ae) {
                 throw ae.InnerException ?? ae;
             }
+        }
+
+        /// <summary>
+        /// Builds the output path for a preview video, incorporating the report base name for uniqueness.
+        /// </summary>
+        internal static string BuildOutputPath(string reportDirectory, string targetName, bool isMultiTarget, string? reportBaseName) {
+            var prefix = string.IsNullOrEmpty(reportBaseName) ? "" : $"{SanitizeFileName(reportBaseName)}_";
+            var sanitized = SanitizeFileName(targetName);
+            var outputFilename = isMultiTarget
+                ? $"{prefix}{sanitized}_preview.mp4"
+                : $"{prefix}preview.mp4";
+            return Path.Combine(reportDirectory, outputFilename);
         }
 
         private static string BuildFFmpegArgs(int width, int height, int fps, string preset, string outputPath, string scaleFilter) {
