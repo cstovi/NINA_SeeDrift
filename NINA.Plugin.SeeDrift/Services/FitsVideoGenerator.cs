@@ -164,9 +164,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                             // Draw drift reticle at the arcsec → pixel offset position
                             if (DrawDriftMarker) {
                                 if (hasCdMatrix && imageData.HasFullCdMatrix) {
-                                    // Full CD matrix transform: negate inputs so reticle shows
-                                    // where the original center stars have moved to (star drift)
-                                    var raDeg = -frame.DeltaRaArcSec / 3600.0;
+                                    // Full CD matrix transform: shows where the original center
+                                    // stars have drifted to (star movement, not mount movement)
+                                    var raDeg = frame.DeltaRaArcSec / 3600.0;
                                     var decDeg = -frame.DeltaDecArcSec / 3600.0;
                                     var det = imageData.Cd1_1!.Value * imageData.Cd2_2!.Value
                                             - imageData.Cd1_2!.Value * imageData.Cd2_1!.Value;
@@ -178,10 +178,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                                         DrawReticle(bgr24, outWidth, outHeight, reticleX, reticleY);
                                     }
                                 } else {
-                                    // Simplified: negate to show star movement, not mount movement
+                                    // Simplified fallback
                                     var px = (int)Math.Round(frame.DeltaRaArcSec / pixelScale);
                                     var py = (int)Math.Round(frame.DeltaDecArcSec / pixelScale);
-                                    var reticleX = centerX - px;
+                                    var reticleX = centerX + px;
                                     var reticleY = centerY + py;
                                     DrawReticle(bgr24, outWidth, outHeight, reticleX, reticleY);
                                 }
