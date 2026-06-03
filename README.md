@@ -1,60 +1,38 @@
 # SeeDrift — NINA plugin
 
-**Plate-solves** **LIGHT** frames whose paths appear on **NINA “Saved image to …”** lines in your session **logs** (`%LocalAppData%\NINA\Logs`). **SeeDrift Start→Stop** keeps saves whose log timestamp falls between Start and Stop; **Run report** on **Plugins → SeeDrift** plate-solves every LIGHT in the **NINA log you choose** — no imaging-folder tree scan. Drift is **ΔRA / ΔDec in arcseconds** vs the **first solved frame per FITS target** (one chart per `OBJECT` when a batch mixes targets). Output is **HTML** (**Tailwind**, **Chart.js** with zoom/pan) with detected Seestar model/serial when NINA logged the connected Alpaca telescope, **dither** / **center-after-drift** markers, possible missing/unsolved-frame markers, advisory effectiveness metrics, drift-rate summaries, a split **Star shape / Walking noise** drift advisory, session-quality timeline, a run-wide **Session settings used** card (Mount Dither Pixels, CenterAfterDrift threshold + evaluate cadence, DitherAfterExposures cadence, dither pulse durations as a Seestar Alpaca guide-rate proxy, plus a **realized dither magnitude** line — *Realized X.X px (Y%) median across N pulses* — that compares commanded vs measured dither size from the same logs), and settings hints when logs correlate between consecutive frames of the same target. Suspect tracking jumps are shown but excluded from dither effectiveness scoring **and from the assessed Σ|ΔRA| / Σ|ΔDec| totals** above the per-row table; the run-wide sums and a **median typical dither** line are also embedded in the report payload so the comparison view can show **Σ|ΔRA| / Σ|ΔDec| over assessed dither intervals** and **Typical dither (median |Δ|)** side by side. The drift advisory now uses two grounded criteria: **Star shape** flags per-exposure motion against the community "< 1–2 px per exposure is acceptable" rule of thumb (Moderate ≥ 1.0 px / 2″, Caution ≥ 2.0 px / 4″), and **Walking noise** uses a **dither headroom ratio** (median dither |Δ| in px ÷ median cumulative drift between dithers in px) combined with direction consistency — so a small but coherent drift between dithers is flagged separately from any star-elongation concern, and visually tame low-magnitude drift no longer triggers Caution on star shape. Recommendations point at the underlying cause when walking-noise risk is high (increase **Mount Dither Pixels**, dither more often, check polar alignment / differential flexure). When the **median realized dither magnitude** falls below **80%** of the commanded magnitude across at least 3 samples, an additional **realized-magnitude** recommendation fires. NINA runs the dither pulse to completion before the settle countdown starts, so a consistent shortfall most often points at mount mechanics (Dec backlash on direction-reversing dithers, or a small guide-rate calibration offset on the Seestar Alpaca side); a too-short settle time is a secondary cause via motion-blur centroid bias during the next exposure.
-
-There is **no live dockable chart** and **no pixel / header-only drift path** in this version.
+Measures mount drift for Seestar devices by plate-solving LIGHT frames referenced in NINA session logs. Generates an interactive HTML report with drift charts, dither scoring, star-shape and walking-noise risk assessment, and optional preview videos.
 
 ## Requirements
 
-- **N.I.N.A.** 3.2+ (targets `NINA.Plugin` **3.2.0.9001**, **.NET 8**)
-- Windows (same as NINA)
-- A working **plate solve** profile in NINA (same stack as **Plate Solve**)
+- **N.I.N.A.** 3.2+ (.NET 8)
+- Windows
+- A working **plate solve** profile in NINA
 
 ## Install
 
-1. Build `NINA.Plugin.SeeDrift.csproj`: `dotnet build -c Release`.
-2. Copy **`NINA.Plugin.SeeDrift.dll`** (includes embedded **`Assets/SeeDrift_featured.png`** for the offline night-report header image; rebuild after replacing that file if you change artwork) from `bin\Release\net8.0-windows\` to:
-
+1. `dotnet build -c Release`
+2. Copy `NINA.Plugin.SeeDrift.dll` from `bin\Release\net8.0-windows\` to:
    `%LOCALAPPDATA%\NINA\Plugins\3.0.0\SeeDrift\`
+3. Restart NINA
 
-   If NINA reports another missing dependency, copy it from the **same** output folder as well (for example **Newtonsoft.Json**.dll, **FreeImage** / imaging-related DLLs pulled in transitively). This project does **not** use Math.NET.
-
-3. Restart NINA.
-
-The csproj may post-build copy to that folder when NINA is not locking the DLL. Plain `dotnet build` defaults to **Debug**; use **`dotnet build -c Release`** for shipping.
-
-## Usage
-
-### Configure imaging path
-
-Set **Options → Imaging → image file path** in NINA so saved lights land where you expect. SeeDrift resolves the paths recorded in the session log.
+## Quick start
 
 ### Sequencer (recommended)
+Add **SeeDrift Start** before capture and **SeeDrift Stop** when finished. Stop reads the NINA log, plate-solves each LIGHT frame, and appends a drift report to the rolling night HTML. Reports are stored in `%LocalAppData%\NINA\SeeDrift\Reports`.
 
-1. Add **SeeDrift Start** before capture and **SeeDrift Stop** when finished.
-2. **Stop** reads NINA log files, collects **Saved image to …** paths between Start and Stop, plate-solves each **LIGHT** (header filter), builds drift samples, and **appends** to the rolling **night HTML** (one drift chart and sequencer block per target when the batch spans multiple `OBJECT` names). Reports are stored in **`%LocalAppData%\NINA\SeeDrift\Reports`**. If the contributing log says NINA discovered a Seestar Alpaca telescope, report filenames include the compact identity, for example `S30_0ac17a9b`. **NINA’s status bar** shows the **full path** on success (plain text), and **Plugins → SeeDrift** shows **Open** with the HTML **file name** as a click target after a successful run. If you set **Discord webhook**, Stop uploads that HTML when one was written, or sends a short **text-only** message when there was nothing to chart (**Run report** never uploads).
+### Options panel
+Under **Plugins → SeeDrift**, pick a recent NINA log from the dropdown (or browse for any `.log`), then click **Run report**.
 
-### Create report (options panel)
+### Preview videos (optional)
+Enable **Auto-generate video** in plugin settings to create an MP4 preview of each target's drift, with an optional drift reticle overlay.
 
-Under **Plugins → SeeDrift**, choose one of the last ten NINA session logs (or **Browse…** / paste any **`.log`** path), then click **Run report**. The recent list hides logs with zero detected targets and summarizes each candidate session by detected Seestar identity, target count, usable image count, and duration; the entire selected log file is used for the report. **While the run is active**, a progress panel under the button shows each phase (log read, FITS checks, plate solving). When the run finishes successfully, **Open** appears as an underlined **file name** you can click to launch the night HTML.
+## Documentation
 
-Successful runs show **processing time** (log read through plate solves and HTML save) in the **night HTML** batch line and in the **completion** line (**NINA status bar** after **Stop**; **Report status** in the plugin panel).
-
-**Concurrency** is a **dropdown** from **1** up to **80% of physical cores** (rounded down, min **1**); on a fresh install it defaults to **physical core count** clamped to that maximum. Physical cores come from **`GetLogicalProcessorInformation`**; if that fails, SeeDrift uses **`Environment.ProcessorCount`** (logical processors) for the cap and default. **Minimum exposures per target** hides targets with fewer solved frames in each batch’s night HTML section (default **50**); after LIGHT counts pass the pre-solve check, SeeDrift also stops requesting further solves once failures make it impossible for any OBJECT to reach that many **successful** solves. **Alternative image location mapping** (optional original + alternative folder roots) lets **Run report** and **Stop** find FITS under a secondary location when the logged path is missing but the same subfolder tree exists under your archive root. Solver throughput still depends primarily on your **NINA Plate Solve** profile (including any downsampling you set there).
-
-Under **Compare saved reports**, pick two SeeDrift HTML reports made by a schema-compatible analytics build and click **Compare saved reports**. The saved-report dropdown reads **`%LocalAppData%\NINA\SeeDrift\Reports`** and displays the imaging session date plus detected Seestar identity from embedded report metadata; Browse remains available for HTML saved elsewhere. SeeDrift reads the embedded report data from the HTML files and writes a whole-report average comparison of dither RA/Dec behavior and center-after-drift recovery without matching target names, scanning FITS files, or running plate solves again. The comparison also includes a **Session settings used** table (Mount Dither Pixels, CenterAfterDrift threshold + evaluate cadence, DitherAfterExposures cadence, dither pulse durations) with **Before / After** and a **Changed / Same** badge for each row, plus a one-line tip in the overall read when anything changed — so you can correlate metric movement with a setting change. Report HTML includes generator version/schema metadata, and new report filenames include the plugin version. If before/after reports came from different Seestars, the comparison report shows an advisory to read scale-sensitive metrics cautiously.
-
-SeeDrift also writes **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** (plugin messages, in addition to NINA’s own log).
-
-See **[docs/MANUAL.md](docs/MANUAL.md)** for options, HTML location, and troubleshooting.
+See **[docs/MANUAL.md](docs/MANUAL.md)** for full details on options, report layout, and troubleshooting.
 
 ## Changelog
 
 See **[CHANGELOG.md](CHANGELOG.md)**.
-
-## Repository
-
-<https://github.com/cstovi/NINA_SeeDrift>
 
 ## Support
 
