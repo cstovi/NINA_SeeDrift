@@ -83,10 +83,23 @@
                          MaxLength="3"/>
             </Grid>
 
-            <CheckBox Margin="0,0,0,10"
-                      IsChecked="{Binding AutoGenerateVideo}"
-                      Content="Auto-generate preview video"
-                      ToolTip="When enabled, SeeDrift generates a preview MP4 for each target at report build time using embedded FFmpeg. The report shows a Play button when the video exists."/>
+            <Grid Margin="0,0,0,10" ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="400">
+                <Grid.ToolTip>
+                    <ToolTip>
+                        <TextBlock MaxWidth="420" TextWrapping="Wrap"
+                                   Text="When enabled, SeeDrift generates a preview MP4 for each target at report build time using embedded FFmpeg. The report shows a Play button when the video exists."/>
+                    </ToolTip>
+                </Grid.ToolTip>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="160"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Video preview:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <CheckBox Grid.Column="1"
+                          IsChecked="{Binding AutoGenerateVideo}"
+                          Content="Auto-generate (embedded FFmpeg)"
+                          Foreground="#e2e8f0"/>
+            </Grid>
 
             <TextBlock Text="Alternative image location mapping" FontWeight="Bold" Margin="0,0,0,4"/>
             <TextBlock Text="When FITS were moved after capture, map the log path prefix to a secondary folder."
