@@ -772,9 +772,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                         sw.Stop();
                         SeeDriftLog.Info($"Preview video for target '{targetName}' completed in {sw.Elapsed.TotalSeconds:F1}s");
 
-                        // Read MP4 into base64 for HTML embedding
+                        // Read MP4 into base64 for HTML embedding, then delete the temp file
                         if (File.Exists(filePath)) {
                             var bytes = File.ReadAllBytes(filePath);
+                            try { File.Delete(filePath); } catch { }
                             var b64 = Convert.ToBase64String(bytes);
                             // Use a unique key per target (if duplicate, first one wins)
                             if (!base64Map.ContainsKey(targetName)) {
