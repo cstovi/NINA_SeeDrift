@@ -4,6 +4,37 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0.0] — 2026-06-03
+
+### Added
+
+- **FITS preview video generation:** Optional build-time MP4 generation per target using embedded FFmpeg (~97 MB, extracted on first use). Controlled by **Auto-generate video** toggle in plugin settings. Videos use sqrt stretch for star visibility, H.264 at CRF 26 with `-tune grain`, and default to 480p resolution.
+- **Drift reticle overlay:** When enabled, a white 25×3px crosshair (+) tracks the FOV center drift across the video. Uses full CD matrix from FITS headers for correct orientation (rotation, flip, scale). Dashed light-gray trail connects all previous positions to show the drift path. Green start circle and red finish circle mark beginning and end.
+- **Drift reticle toggle:** Plugin setting to enable/disable the reticle overlay independently of video generation.
+- **ShowDriftReticle setting persistence** with proper plugin-level property binding so the toggle saves across NINA restarts.
+- **Per-model pixel scale fallback** (S50=2.39″, S30=3.99″) when FITS headers lack CD matrix keywords.
+- **Full CD matrix reading** from FITS headers (CD1_1..CD2_2) for accurate WCS-based arcsec→pixel transformation on the reticle.
+
+### Changed
+
+- **Video architecture:** Switched from local HTTP service (on-demand JS-triggered generation) to synchronous build-time generation. Videos are embedded as base64 data URIs in the HTML for self-contained Discord sharing. Companion `fits_paths.json` files are named per report to avoid collision.
+- **FITS stretch:** Changed from MTF autostretch to linear 16→8 bit conversion (`pixel >> 8`), matching Siril's export behavior for natural contrast. Later refined to sqrt stretch for better star visibility.
+- **Reticle direction:** Negated only Dec axis so the reticle follows star movement (not mount movement) in both axes.
+- **Plugin description simplified** for public listing — removed implementation details, kept core value prop.
+- **README simplified** from 61 lines (giant feature paragraph) to 37 lines with scannable sections and links to manual.
+- **Compare saved reports UI hidden** behind `Visibility="Collapsed"` (code preserved for future re-enablement).
+- **Alternative image mapping** moved to just above the Run button in the options panel.
+- **Git ignored** `.cursor/`, `plans/`, `_parse_report.py`, `session-*.md`. LICENSE copied to repo root for GitHub badge.
+- **Version bumped** from 0.10.2 to 1.0.0.0.
+
+### Fixed
+
+- **ShowDriftReticle not persisting:** XAML binding was targeting a non-existent plugin-level property. Added proper backing field, property with `RaisePropertyChanged`, init in constructor, and sync in `SyncSettingsFromProperties`.
+- **FITS conversion formula:** Was `(stored - BZERO) / BSCALE` instead of the correct `BZERO + BSCALE * stored` — produced negative values clamped to zero for common Seestar case (BITPIX=16, BZERO=32768).
+- **Video modal sizing:** Added `max-h-[80vh] object-contain` so videos fit the viewport with visible controls.
+- **WPF dispatcher deadlock:** `ConfigureAwait(false)` on FFmpeg pipe I/O to prevent blocking the UI thread during video generation.
+- **Per-target video generation:** Was generating one video for all targets due to batch name joining. Now splits by individual target name.
+
 ## [Unreleased]
 
 ### Added
