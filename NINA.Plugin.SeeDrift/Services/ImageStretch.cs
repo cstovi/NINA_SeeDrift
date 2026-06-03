@@ -10,7 +10,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         private const double ClipLowPercentile = 0.001;   // 0.1% low clip
         private const double ClipHighPercentile = 0.999;  // 99.9% high clip
-        private const double DefaultMidtone = 0.25;       // MTF midtone parameter for DSO
+        private const double DefaultMidtone = 0.35;       // MTF midtone parameter (0..1, 0.5=linear, lower=brighter stretch, higher=darker)
 
         /// <summary>
         /// Processes a FITS image: debayers if Bayer pattern is given, then auto-stretches,

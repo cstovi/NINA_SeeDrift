@@ -750,6 +750,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                     var generator = new FitsVideoGenerator(_plugin.FFmpegManager) {
                         FrameRate = _plugin.Settings.VideoFrameRate,
                         EncoderPreset = _plugin.Settings.VideoEncoderPreset,
+                        TargetWidth = ParseVideoResolution(_plugin.Settings.VideoResolution),
                     };
 
                     SeeDriftLog.Info($"Generating preview video for target '{targetName}' ({fitsPaths.Count} frames)...");
@@ -760,6 +761,21 @@ namespace NINA.Plugin.SeeDrift.Services {
                 } catch (Exception ex) {
                     SeeDriftLog.Warning($"Could not generate preview video for target '{targetName}': {ex.Message}");
                 }
+            }
+        }
+
+        /// <summary>
+        /// Parses a VideoResolution setting ("native", "1080p", "720p") to a target pixel width.
+        /// </summary>
+        private static int? ParseVideoResolution(string resolution) {
+            if (string.IsNullOrWhiteSpace(resolution))
+                return null;
+            var r = resolution.Trim().ToLowerInvariant();
+            switch (r) {
+                case "1080p": return 1920;
+                case "720p": return 1280;
+                case "480p": return 640;
+                default: return null; // "native" or any unrecognized → full resolution
             }
         }
 

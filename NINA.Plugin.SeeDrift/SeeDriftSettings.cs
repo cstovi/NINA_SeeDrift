@@ -38,7 +38,7 @@ namespace NINA.Plugin.SeeDrift {
         public string VideoEncoderPreset { get; set; } = "fast";
 
         /// <summary>Output resolution: "native", "1080p", "720p" (default "native").</summary>
-        public string VideoResolution { get; set; } = "native";
+        public string VideoResolution { get; set; } = "720p";
 
         /// <summary>
         /// If true, generates video preview automatically when a report is created
