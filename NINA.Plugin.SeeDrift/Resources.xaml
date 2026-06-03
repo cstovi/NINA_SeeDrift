@@ -83,6 +83,11 @@
                          MaxLength="3"/>
             </Grid>
 
+            <CheckBox Margin="0,0,0,10"
+                      IsChecked="{Binding AutoGenerateVideo}"
+                      Content="Auto-generate preview video"
+                      ToolTip="When enabled, SeeDrift generates a preview MP4 for each target at report build time using embedded FFmpeg. The report shows a Play button when the video exists."/>
+
             <TextBlock Text="Alternative image location mapping" FontWeight="Bold" Margin="0,0,0,4"/>
             <TextBlock Text="When FITS were moved after capture, map the log path prefix to a secondary folder."
                        Foreground="#888" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
