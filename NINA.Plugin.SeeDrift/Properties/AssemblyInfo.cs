@@ -11,13 +11,13 @@ using System.Windows;
 [assembly: AssemblyMetadata("FeaturedImageURL", "https://i.ibb.co/PsM1CDGS/Screenshot-2026-05-08-203201.png")]
 [assembly: AssemblyMetadata("ChangelogURL", "https://github.com/cstovi/NINA_SeeDrift/releases")]
 [assembly: AssemblyMetadata("Homepage", "https://ko-fi.com/turnpike47298")]
-[assembly: AssemblyDescription("Plate-solves LIGHT frames referenced by NINA session logs and writes Seestar-identified drift HTML to a report library with star-shape, walking-noise, dither, center, gap, and before/after analytics.")]
-[assembly: AssemblyMetadata("ShortDescription", "Seestar-identified drift report library with recent-log picker and analytics.")]
-[assembly: AssemblyMetadata("LongDescription", @"SeeDrift reads NINA session logs (%LocalAppData%\NINA\Logs): Saved image to … lines give the FITS paths to solve. Start→Stop keeps lines between arm and disarm times; Run report on the options page plate-solves every LIGHT in the NINA log you choose. Each frame is plate-solved using your NINA plate-solve profile; drift is shown as ΔRA/ΔDec arcseconds vs the first solved frame.
+[assembly: AssemblyDescription("Measures mount drift for Seestar devices by plate-solving LIGHT frames referenced in NINA session logs. Generates HTML reports with drift timelines, dither scoring, star-shape and walking-noise risk assessment, and optional preview videos.")]
+[assembly: AssemblyMetadata("ShortDescription", "Drift analysis for Seestar devices using NINA session logs.")]
+[assembly: AssemblyMetadata("LongDescription", @"SeeDrift reads NINA session logs and plate-solves every LIGHT frame to measure mount drift. Results are shown as ΔRA/ΔDec arcseconds in an interactive HTML report with drift timelines, quality metrics, and per-target analytics.
 
-When log lines correlate between exposures, dither and center-after-drift triggers appear in the HTML report with advisory effectiveness metrics and settings hints. Recent NINA logs can be selected from the options UI. Reports are stored in a stable library by default, Seestar model/serial identity is shown when NINA logged a connected Alpaca telescope, star-shape and walking-noise drift risk are summarized separately from logged dithers, possible missing/unsolved frame gaps are marked, suspect tracking jumps are excluded from dither scoring, and schema-compatible saved reports can be compared by whole-report averages.
+Dither, center-after-drift, and SeeDither events are correlated from the NINA sequencer log. Star-shape and walking-noise drift risk are summarized separately. Optional preview videos with a drift reticle overlay can be generated using the embedded FFmpeg.
 
-If you use and like anything I've done, support on Ko-fi (https://ko-fi.com/turnpike47298) is appreciated to encourage me to keep going!")]
+Reports are stored in a local library and can be exported or compared. Support on Ko-fi is appreciated!")]
 [assembly: AssemblyCompany("Carl Stovell")]
 [assembly: AssemblyProduct("NINA.Plugin.SeeDrift")]
 [assembly: AssemblyVersion("0.10.2.0")]
