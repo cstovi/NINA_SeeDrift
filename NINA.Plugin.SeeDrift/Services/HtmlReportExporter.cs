@@ -875,32 +875,42 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine("      </div>");
             }
 
+            // Directional consistency (affects both star shape and walking noise escalation)
             if (risk.IntervalCount > 0) {
-                sb.AppendLine(
-                    $"      <p class=\"mt-3 text-xs text-slate-500\">Average drift between dithers and center corrections — your mount's raw performance</p>");
-                sb.AppendLine(
-                    $"      <p class=\"mt-1 text-sm text-slate-200\">{risk.NaturalDriftArcSecPerMinute:0.##}″/min{Escape(px)} (between corrections)</p>");
+                var consistencyPct = FormattableString.Invariant($"{risk.DirectionConsistency:P0}");
+                sb.AppendLine($"      <p class=\"mt-3 text-xs text-slate-500\">Drift direction consistency: <span class=\"text-slate-300\">{consistencyPct}</span> <span class=\"text-slate-600\">(higher = more directional, can escalate ratings)</span></p>");
+            }
+
+            // Star shape section
+            if (!string.IsNullOrWhiteSpace(risk.StarShapeStatus) && risk.IntervalCount > 0) {
                 if (risk.EstimatedDriftPerExposurePixels.HasValue) {
                     var assessment = risk.EstimatedDriftPerExposurePixels.Value < 1.0 ? "excellent"
                         : risk.EstimatedDriftPerExposurePixels.Value < 2.0 ? "acceptable"
                         : "may show elongation";
-                    sb.AppendLine("      <p class=\"mt-3 text-xs text-slate-500\">Typical star movement within a single exposure</p>");
+                    sb.AppendLine("      <p class=\"mt-3 text-xs font-semibold text-slate-400\">Star shape factors:</p>");
                     sb.AppendLine(
                         $"      <p class=\"mt-1 text-xs text-slate-400\">Per-exposure drift: ~{risk.EstimatedDriftPerExposurePixels.Value:0.#} px ({assessment} for round stars)</p>");
                 } else if (risk.EstimatedDriftPerExposureArcSec.HasValue) {
-                    sb.AppendLine("      <p class=\"mt-3 text-xs text-slate-500\">Typical star movement within a single exposure</p>");
+                    sb.AppendLine("      <p class=\"mt-3 text-xs font-semibold text-slate-400\">Star shape factors:</p>");
                     sb.AppendLine(
                         $"      <p class=\"mt-1 text-xs text-slate-400\">Per-exposure drift: ~{risk.EstimatedDriftPerExposureArcSec.Value:0.#}″</p>");
                 }
+            }
+
+            // Walking noise section
+            if (!string.IsNullOrWhiteSpace(risk.WalkingNoiseStatus) && risk.IntervalCount > 0) {
+                sb.AppendLine("      <p class=\"mt-3 text-xs font-semibold text-slate-400\">Walking noise factors:</p>");
+                sb.AppendLine(
+                    $"      <p class=\"mt-1 text-xs text-slate-400\">Average drift rate: {risk.NaturalDriftArcSecPerMinute:0.##}″/min{Escape(px)} (during natural imaging, between any corrections)</p>");
                 if (risk.DitherHeadroomRatio.HasValue && risk.BetweenDitherDriftPixels.HasValue) {
                     var assessment = risk.DitherHeadroomRatio.Value >= 3.0 ? "good"
                         : risk.DitherHeadroomRatio.Value >= 2.0 ? "acceptable"
                         : "tight";
                     sb.AppendLine(
-                        $"      <p class=\"mt-1 text-xs text-slate-400\">Dither headroom: <span class=\"font-semibold text-slate-200\">{risk.DitherHeadroomRatio.Value:0.0}×</span> ({assessment}) — Drift between dithers: ~{risk.BetweenDitherDriftPixels.Value:0.#} px</p>");
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Dither headroom: <span class=\"font-semibold text-slate-200\">{risk.DitherHeadroomRatio.Value:0.0}×</span> ({assessment}) — Cumulative drift in one imaging segment: ~{risk.BetweenDitherDriftPixels.Value:0.#} px</p>");
                 } else if (risk.BetweenDitherDriftArcSec.HasValue) {
                     sb.AppendLine(
-                        $"      <p class=\"mt-1 text-xs text-slate-400\">Drift between dithers: ~{risk.BetweenDitherDriftArcSec.Value:0.#}″</p>");
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Cumulative drift in one imaging segment: ~{risk.BetweenDitherDriftArcSec.Value:0.#}″</p>");
                 } else if (risk.WorstWindowDriftArcSec.HasValue && risk.WorstWindowFrameCount > 0) {
                     var windowPx = risk.WorstWindowDriftPixels.HasValue
                         ? FormattableString.Invariant($" · ≈ {risk.WorstWindowDriftPixels.Value:0.##} px")
@@ -909,6 +919,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                         $"      <p class=\"mt-1 text-xs text-slate-400\">Walking-noise hint (no dither headroom data): worst short-window drift was {risk.WorstWindowDriftArcSec.Value:0.#}″ over {risk.WorstWindowFrameCount} frame{(risk.WorstWindowFrameCount == 1 ? "" : "s")}{Escape(windowPx)}.</p>");
                 }
             }
+
             sb.AppendLine("    </div>");
             return sb.ToString();
         }
