@@ -138,6 +138,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var centerX = outWidth / 2;
                 var centerY = outHeight / 2;
 
+                // Collect reticle positions for the drift trail
+                var reticlePositions = new List<(int X, int Y)>();
+
                 for (var frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
                     cancellationToken.ThrowIfCancellationRequested();
 
@@ -161,11 +164,12 @@ namespace NINA.Plugin.SeeDrift.Services {
                                 bgr24 = ResizeBgr24(bgr24, imageData.Width, imageData.Height, outWidth, outHeight);
                             }
 
-                            // Draw drift reticle at the arcsec → pixel offset position
+                            // Compute reticle pixel position for this frame
                             if (DrawDriftMarker) {
+                                int? reticleX = null;
+                                int? reticleY = null;
+
                                 if (hasCdMatrix && imageData.HasFullCdMatrix) {
-                                    // Full CD matrix transform: shows where the original center
-                                    // stars have drifted to (star movement, not mount movement)
                                     var raDeg = frame.DeltaRaArcSec / 3600.0;
                                     var decDeg = -frame.DeltaDecArcSec / 3600.0;
                                     var det = imageData.Cd1_1!.Value * imageData.Cd2_2!.Value
@@ -173,17 +177,23 @@ namespace NINA.Plugin.SeeDrift.Services {
                                     if (Math.Abs(det) > 1e-15) {
                                         var px = (imageData.Cd2_2!.Value * raDeg - imageData.Cd1_2!.Value * decDeg) / det;
                                         var py = (-imageData.Cd2_1!.Value * raDeg + imageData.Cd1_1!.Value * decDeg) / det;
-                                        var reticleX = centerX + (int)Math.Round(px);
-                                        var reticleY = centerY + (int)Math.Round(py);
-                                        DrawReticle(bgr24, outWidth, outHeight, reticleX, reticleY);
+                                        reticleX = centerX + (int)Math.Round(px);
+                                        reticleY = centerY + (int)Math.Round(py);
                                     }
                                 } else {
-                                    // Simplified fallback
                                     var px = (int)Math.Round(frame.DeltaRaArcSec / pixelScale);
                                     var py = (int)Math.Round(frame.DeltaDecArcSec / pixelScale);
-                                    var reticleX = centerX + px;
-                                    var reticleY = centerY + py;
-                                    DrawReticle(bgr24, outWidth, outHeight, reticleX, reticleY);
+                                    reticleX = centerX + px;
+                                    reticleY = centerY + py;
+                                }
+
+                                if (reticleX.HasValue && reticleY.HasValue) {
+                                    // Draw drift trail from all previous positions
+                                    DrawDriftTrail(bgr24, outWidth, outHeight, reticlePositions);
+                                    // Draw current reticle on top
+                                    DrawReticle(bgr24, outWidth, outHeight, reticleX.Value, reticleY.Value);
+                                    // Store for future frames
+                                    reticlePositions.Add((reticleX.Value, reticleY.Value));
                                 }
                             }
                         }
@@ -354,6 +364,63 @@ namespace NINA.Plugin.SeeDrift.Services {
                     bgr24[idx + 1] = white;
                     bgr24[idx + 2] = white;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Draws a dashed drift trail connecting the given list of pixel positions.
+        /// The trail is drawn in light gray (160) so it doesn't visually compete with
+        /// the bright white reticle crosshair.
+        /// </summary>
+        private static void DrawDriftTrail(byte[] bgr24, int width, int height, List<(int X, int Y)> positions) {
+            if (positions.Count < 2) return;
+
+            const byte trailColor = 160; // dimmer than the reticle (255)
+
+            for (var i = 1; i < positions.Count; i++) {
+                DrawDashedLine(bgr24, width, height,
+                    positions[i - 1].X, positions[i - 1].Y,
+                    positions[i].X, positions[i].Y,
+                    trailColor);
+            }
+        }
+
+        /// <summary>
+        /// Draws a dashed line from (x0,y0) to (x1,y1) using Bresenham's algorithm.
+        /// Dash pattern: draw 5 pixels, skip 3 pixels.
+        /// </summary>
+        private static void DrawDashedLine(byte[] bgr24, int width, int height,
+            int x0, int y0, int x1, int y1, byte color) {
+
+            var dx = Math.Abs(x1 - x0);
+            var dy = -Math.Abs(y1 - y0);
+            var sx = x0 < x1 ? 1 : -1;
+            var sy = y0 < y1 ? 1 : -1;
+            var err = dx + dy;
+
+            var px = x0;
+            var py = y0;
+            var pixelCount = 0;
+            const int dashLen = 5;
+            const int gapLen = 3;
+
+            while (true) {
+                // Dash pattern: draw for dashLen pixels, then skip for gapLen
+                var inDash = (pixelCount % (dashLen + gapLen)) < dashLen;
+                if (inDash) {
+                    if (px >= 0 && px < width && py >= 0 && py < height) {
+                        var idx = (py * width + px) * 3;
+                        bgr24[idx] = color;
+                        bgr24[idx + 1] = color;
+                        bgr24[idx + 2] = color;
+                    }
+                }
+
+                if (px == x1 && py == y1) break;
+                var e2 = 2 * err;
+                if (e2 >= dy) { err += dy; px += sx; }
+                if (e2 <= dx) { err += dx; py += sy; }
+                pixelCount++;
             }
         }
 
