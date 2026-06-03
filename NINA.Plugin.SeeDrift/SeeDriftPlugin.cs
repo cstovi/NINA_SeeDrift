@@ -89,11 +89,13 @@ namespace NINA.Plugin.SeeDrift {
             _alternativeMappingOriginalRoot = Settings.AlternativeImageMappingOriginalRoot ?? "";
             _alternativeMappingAlternativeRoot = Settings.AlternativeImageMappingAlternativeRoot ?? "";
             _autoGenerateVideo = Settings.AutoGenerateVideo;
+            _showDriftReticle = Settings.ShowDriftReticle;
             _isInitializing = false;
             RaisePropertyChanged(nameof(TestReportLogFilePath));
             RaisePropertyChanged(nameof(DiscordWebhookUrl));
             RaisePropertyChanged(nameof(AlternativeImageMappingOriginalRoot));
             RaisePropertyChanged(nameof(AlternativeImageMappingAlternativeRoot));
+            RaisePropertyChanged(nameof(ShowDriftReticle));
 
             RunTestReportCommand = new RelayCommand(_ => { _ = RunTestReportFireAsync(); });
             BrowseTestReportLogCommand = new RelayCommand(_ => BrowseTestReportLog());
@@ -835,6 +837,7 @@ namespace NINA.Plugin.SeeDrift {
                 Settings.PlateSolveParallelism = _plateSolveParallelism;
                 Settings.MinExposuresPerTarget = _minExposuresPerTarget;
                 Settings.AutoGenerateVideo = _autoGenerateVideo;
+                Settings.ShowDriftReticle = _showDriftReticle;
                 Settings.AlternativeImageMappingOriginalRoot = _alternativeMappingOriginalRoot;
                 Settings.AlternativeImageMappingAlternativeRoot = _alternativeMappingAlternativeRoot;
                 Settings.Save();
@@ -939,6 +942,18 @@ namespace NINA.Plugin.SeeDrift {
             }
         }
         private bool _autoGenerateVideo;
+
+        /// <summary>When true, overlays a drift reticle (+) on preview video frames.</summary>
+        public bool ShowDriftReticle {
+            get => _showDriftReticle;
+            set {
+                if (value == _showDriftReticle) return;
+                _showDriftReticle = value;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+        private bool _showDriftReticle;
 
         private void BrowseFolderInto(ref string field, string propertyName) {
             try {
