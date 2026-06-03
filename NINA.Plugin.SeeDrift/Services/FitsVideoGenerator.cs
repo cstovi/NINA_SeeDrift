@@ -9,6 +9,9 @@ using NINA.Plugin.SeeDrift.Utility;
 
 namespace NINA.Plugin.SeeDrift.Services {
 
+    /// <summary>Describes a single frame for video generation: FITS path + drift offset from frame 1.</summary>
+    internal sealed record FrameInfo(string FitsPath, double DeltaRaArcSec, double DeltaDecArcSec);
+
     /// <summary>
     /// Generates per-target MP4 video previews from FITS image files.
     /// Streams stretched/debayered frames directly to FFmpeg stdin — no temporary files on disk.
@@ -37,7 +40,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// Generates a video for a single target.
         /// </summary>
         /// <param name="targetName">Target name (used for output filename).</param>
-        /// <param name="fitsPaths">Ordered list of FITS file paths for this target.</param>
+        /// <param name="frames">Ordered list of frame info (FITS path + drift deltas) for this target.</param>
         /// <param name="reportDirectory">Directory where the MP4 will be written.</param>
         /// <param name="isMultiTarget">True when the session has multiple targets (uses "{target}_preview.mp4" naming).</param>
         /// <param name="reportBaseName">Report filename base (e.g. "SeeDrift_v1_0_0_ran20260603_sess20260603") to uniquify output filenames.</param>
@@ -46,7 +49,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <returns>The path to the generated MP4 file.</returns>
         public async Task<string> GenerateVideoForTargetAsync(
             string targetName,
-            IReadOnlyList<string> fitsPaths,
+            IReadOnlyList<FrameInfo> frames,
             string reportDirectory,
             bool isMultiTarget,
             IProgress<int>? progress,
@@ -55,21 +58,21 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             if (string.IsNullOrWhiteSpace(targetName))
                 throw new ArgumentException("Target name is required", nameof(targetName));
-            if (fitsPaths == null || fitsPaths.Count == 0)
-                throw new ArgumentException("At least one FITS path is required", nameof(fitsPaths));
+            if (frames == null || frames.Count == 0)
+                throw new ArgumentException("At least one frame is required", nameof(frames));
             if (string.IsNullOrWhiteSpace(reportDirectory))
                 throw new ArgumentException("Report directory is required", nameof(reportDirectory));
 
             Directory.CreateDirectory(reportDirectory);
-            var totalFrames = fitsPaths.Count;
+            var totalFrames = frames.Count;
 
             // Determine output filename
             var outputPath = BuildOutputPath(reportDirectory, targetName, isMultiTarget, reportBaseName);
 
-            // Read the first FITS to determine dimensions
-            var firstImage = FitsImageReader.TryReadImageData(fitsPaths[0]);
+            // Read the first FITS to determine dimensions and pixel scale
+            var firstImage = FitsImageReader.TryReadImageData(frames[0].FitsPath);
             if (firstImage == null)
-                throw new InvalidOperationException($"Cannot read FITS image data from first file: {fitsPaths[0]}");
+                throw new InvalidOperationException($"Cannot read FITS image data from first file: {frames[0].FitsPath}");
 
             var width = firstImage.Width;
             var height = firstImage.Height;
@@ -79,6 +82,10 @@ namespace NINA.Plugin.SeeDrift.Services {
             var scaleFilter = (outWidth != width || outHeight != height)
                 ? $",scale={outWidth}:{outHeight}:flags=bilinear"
                 : "";
+
+            // Pixel scale for crosshair positioning (arcsec/pixel, cached from first frame)
+            var pixelScale = firstImage.PixelScaleArcSec ?? 1.95; // Seestar S50 fallback
+            SeeDriftLog.Debug($"Using pixel scale {pixelScale:F3} arcsec/px for crosshair overlay");
 
             SeeDriftLog.Info($"Starting video generation for target '{targetName}': {totalFrames} frames, {width}x{height} -> {outWidth}x{outHeight}, {FrameRate} fps");
 
@@ -111,19 +118,22 @@ namespace NINA.Plugin.SeeDrift.Services {
                 // because we're writing to StandardInput.BaseStream from this thread.
                 var stdin = process.StandardInput.BaseStream;
 
+                var centerX = outWidth / 2;
+                var centerY = outHeight / 2;
+
                 for (var frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    var fitsPath = fitsPaths[frameIndex];
-                    SeeDriftLog.Debug($"Video frame {frameIndex + 1}/{totalFrames}: {Path.GetFileName(fitsPath)}");
+                    var frame = frames[frameIndex];
+                    SeeDriftLog.Debug($"Video frame {frameIndex + 1}/{totalFrames}: {Path.GetFileName(frame.FitsPath)}");
 
                     byte[] bgr24;
                     try {
-                        var imageData = FitsImageReader.TryReadImageData(fitsPath);
+                        var imageData = FitsImageReader.TryReadImageData(frame.FitsPath);
                         if (imageData == null) {
                             // If a frame fails, output a blank frame rather than failing entirely
                             bgr24 = GenerateBlankFrame(outWidth, outHeight);
-                            SeeDriftLog.Warning($"Could not read FITS for frame {frameIndex + 1}, using blank: {fitsPath}");
+                            SeeDriftLog.Warning($"Could not read FITS for frame {frameIndex + 1}, using blank: {frame.FitsPath}");
                         } else {
                             bgr24 = ImageStretch.ProcessToBgr24Sqrt(
                                 imageData.Data, imageData.Width, imageData.Height,
@@ -133,6 +143,13 @@ namespace NINA.Plugin.SeeDrift.Services {
                             if (outWidth != imageData.Width || outHeight != imageData.Height) {
                                 bgr24 = ResizeBgr24(bgr24, imageData.Width, imageData.Height, outWidth, outHeight);
                             }
+
+                            // Draw drift crosshair in arcsec → pixel coordinates
+                            var px = (int)Math.Round(frame.DeltaRaArcSec / pixelScale);
+                            var py = (int)Math.Round(frame.DeltaDecArcSec / pixelScale);
+                            var crosshairX = centerX + px;
+                            var crosshairY = centerY - py; // Dec positive = up in image, but Y=down in buffer
+                            DrawCrosshair(bgr24, outWidth, outHeight, crosshairX, crosshairY);
                         }
                     } catch (Exception ex) {
                         SeeDriftLog.Warning($"Error processing frame {frameIndex + 1}, using blank: {ex.Message}");
@@ -183,14 +200,14 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// </summary>
         public string GenerateVideoForTarget(
             string targetName,
-            IReadOnlyList<string> fitsPaths,
+            IReadOnlyList<FrameInfo> frames,
             string reportDirectory,
             bool isMultiTarget,
             string? reportBaseName = null) {
 
             try {
                 var task = GenerateVideoForTargetAsync(
-                    targetName, fitsPaths, reportDirectory, isMultiTarget, null, CancellationToken.None, reportBaseName);
+                    targetName, frames, reportDirectory, isMultiTarget, null, CancellationToken.None, reportBaseName);
                 task.GetAwaiter().GetResult();
                 return BuildOutputPath(reportDirectory, targetName, isMultiTarget, reportBaseName);
             } catch (AggregateException ae) {
@@ -264,6 +281,40 @@ namespace NINA.Plugin.SeeDrift.Services {
             // Medium gray (128) for visibility
             Array.Fill<byte>(frame, 128);
             return frame;
+        }
+
+        /// <summary>
+        /// Draws a 15px red crosshair (+) on a BGR24 buffer at the specified pixel coordinates.
+        /// Coordinates are clamped to image bounds. Uses bright green so it stands out against
+        /// the dark sky background and doesn't blend with red/blue star colors.
+        /// </summary>
+        private static void DrawCrosshair(byte[] bgr24, int width, int height, int cx, int cy) {
+            const int armLen = 7; // pixels from center to each arm tip
+            const byte r = 0;     // BGR: R channel
+            const byte g = 255;   // BGR: G channel (bright green)
+            const byte b = 0;     // BGR: B channel
+
+            // Vertical arm (x = cx, y from cy-armLen to cy+armLen)
+            for (var dy = -armLen; dy <= armLen; dy++) {
+                var py = cy + dy;
+                if (py < 0 || py >= height) continue;
+                if (cx < 0 || cx >= width) continue;
+                var idx = (py * width + cx) * 3;
+                bgr24[idx]     = b;
+                bgr24[idx + 1] = g;
+                bgr24[idx + 2] = r;
+            }
+
+            // Horizontal arm (y = cy, x from cx-armLen to cx+armLen)
+            for (var dx = -armLen; dx <= armLen; dx++) {
+                var px = cx + dx;
+                if (px < 0 || px >= width) continue;
+                if (cy < 0 || cy >= height) continue;
+                var idx = (cy * width + px) * 3;
+                bgr24[idx]     = b;
+                bgr24[idx + 1] = g;
+                bgr24[idx + 2] = r;
+            }
         }
 
         /// <summary>

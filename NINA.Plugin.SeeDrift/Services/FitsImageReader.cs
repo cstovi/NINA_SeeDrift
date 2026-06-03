@@ -28,6 +28,9 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         /// <summary>True when the image is already RGB (NAXIS3 == 3).</summary>
         public bool IsRgb => Channels == 3;
+
+        /// <summary>Pixel scale in arcseconds per pixel, read from FITS header keywords.</summary>
+        public double? PixelScaleArcSec { get; init; }
     }
 
     /// <summary>
@@ -93,6 +96,16 @@ namespace NINA.Plugin.SeeDrift.Services {
             cards.Values.TryGetValue("BAYERPAT", out var bayerPat);
             bayerPat = bayerPat?.Trim('\'', '"', ' ');
 
+            // Pixel scale: try PIXSCALE keyword, then compute from CDELT1 (deg→arcsec)
+            double? pixelScale = null;
+            if (cards.Values.TryGetValue("PIXSCALE", out var psStr) && double.TryParse(psStr, out var ps)) {
+                pixelScale = ps;
+            } else if (cards.Values.TryGetValue("CD1_1", out var cdStr) && double.TryParse(cdStr, out var cd)) {
+                pixelScale = Math.Abs(cd) * 3600.0; // degrees/pixel → arcsec/pixel
+            } else if (cards.Values.TryGetValue("CDELT1", out var cdeltStr) && double.TryParse(cdeltStr, out var cdelt)) {
+                pixelScale = Math.Abs(cdelt) * 3600.0;
+            }
+
             // Data offset: next 2880-byte boundary after header
             var dataOffset = headerSize;
 
@@ -112,7 +125,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                 Height = height,
                 Channels = channels,
                 Data = data,
-                BayerPattern = bayerPat
+                BayerPattern = bayerPat,
+                PixelScaleArcSec = pixelScale
             };
         }
 

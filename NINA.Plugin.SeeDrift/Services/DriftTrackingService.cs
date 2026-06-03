@@ -747,14 +747,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                     var targetName = tg.Key;
                     var targetSamples = tg.OrderBy(s => s.FrameIndex).ToList();
 
-                    // Collect ordered FITS paths for this target
-                    var fitsPaths = targetSamples
+                    // Collect FrameInfo objects (FITS path + drift deltas) for this target
+                    var frames = targetSamples
                         .Where(s => !string.IsNullOrEmpty(s.SourceFilePath))
-                        .Select(s => s.SourceFilePath!)
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .GroupBy(s => s.SourceFilePath!, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => new FrameInfo(g.Key, g.First().DeltaRaArcSec, g.First().DeltaDecArcSec))
                         .ToList();
 
-                    if (fitsPaths.Count == 0) {
+                    if (frames.Count == 0) {
                         SeeDriftLog.Debug($"No FITS files for target '{targetName}', skipping video");
                         continue;
                     }
@@ -766,9 +766,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                             TargetWidth = ParseVideoResolution(_plugin.Settings.VideoResolution),
                         };
 
-                        SeeDriftLog.Info($"Generating preview video for target '{targetName}' ({fitsPaths.Count} frames)...");
+                        SeeDriftLog.Info($"Generating preview video for target '{targetName}' ({frames.Count} frames)...");
                         var sw = System.Diagnostics.Stopwatch.StartNew();
-                        var filePath = generator.GenerateVideoForTarget(targetName, fitsPaths, reportDir, isMultiTarget, reportBaseName);
+                        var filePath = generator.GenerateVideoForTarget(targetName, frames, reportDir, isMultiTarget, reportBaseName);
                         sw.Stop();
                         SeeDriftLog.Info($"Preview video for target '{targetName}' completed in {sw.Elapsed.TotalSeconds:F1}s");
 
