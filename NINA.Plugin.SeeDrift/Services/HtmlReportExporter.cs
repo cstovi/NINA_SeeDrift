@@ -461,14 +461,14 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("    var videoPath = section.getAttribute('data-video-path');");
             sb.AppendLine("    if (!videoPath) return;");
             sb.AppendLine("    var probe = document.createElement('video');");
-            sb.AppendLine("    probe.oncanplaythrough = function() {");
-            sb.AppendLine("      // Video file exists and is playable — show the button");
+            sb.AppendLine("    probe.onloadedmetadata = function() {");
+            sb.AppendLine("      // Video file exists — keep the section visible");
             sb.AppendLine("    };");
             sb.AppendLine("    probe.onerror = function() {");
             sb.AppendLine("      // Video file not found — hide this section");
             sb.AppendLine("      section.style.display = 'none';");
             sb.AppendLine("    };");
-            sb.AppendLine("    probe.preload = 'none';");
+            sb.AppendLine("    probe.preload = 'metadata';");
             sb.AppendLine("    probe.src = videoPath;");
             sb.AppendLine("    probe.load();");
             sb.AppendLine("  });");
