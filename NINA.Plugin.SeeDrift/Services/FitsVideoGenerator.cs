@@ -125,7 +125,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                             bgr24 = GenerateBlankFrame(outWidth, outHeight);
                             SeeDriftLog.Warning($"Could not read FITS for frame {frameIndex + 1}, using blank: {fitsPath}");
                         } else {
-                            bgr24 = ImageStretch.ProcessToBgr24(
+                            bgr24 = ImageStretch.ProcessToBgr24Linear(
                                 imageData.Data, imageData.Width, imageData.Height,
                                 imageData.Channels, imageData.BayerPattern);
 
@@ -229,7 +229,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var defaultVf = string.IsNullOrEmpty(scaleFilter) ? " -vf \"format=yuv420p\"" : "";
 
             return $"-y -f rawvideo -vcodec rawvideo -s {width}x{height} -pix_fmt bgr24 -r {fps} -i - " +
-                   $"-c:v libx264 -preset {preset} -crf 33 -tune stillimage{defaultVf}{vf} \"{outputPath}\"";
+                   $"-c:v libx264 -preset {preset} -crf 26 -tune grain{defaultVf}{vf} \"{outputPath}\"";
         }
 
         private static (int width, int height) ComputeOutputDimensions(int nativeWidth, int nativeHeight, int? targetWidth = null) {

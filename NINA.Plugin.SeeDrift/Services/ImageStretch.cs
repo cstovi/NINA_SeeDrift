@@ -87,9 +87,78 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>
-        /// Simple bilinear debayer from Bayer CFA to full color, then stretch to BGR24.
-        /// Input data is Width × Height (1 channel with Bayer pattern).
+        /// Linear 16-bit → 8-bit conversion with debayering (matching Siril's approach).
+        /// No histogram stretch — preserves the linear FITS data relationship.
+        /// Background stays dark, stars stay bright — ideal for drift preview video.
         /// </summary>
+        public static byte[] ProcessToBgr24Linear(ushort[] data, int width, int height, int channels, string? bayerPattern) {
+            var pixels = width * height;
+
+            if (channels == 3) {
+                // Already RGB interleaved — linear convert and swap to BGR
+                var result = new byte[pixels * 3];
+                for (var i = 0; i < pixels; i++) {
+                    result[i * 3]     = (byte)(data[i * 3 + 2] >> 8);  // B
+                    result[i * 3 + 1] = (byte)(data[i * 3 + 1] >> 8);  // G
+                    result[i * 3 + 2] = (byte)(data[i * 3] >> 8);      // R
+                }
+                return result;
+            }
+
+            if (!string.IsNullOrEmpty(bayerPattern)) {
+                var rChannel = new ushort[pixels];
+                var gChannel = new ushort[pixels];
+                var bChannel = new ushort[pixels];
+                DebayerToChannels(data, width, height, bayerPattern!, rChannel, gChannel, bChannel);
+                var result = new byte[pixels * 3];
+                for (var i = 0; i < pixels; i++) {
+                    result[i * 3]     = (byte)(bChannel[i] >> 8);  // B
+                    result[i * 3 + 1] = (byte)(gChannel[i] >> 8);  // G
+                    result[i * 3 + 2] = (byte)(rChannel[i] >> 8);  // R
+                }
+                return result;
+            }
+
+            // Mono — grayscale BGR
+            var gray = new byte[pixels * 3];
+            for (var i = 0; i < pixels; i++) {
+                var b = (byte)(data[i] >> 8);
+                gray[i * 3]     = b;
+                gray[i * 3 + 1] = b;
+                gray[i * 3 + 2] = b;
+            }
+            return gray;
+        }
+
+        /// <summary>Debayers a Bayer CFA image into separate R, G, B channels using bilinear interpolation.</summary>
+        private static void DebayerToChannels(ushort[] data, int width, int height, string bayerPattern,
+            ushort[] rChannel, ushort[] gChannel, ushort[] bChannel) {
+
+            var (r0, r1) = GetBayerPhase(bayerPattern, 'R');
+            var (b0, b1) = GetBayerPhase(bayerPattern, 'B');
+
+            for (var y = 0; y < height; y++) {
+                for (var x = 0; x < width; x++) {
+                    var i = y * width + x;
+                    var px = x & 1;
+                    var py = y & 1;
+
+                    if (px == r1 && py == r0) {
+                        rChannel[i] = data[i];
+                        gChannel[i] = InterpolateGreen(data, width, height, x, y);
+                        bChannel[i] = InterpolateBAtR(data, width, height, x, y);
+                    } else if (px == b1 && py == b0) {
+                        bChannel[i] = data[i];
+                        gChannel[i] = InterpolateGreen(data, width, height, x, y);
+                        rChannel[i] = InterpolateRAtB(data, width, height, x, y);
+                    } else {
+                        gChannel[i] = data[i];
+                        rChannel[i] = InterpolateRAtG(data, width, height, x, y, px, py);
+                        bChannel[i] = InterpolateBAtG(data, width, height, x, y, px, py);
+                    }
+                }
+            }
+        }
         private static byte[] DebayerAndStretch(ushort[] data, int width, int height, string bayerPattern) {
             var pixels = width * height;
             var rChannel = new ushort[pixels];
