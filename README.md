@@ -30,6 +30,8 @@ Add **SeeDrift Start** before capture and **SeeDrift Stop** when finished. Stop 
 ### Options panel
 Under **Plugins → SeeDrift**, pick a recent NINA log from the dropdown (or browse for any `.log`), then click **Run report**.
 
+**Plate solving every LIGHT frame takes time** — a ~300-frame session can take 10–20 minutes depending on your solver profile and concurrency setting. Video previews add extra build time on top of that.
+
 ### Preview videos (optional)
 Enable **Auto-generate video** in plugin settings to create an MP4 preview of each target's drift, with an optional drift reticle overlay.
 

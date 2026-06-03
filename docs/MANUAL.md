@@ -25,7 +25,7 @@ For **Discord webhook**, **Concurrency**, and **Minimum exposures**, hover anywh
 
 SeeDrift also appends its own messages to **`%LocalAppData%\NINA\SeeDrift\SeeDrift.log`** (same folder as `settings.json`). The main NINA application log still receives the same lines.
 
-**Tip:** Plate solving uses your **NINA plate-solve profile** (same engines/settings as the Plate Solve tool). To reduce solve time, tune that profile (solver choice, timeouts, downsampling); then adjust **Concurrency** if your PC can sustain multiple solves. The **Compare saved reports** path avoids this cost by using metrics already embedded in generated HTML and comparing the reports as whole sessions rather than target-by-target.
+**Tip:** Plate solving uses your **NINA plate-solve profile** (same engines/settings as the Plate Solve tool). A typical ~300-frame session can take **10–20 minutes** depending on solver speed and your **Concurrency** setting. To reduce solve time, tune that profile (solver choice, timeouts, downsampling); then adjust **Concurrency** if your PC can sustain multiple solves. **Video previews** (when enabled) add extra build time on top of plate solving — each target's video encodes all frames with no sampling, so more frames = longer wait. The **Compare saved reports** path avoids solve and video costs entirely by using metrics already embedded in generated HTML.
 
 ## Workflow
 
@@ -99,6 +99,7 @@ When log lines match **between-frame** intervals, **dither** and **center-after-
 - **Logs folder:** Stop works from **`%LocalAppData%\NINA\Logs\*.log`** only — fast compared to walking the image tree. It **pre-filters** by the `yyyyMMdd-HHmmss-…` prefix in each log file name (local dates around arm/disarm, plus one day before the earlier date). If **no** files match that filter, SeeDrift reads **all** logs and logs a warning (covers unusual file names). In practice you often get **one log file per imaging session**, but NINA may **start a new file** when it rotates logs, so one session can span **two** files. The night HTML lists **only** logs that had at least one in-window **Saved image to …** line for that run.
 - **Solve failures:** Frames that do not solve are skipped for the trace (implementation logs errors).
 - **Jump detection:** Runs on the solved-sample sequence where applicable.
+- **Video preview speed:** When **Auto-generate video** is enabled, each target encodes **all** frames using embedded FFmpeg — no frame sampling. A target with ~200 frames at 480p takes roughly 30–60 seconds to encode. At higher resolutions or with the drift reticle enabled (frame-by-frame overlay drawing), expect longer build times.
 
 ## Troubleshooting
 
