@@ -17,7 +17,7 @@ using System.Windows;
 
 Dither, center-after-drift, and SeeDither events are correlated from the NINA sequencer log. Star-shape and walking-noise drift risk are summarized separately. Optional preview videos with a drift reticle overlay can be generated using the embedded FFmpeg.
 
-Reports are stored in a local library and can be exported or compared. Support on Ko-fi is appreciated!")]
+Reports are stored in a local library and can be exported or compared. If you use and like anything I've done, support on Ko-fi (https://ko-fi.com/turnpike47298) is appreciated to encourage me to keep going!")]
 [assembly: AssemblyCompany("Carl Stovell")]
 [assembly: AssemblyProduct("NINA.Plugin.SeeDrift")]
 [assembly: AssemblyVersion("0.10.2.0")]

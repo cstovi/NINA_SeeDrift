@@ -102,18 +102,28 @@
                           Foreground="#e2e8f0"/>
             </Grid>
 
-            <Grid Margin="24,0,0,12" ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="400">
+            <Grid Margin="0,0,0,12"
+                  ToolTipService.ShowDuration="60000" ToolTipService.InitialShowDelay="400">
+                <Grid.ToolTip>
+                    <ToolTip>
+                        <TextBlock Text="When Auto-generate video is on, overlays a green drift reticle (+)
+on the preview video showing the FOV center movement
+across each frame."/>
+                    </ToolTip>
+                </Grid.ToolTip>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="160"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Drift reticle:" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#94a3b8" FontSize="12"/>
+                <TextBlock Grid.Column="0" Text="Drift reticle:" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <CheckBox Grid.Column="1"
                           HorizontalAlignment="Left"
                           IsChecked="{Binding ShowDriftReticle}"
                           Content="Show drift marker (+) on video"
-                          Foreground="#94a3b8" FontSize="12"/>
+                          Foreground="#e2e8f0"/>
             </Grid>
+
+            <Separator Margin="0,0,0,12"/>
 
             <TextBlock Text="Alternative image location mapping" FontWeight="Bold" Margin="0,0,0,4"/>
             <TextBlock Text="When FITS were moved after capture, map the log path prefix to a secondary folder."
