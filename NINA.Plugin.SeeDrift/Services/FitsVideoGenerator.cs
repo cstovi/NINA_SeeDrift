@@ -139,8 +139,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                         bgr24 = GenerateBlankFrame(outWidth, outHeight);
                     }
 
-                    await stdin.WriteAsync(bgr24, 0, bgr24.Length, cancellationToken);
-                    await stdin.FlushAsync(cancellationToken);
+                    await stdin.WriteAsync(bgr24, 0, bgr24.Length, cancellationToken).ConfigureAwait(false);
+                    await stdin.FlushAsync(cancellationToken).ConfigureAwait(false);
 
                     // Report progress
                     var pct = (int)((double)(frameIndex + 1) / totalFrames * 100);
@@ -149,7 +149,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 // Close stdin to signal end of input to FFmpeg
                 stdin.Close();
-                await process.WaitForExitAsync();
+                await process.WaitForExitAsync().ConfigureAwait(false);
 
                 if (process.ExitCode != 0) {
                     lock (stderrBuilder) {
