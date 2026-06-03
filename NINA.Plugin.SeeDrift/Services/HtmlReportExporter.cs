@@ -81,7 +81,8 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// <param name="minExposuresPerTarget">Targets with fewer solved frames in the batch are omitted from headings and subsections (minimum 1).</param>
         public static void WriteNightReport(
                 IReadOnlyList<DriftTrackingService.CompletedTarget> targets, string path,
-                int minExposuresPerTarget = 50) {
+                int minExposuresPerTarget = 50,
+                IReadOnlyDictionary<string, string>? videoBase64ByTarget = null) {
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var min = Math.Max(1, minExposuresPerTarget);
@@ -128,6 +129,15 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("    </div>");
             sb.AppendLine("  </div>");
             sb.AppendLine("</header>");
+
+            // Emit embedded video base64 data if available (for self-contained HTML sharing)
+            if (videoBase64ByTarget != null && videoBase64ByTarget.Count > 0) {
+                sb.AppendLine("<script>");
+                sb.Append("window.__seedriftVideoBase64=");
+                sb.Append(SerializeBase64Map(videoBase64ByTarget));
+                sb.AppendLine(";");
+                sb.AppendLine("</script>");
+            }
 
             // Pre-build per-target analyses up-front so the run-wide Session Settings panel can pool
             // the realized-dither medians (the run-wide value is the mean of per-target medians).
@@ -225,16 +235,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                     sb.Append(FormatAnalysisSummaryHtml(analysis));
                     sb.Append(FormatTimelineHtml(analysis));
 
-                    // Video preview button for this target
+                    // Video preview button for this target (shown/hidden by JS based on base64 data)
                     var videoSectionClass = g < filteredGroups.Count - 1 ? "mt-3" : "mt-3 mb-2";
-                    var isMultiTarget = targets.Count > 1;
-                    var reportBaseName = Path.GetFileNameWithoutExtension(path);
-                    var videoFileName = FitsVideoGenerator.BuildOutputPath(
-                        "", targetName, isMultiTarget, reportBaseName);
-                    // Extract just the filename (path is empty above)
-                    videoFileName = Path.GetFileName(videoFileName);
                     sb.AppendLine($"  <div class=\"{videoSectionClass}\">");
-                    sb.AppendLine($"    <div class=\"video-preview-section\" data-target-name=\"{Escape(targetName)}\" data-video-path=\"{Escape(videoFileName)}\" style=\"display:none;\">");
+                    sb.AppendLine($"    <div class=\"video-preview-section\" data-target-name=\"{Escape(targetName)}\" style=\"display:none;\">");
                     sb.AppendLine($"      <button class=\"showVideoBtn text-xs rounded border border-slate-600 bg-slate-800/60 px-3 py-1.5 text-slate-300 hover:bg-slate-700/60 hover:text-white\" onclick=\"showVideo('{Escape(targetName)}')\">");
                     sb.AppendLine("        <span class=\"btnText\">▶ Play Preview Video</span>");
                     sb.AppendLine("      </button>");
@@ -457,31 +461,20 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             sb.AppendLine("<script>");
             sb.AppendLine("(function(){");
-            sb.AppendLine("  // Probe each section's video file to show/hide the play button");
+            sb.AppendLine("  // Show play buttons for targets that have embedded video base64 data");
+            sb.AppendLine("  var b64 = window.__seedriftVideoBase64 || {};");
             sb.AppendLine("  document.querySelectorAll('.video-preview-section').forEach(function(section) {");
-            sb.AppendLine("    section.style.display = 'block';");
-            sb.AppendLine("    var videoPath = section.getAttribute('data-video-path');");
-            sb.AppendLine("    if (!videoPath) return;");
-            sb.AppendLine("    var probe = document.createElement('video');");
-            sb.AppendLine("    probe.onloadedmetadata = function() {");
-            sb.AppendLine("      // Video file exists — keep the section visible");
-            sb.AppendLine("    };");
-            sb.AppendLine("    probe.onerror = function() {");
-            sb.AppendLine("      // Video file not found — hide this section");
-            sb.AppendLine("      section.style.display = 'none';");
-            sb.AppendLine("    };");
-            sb.AppendLine("    probe.preload = 'metadata';");
-            sb.AppendLine("    probe.src = videoPath;");
-            sb.AppendLine("    probe.load();");
+            sb.AppendLine("    var targetName = section.getAttribute('data-target-name');");
+            sb.AppendLine("    if (targetName && b64[targetName]) {");
+            sb.AppendLine("      section.style.display = 'block';");
+            sb.AppendLine("    }");
             sb.AppendLine("  });");
             sb.AppendLine("");
             sb.AppendLine("  window.showVideo = function(targetName) {");
-            sb.AppendLine("    var section = document.querySelector('[data-target-name=\"' + targetName + '\"]');");
-            sb.AppendLine("    if (!section) return;");
-            sb.AppendLine("    var videoPath = section.getAttribute('data-video-path');");
-            sb.AppendLine("    if (!videoPath) return;");
+            sb.AppendLine("    var b64 = (window.__seedriftVideoBase64 || {})[targetName];");
+            sb.AppendLine("    if (!b64) return;");
             sb.AppendLine("    document.getElementById('videoTargetName').textContent = targetName;");
-            sb.AppendLine("    document.getElementById('videoSource').src = videoPath;");
+            sb.AppendLine("    document.getElementById('videoSource').src = 'data:video/mp4;base64,' + b64;");
             sb.AppendLine("    document.getElementById('videoPlayer').load();");
             sb.AppendLine("    document.getElementById('videoPlayerModal').style.display = 'flex';");
             sb.AppendLine("  };");
@@ -1314,6 +1307,26 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// Returns the HTML for the video player modal (hidden by default).
         /// Shared across all targets in the session.
         /// </summary>
+        /// <summary>
+        /// Serializes the video base64 map as a JavaScript object literal for embedding in the HTML.
+        /// </summary>
+        private static string SerializeBase64Map(IReadOnlyDictionary<string, string> map) {
+            var sb = new StringBuilder();
+            sb.Append('{');
+            var first = true;
+            foreach (var kvp in map) {
+                if (!first) sb.Append(',');
+                first = false;
+                sb.Append('"');
+                sb.Append(kvp.Key.Replace("\\", "\\\\").Replace("\"", "\\\""));
+                sb.Append("\":\"");
+                sb.Append(kvp.Value);
+                sb.Append('"');
+            }
+            sb.Append('}');
+            return sb.ToString();
+        }
+
         private static string FormatVideoModalHtml() {
             return @"
 <div id=""videoPlayerModal"" class=""fixed inset-0 z-50 items-center justify-center bg-black/80"" style=""display:none;"">

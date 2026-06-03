@@ -692,7 +692,15 @@ namespace NINA.Plugin.SeeDrift.Services {
                 Directory.CreateDirectory(folder);
                 var path = Path.Combine(folder, FormatNightReportHtmlFileName(CompletedTargets));
                 path = Path.GetFullPath(path);
-                HtmlReportExporter.WriteNightReport(CompletedTargets, path, _plugin.MinExposuresPerTarget);
+
+                // Generate preview videos BEFORE writing the HTML (so base64 can be embedded)
+                Dictionary<string, string>? videoBase64 = null;
+                if (_plugin.Settings.AutoGenerateVideo) {
+                    videoBase64 = GeneratePreviewVideos(path);
+                }
+
+                // Write the report with embedded video data
+                HtmlReportExporter.WriteNightReport(CompletedTargets, path, _plugin.MinExposuresPerTarget, videoBase64);
                 if (!File.Exists(path)) {
                     errorMessage = "file missing after write";
                     return false;
@@ -700,11 +708,6 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 fullPath = path;
                 SeeDriftLog.Info($"SeeDrift: night report saved → {path}");
-
-                // Generate preview videos at build time if enabled
-                if (_plugin.Settings.AutoGenerateVideo) {
-                    GeneratePreviewVideos(path);
-                }
 
                 return true;
             } catch (Exception ex) {
@@ -716,18 +719,20 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         /// <summary>
         /// Generates preview MP4 videos for each target in the report, using the embedded FFmpeg.
+        /// Returns a dictionary mapping target names to base64-encoded MP4 data (for HTML embedding).
         /// </summary>
-        private void GeneratePreviewVideos(string reportPath) {
+        private Dictionary<string, string>? GeneratePreviewVideos(string reportPath) {
             if (!_plugin.FFmpegManager.IsAvailable()) {
                 SeeDriftLog.Info("Video preview generation skipped: FFmpeg not available");
-                return;
+                return null;
             }
 
             var reportDir = Path.GetDirectoryName(reportPath);
-            if (string.IsNullOrEmpty(reportDir)) return;
+            if (string.IsNullOrEmpty(reportDir)) return null;
 
             var isMultiTarget = CompletedTargets.Count > 1;
             var reportBaseName = Path.GetFileNameWithoutExtension(reportPath);
+            var base64Map = new Dictionary<string, string>();
 
             foreach (var batch in CompletedTargets) {
                 var targetName = batch.Name;
@@ -755,13 +760,23 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                     SeeDriftLog.Info($"Generating preview video for target '{targetName}' ({fitsPaths.Count} frames)...");
                     var sw = System.Diagnostics.Stopwatch.StartNew();
-                    generator.GenerateVideoForTarget(targetName, fitsPaths, reportDir, isMultiTarget, reportBaseName);
+                    var filePath = generator.GenerateVideoForTarget(targetName, fitsPaths, reportDir, isMultiTarget, reportBaseName);
                     sw.Stop();
                     SeeDriftLog.Info($"Preview video for target '{targetName}' completed in {sw.Elapsed.TotalSeconds:F1}s");
+
+                    // Read MP4 into base64 for HTML embedding
+                    if (File.Exists(filePath)) {
+                        var bytes = File.ReadAllBytes(filePath);
+                        var b64 = Convert.ToBase64String(bytes);
+                        base64Map[targetName] = b64;
+                        SeeDriftLog.Debug($"Base64 for target '{targetName}': {b64.Length / 1024} KB encoded");
+                    }
                 } catch (Exception ex) {
                     SeeDriftLog.Warning($"Could not generate preview video for target '{targetName}': {ex.Message}");
                 }
             }
+
+            return base64Map.Count > 0 ? base64Map : null;
         }
 
         /// <summary>
