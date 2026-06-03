@@ -872,7 +872,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 sb.AppendLine("          <span class=\"text-blue-400 text-sm\">ℹ️</span>");
                 sb.AppendLine("          <div class=\"flex-1\">");
                 sb.AppendLine("            <p class=\"text-xs font-semibold text-blue-300\">Both regular NINA dither and SeeDither detected</p>");
-                sb.AppendLine("            <p class=\"mt-1 text-xs text-blue-400/80\">You only need SeeDither — it replaces the built-in DitherAfterExposures. Using both may cause unnecessary corrections.</p>");
+                sb.AppendLine("            <p class=\"mt-1 text-xs text-blue-400/80\">You only need SeeDither — it replaces the built-in DitherAfterExposures. Using both may cause unnecessary dithering.</p>");
                 sb.AppendLine("          </div>");
                 sb.AppendLine("        </div>");
                 sb.AppendLine("      </div>");
