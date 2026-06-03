@@ -282,6 +282,8 @@ across each frame."/>
                 </StackPanel>
             </Border>
 
+            <StackPanel Visibility="Collapsed">
+
             <Separator Margin="0,2,0,12"/>
 
             <TextBlock Text="Compare saved reports" FontWeight="Bold" Margin="0,0,0,4"/>
@@ -370,6 +372,8 @@ across each frame."/>
                     </StackPanel>
                 </StackPanel>
             </Border>
+
+            </StackPanel>
 
             <TextBlock Text="Tip: plate solving uses your NINA plate-solve profile (same solvers as the Plate Solve tool)." FontSize="11" Foreground="#888" TextWrapping="Wrap" Margin="0,4,0,0"/>
         </StackPanel>
