@@ -730,49 +730,61 @@ namespace NINA.Plugin.SeeDrift.Services {
             var reportDir = Path.GetDirectoryName(reportPath);
             if (string.IsNullOrEmpty(reportDir)) return null;
 
-            var isMultiTarget = CompletedTargets.Count > 1;
             var reportBaseName = Path.GetFileNameWithoutExtension(reportPath);
             var base64Map = new Dictionary<string, string>();
+            var isMultiTarget = CompletedTargets.SelectMany(b => b.Samples)
+                .Select(s => (string.IsNullOrWhiteSpace(s.TargetName) ? "Unknown" : s.TargetName.Trim()))
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
 
             foreach (var batch in CompletedTargets) {
-                var targetName = batch.Name;
-                if (string.IsNullOrWhiteSpace(targetName)) targetName = "Unknown";
+                // Split batch frames by individual target (same approach as WriteNightReport)
+                var ordered = batch.Samples.OrderBy(s => s.FrameIndex).ToList();
+                var groups = ordered
+                    .GroupBy(s => string.IsNullOrWhiteSpace(s.TargetName) ? "Unknown" : s.TargetName.Trim(),
+                             StringComparer.OrdinalIgnoreCase);
 
-                // Collect ordered FITS paths for this target
-                var fitsPaths = batch.Samples
-                    .Where(s => !string.IsNullOrEmpty(s.SourceFilePath))
-                    .OrderBy(s => s.FrameIndex)
-                    .Select(s => s.SourceFilePath!)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                foreach (var tg in groups) {
+                    var targetName = tg.Key;
+                    var targetSamples = tg.OrderBy(s => s.FrameIndex).ToList();
 
-                if (fitsPaths.Count == 0) {
-                    SeeDriftLog.Debug($"No FITS files for target '{targetName}', skipping video");
-                    continue;
-                }
+                    // Collect ordered FITS paths for this target
+                    var fitsPaths = targetSamples
+                        .Where(s => !string.IsNullOrEmpty(s.SourceFilePath))
+                        .Select(s => s.SourceFilePath!)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
 
-                try {
-                    var generator = new FitsVideoGenerator(_plugin.FFmpegManager) {
-                        FrameRate = _plugin.Settings.VideoFrameRate,
-                        EncoderPreset = _plugin.Settings.VideoEncoderPreset,
-                        TargetWidth = ParseVideoResolution(_plugin.Settings.VideoResolution),
-                    };
-
-                    SeeDriftLog.Info($"Generating preview video for target '{targetName}' ({fitsPaths.Count} frames)...");
-                    var sw = System.Diagnostics.Stopwatch.StartNew();
-                    var filePath = generator.GenerateVideoForTarget(targetName, fitsPaths, reportDir, isMultiTarget, reportBaseName);
-                    sw.Stop();
-                    SeeDriftLog.Info($"Preview video for target '{targetName}' completed in {sw.Elapsed.TotalSeconds:F1}s");
-
-                    // Read MP4 into base64 for HTML embedding
-                    if (File.Exists(filePath)) {
-                        var bytes = File.ReadAllBytes(filePath);
-                        var b64 = Convert.ToBase64String(bytes);
-                        base64Map[targetName] = b64;
-                        SeeDriftLog.Debug($"Base64 for target '{targetName}': {b64.Length / 1024} KB encoded");
+                    if (fitsPaths.Count == 0) {
+                        SeeDriftLog.Debug($"No FITS files for target '{targetName}', skipping video");
+                        continue;
                     }
-                } catch (Exception ex) {
-                    SeeDriftLog.Warning($"Could not generate preview video for target '{targetName}': {ex.Message}");
+
+                    try {
+                        var generator = new FitsVideoGenerator(_plugin.FFmpegManager) {
+                            FrameRate = _plugin.Settings.VideoFrameRate,
+                            EncoderPreset = _plugin.Settings.VideoEncoderPreset,
+                            TargetWidth = ParseVideoResolution(_plugin.Settings.VideoResolution),
+                        };
+
+                        SeeDriftLog.Info($"Generating preview video for target '{targetName}' ({fitsPaths.Count} frames)...");
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        var filePath = generator.GenerateVideoForTarget(targetName, fitsPaths, reportDir, isMultiTarget, reportBaseName);
+                        sw.Stop();
+                        SeeDriftLog.Info($"Preview video for target '{targetName}' completed in {sw.Elapsed.TotalSeconds:F1}s");
+
+                        // Read MP4 into base64 for HTML embedding
+                        if (File.Exists(filePath)) {
+                            var bytes = File.ReadAllBytes(filePath);
+                            var b64 = Convert.ToBase64String(bytes);
+                            // Use a unique key per target (if duplicate, first one wins)
+                            if (!base64Map.ContainsKey(targetName)) {
+                                base64Map[targetName] = b64;
+                            }
+                            SeeDriftLog.Debug($"Base64 for target '{targetName}': {b64.Length / 1024} KB encoded");
+                        }
+                    } catch (Exception ex) {
+                        SeeDriftLog.Warning($"Could not generate preview video for target '{targetName}': {ex.Message}");
+                    }
                 }
             }
 
