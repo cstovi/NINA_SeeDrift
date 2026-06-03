@@ -1285,18 +1285,48 @@ namespace NINA.Plugin.SeeDrift.Services {
             return RunDurationFormatter.ToReadable(TimeSpan.FromSeconds(totalSeconds));
         }
 
-        /// <summary>First/last exposure start from solved frames (DATE-OBS / log timing), shown in local wall time.</summary>
+        /// <summary>First/last exposure start from solved frames, shown in the imaging site timezone (DATE-LOC when available, fallback to local time).</summary>
         private static string FormatTargetExposureRangeHtml(IReadOnlyList<DriftSample> grp) {
             if (grp.Count == 0)
                 return "";
-            var startUtc = grp.Min(s => s.ExposureStartUtc);
-            var endUtc = grp.Max(s => s.ExposureStartUtc);
+
+            DateTime startDisp, endDisp;
+            string tzSuffix;
+
+            var anyLocal = grp.Any(s => s.ExposureStartLocal.HasValue);
+            if (anyLocal) {
+                var withLocal = grp.Where(s => s.ExposureStartLocal.HasValue).ToList();
+                startDisp = withLocal.Min(s => s.ExposureStartLocal!.Value);
+                endDisp = withLocal.Max(s => s.ExposureStartLocal!.Value);
+                tzSuffix = FormatLocalZoneSuffix(withLocal[0]);
+            } else {
+                var startUtc = grp.Min(s => s.ExposureStartUtc);
+                var endUtc = grp.Max(s => s.ExposureStartUtc);
+                startDisp = startUtc.ToLocalTime();
+                endDisp = endUtc.ToLocalTime();
+                tzSuffix = "(local)";
+            }
+
             var fmt = "yyyy-MM-dd HH:mm";
-            var sl = startUtc.ToLocalTime().ToString(fmt, CultureInfo.InvariantCulture);
-            if (startUtc == endUtc)
-                return $"<span class=\"text-slate-500\">Exposure</span> {Escape(sl)} <span class=\"text-slate-500\">(local)</span>";
-            var el = endUtc.ToLocalTime().ToString(fmt, CultureInfo.InvariantCulture);
-            return $"<span class=\"text-slate-500\">Start</span> {Escape(sl)} <span class=\"text-slate-500\">·</span> <span class=\"text-slate-500\">End</span> {Escape(el)} <span class=\"text-slate-500\">(local)</span>";
+            var sl = startDisp.ToString(fmt, CultureInfo.InvariantCulture);
+            if (startDisp == endDisp)
+                return $"<span class=\"text-slate-500\">Exposure</span> {Escape(sl)} <span class=\"text-slate-500\">{Escape(tzSuffix)}</span>";
+            var el = endDisp.ToString(fmt, CultureInfo.InvariantCulture);
+            return $"<span class=\"text-slate-500\">Start</span> {Escape(sl)} <span class=\"text-slate-500\">·</span> <span class=\"text-slate-500\">End</span> {Escape(el)} <span class=\"text-slate-500\">{Escape(tzSuffix)}</span>";
+        }
+
+        /// <summary>Computes the UTC offset suffix from a sample's DATE-LOC vs DATE-OBS, e.g. "(UTC-5)" or "(UTC+5:30)".</summary>
+        private static string FormatLocalZoneSuffix(DriftSample sample) {
+            var local = sample.ExposureStartLocal!.Value;
+            var utc = sample.ExposureStartUtc;
+            var localBase = new DateTime(local.Year, local.Month, local.Day, local.Hour, local.Minute, 0, DateTimeKind.Unspecified);
+            var utcBase = new DateTime(utc.Year, utc.Month, utc.Day, utc.Hour, utc.Minute, 0, DateTimeKind.Unspecified);
+            var offset = localBase - utcBase;
+            var sign = offset >= TimeSpan.Zero ? "+" : "-";
+            var abs = offset.Duration();
+            return abs.Minutes == 0
+                ? $"(UTC{sign}{abs.Hours})"
+                : $"(UTC{sign}{abs.Hours}:{abs.Minutes:D2})";
         }
 
         private static string Escape(string s) {

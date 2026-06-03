@@ -58,6 +58,20 @@ namespace NINA.Plugin.SeeDrift.Utility {
             return false;
         }
 
+        /// <summary>Parses DATE-LOC (local time at the observatory) from FITS headers. Returns raw clock value with Unspecified kind.</summary>
+        public static bool TryParseObservationLocal(Dictionary<string, string> cards, out DateTime local) {
+            local = default;
+            foreach (var key in new[] { "DATE-LOC", "DATE_LOC", "LOCALTIME", "LST" }) {
+                if (!cards.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
+                    continue;
+                raw = raw.Trim().Trim('\'', '"');
+                if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)) {
+                    local = DateTime.SpecifyKind(parsed, DateTimeKind.Unspecified);
+                    return true;
+                }
+            }
+            return false;
+        }
         /// <summary>
         /// Excludes obvious calibration frames when IMAGETYP / OBSTYPE is set; includes unknown types so folders without keywords still load.
         /// </summary>

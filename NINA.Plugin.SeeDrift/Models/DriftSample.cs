@@ -6,6 +6,9 @@ namespace NINA.Plugin.SeeDrift.Models {
     public sealed class DriftSample {
         public int FrameIndex { get; init; }
         public DateTime ExposureStartUtc { get; init; }
+
+        /// <summary>Local time at the observatory from FITS <c>DATE-LOC</c>. Used exclusively for display — not for computation.</summary>
+        public DateTime? ExposureStartLocal { get; init; }
         public string FileName { get; init; } = "";
         public string TargetName { get; init; } = "";
         public double DeltaRaArcSec { get; init; }

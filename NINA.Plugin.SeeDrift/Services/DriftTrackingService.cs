@@ -54,6 +54,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             /// <summary>Target Scheduler <c>NewTargetStart</c> events from the same log pass.</summary>
             public IReadOnlyList<TargetSchedulerStartEvent> TargetSchedulerStarts { get; init; } =
                 Array.Empty<TargetSchedulerStartEvent>();
+
         }
 
         private sealed class TraceState {
@@ -503,16 +504,20 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var label = entry.TargetLabel;
                 double? nomScale = null;
                 double? exposureSeconds = null;
+                DateTime? exposureLocal = null;
                 if (TryResolveHeaderCards(entry, out var hdrCards)) {
                     if (FitsCoordinates.TryReadPlateScale(hdrCards, out var sPx))
                         nomScale = sPx;
                     if (FitsCoordinates.TryReadExposureSeconds(hdrCards, out var expSec))
                         exposureSeconds = expSec;
+                    if (FitsCoordinates.TryParseObservationLocal(hdrCards, out var loc))
+                        exposureLocal = loc;
                 }
                 AccumulateFromParsed(
                     sc.Value.RaHours,
                     sc.Value.DecDeg,
                     entry.ExposureUtc,
+                    exposureLocal,
                     entry.Path,
                     label,
                     trace,
@@ -565,16 +570,16 @@ namespace NINA.Plugin.SeeDrift.Services {
             string? nightSaveError = null;
 
             await Application.Current!.Dispatcher.InvokeAsync(() => {
-                CompletedTargets.Add(new CompletedTarget {
-                    Name = targetName,
-                    Samples = built,
-                    SourceLogPaths = sourceLogsForBatch,
-                    SeestarDevice = SeestarDeviceInfoService.FromLogFiles(sourceLogsForBatch),
-                    RunDuration = runStopwatch.Elapsed,
-                    LogObservations = LatestLogObservations,
-                    LightSaveCatalog = lightCatalog,
-                    TargetSchedulerStarts = LatestTargetSchedulerStarts
-                });
+                    CompletedTargets.Add(new CompletedTarget {
+                        Name = targetName,
+                        Samples = built,
+                        SourceLogPaths = sourceLogsForBatch,
+                        SeestarDevice = SeestarDeviceInfoService.FromLogFiles(sourceLogsForBatch),
+                        RunDuration = runStopwatch.Elapsed,
+                        LogObservations = LatestLogObservations,
+                        LightSaveCatalog = lightCatalog,
+                        TargetSchedulerStarts = LatestTargetSchedulerStarts
+                    });
                 if (!TryWriteNightReport(out nightSavedPath, out nightSaveError)) {
                     // Avoid leaving a batch in memory that never reached disk.
                     if (CompletedTargets.Count > 0)
@@ -911,6 +916,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             double raHours,
             double decDeg,
             DateTime exposureUtc,
+            DateTime? exposureLocal,
             string path,
             string label,
             TraceState st,
@@ -933,6 +939,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             sample = new DriftSample {
                 FrameIndex = st.NextFrameIndex++,
                 ExposureStartUtc = utc,
+                ExposureStartLocal = exposureLocal,
                 FileName = Path.GetFileName(path),
                 SourceFilePath = path,
                 TargetName = label,
