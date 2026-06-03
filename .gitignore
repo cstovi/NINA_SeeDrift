@@ -5,3 +5,6 @@ out/
 *.user
 .idea/
 plans/
+.cursor/
+_parse_report.py
+session-ses_1c9e.md
