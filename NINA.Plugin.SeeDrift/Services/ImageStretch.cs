@@ -87,6 +87,63 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>
+        /// Sqrt stretch 16-bit → 8-bit conversion with debayering.
+        /// Applies sqrt(normalized)*255 to bring out faint stars while keeping background dark.
+        /// Uses a precomputed 65536-entry lookup table for performance.
+        /// </summary>
+        public static byte[] ProcessToBgr24Sqrt(ushort[] data, int width, int height, int channels, string? bayerPattern) {
+            var pixels = width * height;
+            var sqrtLookup = BuildSqrtLookup();
+
+            if (channels == 3) {
+                var result = new byte[pixels * 3];
+                for (var i = 0; i < pixels; i++) {
+                    result[i * 3]     = sqrtLookup[data[i * 3 + 2]];  // B
+                    result[i * 3 + 1] = sqrtLookup[data[i * 3 + 1]];  // G
+                    result[i * 3 + 2] = sqrtLookup[data[i * 3]];      // R
+                }
+                return result;
+            }
+
+            if (!string.IsNullOrEmpty(bayerPattern)) {
+                var rChannel = new ushort[pixels];
+                var gChannel = new ushort[pixels];
+                var bChannel = new ushort[pixels];
+                DebayerToChannels(data, width, height, bayerPattern!, rChannel, gChannel, bChannel);
+                var result = new byte[pixels * 3];
+                for (var i = 0; i < pixels; i++) {
+                    result[i * 3]     = sqrtLookup[bChannel[i]];
+                    result[i * 3 + 1] = sqrtLookup[gChannel[i]];
+                    result[i * 3 + 2] = sqrtLookup[rChannel[i]];
+                }
+                return result;
+            }
+
+            // Mono — grayscale BGR
+            var gray = new byte[pixels * 3];
+            for (var i = 0; i < pixels; i++) {
+                var b = sqrtLookup[data[i]];
+                gray[i * 3]     = b;
+                gray[i * 3 + 1] = b;
+                gray[i * 3 + 2] = b;
+            }
+            return gray;
+        }
+
+        /// <summary>
+        /// Precomputes a 65536-entry lookup table: output = sqrt(input / 65535.0) * 255.
+        /// Faint stars get a significant boost; background stays reasonably dark.
+        /// </summary>
+        private static byte[] BuildSqrtLookup() {
+            var lookup = new byte[ushort.MaxValue + 1];
+            for (var i = 0; i < lookup.Length; i++) {
+                var normalized = (double)i / ushort.MaxValue; // 0..1
+                lookup[i] = (byte)Math.Round(Math.Sqrt(normalized) * 255.0);
+            }
+            return lookup;
+        }
+
+        /// <summary>
         /// Linear 16-bit → 8-bit conversion with debayering (matching Siril's approach).
         /// No histogram stretch — preserves the linear FITS data relationship.
         /// Background stays dark, stars stay bright — ideal for drift preview video.

@@ -125,7 +125,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                             bgr24 = GenerateBlankFrame(outWidth, outHeight);
                             SeeDriftLog.Warning($"Could not read FITS for frame {frameIndex + 1}, using blank: {fitsPath}");
                         } else {
-                            bgr24 = ImageStretch.ProcessToBgr24Linear(
+                            bgr24 = ImageStretch.ProcessToBgr24Sqrt(
                                 imageData.Data, imageData.Width, imageData.Height,
                                 imageData.Channels, imageData.BayerPattern);
 
