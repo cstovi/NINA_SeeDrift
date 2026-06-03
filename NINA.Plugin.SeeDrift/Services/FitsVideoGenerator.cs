@@ -32,6 +32,12 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// </summary>
         public int? TargetWidth { get; init; }
 
+        /// <summary>
+        /// When true, overlays a green drift reticle (+) at the FOV center position
+        /// (adjusted by per-frame DeltaRaArcSec/DeltaDecArcSec) on each frame.
+        /// </summary>
+        public bool DrawDriftMarker { get; init; } = true;
+
         public FitsVideoGenerator(FFmpegManager ffmpegManager) {
             _ffmpegManager = ffmpegManager ?? throw new ArgumentNullException(nameof(ffmpegManager));
         }
@@ -144,12 +150,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                                 bgr24 = ResizeBgr24(bgr24, imageData.Width, imageData.Height, outWidth, outHeight);
                             }
 
-                            // Draw drift crosshair in arcsec → pixel coordinates
-                            var px = (int)Math.Round(frame.DeltaRaArcSec / pixelScale);
-                            var py = (int)Math.Round(frame.DeltaDecArcSec / pixelScale);
-                            var crosshairX = centerX + px;
-                            var crosshairY = centerY - py; // Dec positive = up in image, but Y=down in buffer
-                            DrawCrosshair(bgr24, outWidth, outHeight, crosshairX, crosshairY);
+                            // Draw drift reticle at the arcsec → pixel offset position
+                            if (DrawDriftMarker) {
+                                var px = (int)Math.Round(frame.DeltaRaArcSec / pixelScale);
+                                var py = (int)Math.Round(frame.DeltaDecArcSec / pixelScale);
+                                var crosshairX = centerX + px;
+                                var crosshairY = centerY - py; // Dec positive = up in image, but Y=down in buffer
+                                DrawCrosshair(bgr24, outWidth, outHeight, crosshairX, crosshairY);
+                            }
                         }
                     } catch (Exception ex) {
                         SeeDriftLog.Warning($"Error processing frame {frameIndex + 1}, using blank: {ex.Message}");

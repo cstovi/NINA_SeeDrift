@@ -46,6 +46,12 @@ namespace NINA.Plugin.SeeDrift {
         /// </summary>
         public bool AutoGenerateVideo { get; set; } = false;
 
+        /// <summary>
+        /// If true, overlays a drift reticle (+) on the preview video showing the FOV center
+        /// movement across frames.
+        /// </summary>
+        public bool ShowDriftReticle { get; set; } = true;
+
         /// <summary>Log path prefix for capture location (e.g. C:\Users\…\N.I.N.A). Used with <see cref="AlternativeImageMappingAlternativeRoot"/>.</summary>
         public string AlternativeImageMappingOriginalRoot { get; set; } = "";
 

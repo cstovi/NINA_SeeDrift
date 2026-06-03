@@ -764,6 +764,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                             FrameRate = _plugin.Settings.VideoFrameRate,
                             EncoderPreset = _plugin.Settings.VideoEncoderPreset,
                             TargetWidth = ParseVideoResolution(_plugin.Settings.VideoResolution),
+                            DrawDriftMarker = _plugin.Settings.ShowDriftReticle,
                         };
 
                         SeeDriftLog.Info($"Generating preview video for target '{targetName}' ({frames.Count} frames)...");
