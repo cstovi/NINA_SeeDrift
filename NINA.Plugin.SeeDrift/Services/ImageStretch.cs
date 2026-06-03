@@ -8,9 +8,9 @@ namespace NINA.Plugin.SeeDrift.Services {
     /// </summary>
     internal static class ImageStretch {
 
-        private const double ClipLowPercentile = 0.001;   // 0.1% low clip
-        private const double ClipHighPercentile = 0.999;  // 99.9% high clip
-        private const double DefaultMidtone = 0.35;       // MTF midtone parameter (0..1, 0.5=linear, lower=brighter stretch, higher=darker)
+        private const double ClipLowPercentile = 0.01;    // 1% low clip (push sky background to black)
+        private const double ClipHighPercentile = 0.999;  // 99.9% high clip (ignore hot pixels)
+        private const double DefaultMidtone = 0.30;       // MTF midtone parameter (0..1, 0.5=linear, lower=brighter stretch, higher=darker)
 
         /// <summary>
         /// Processes a FITS image: debayers if Bayer pattern is given, then auto-stretches,
