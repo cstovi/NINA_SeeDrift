@@ -190,6 +190,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                                 if (reticleX.HasValue && reticleY.HasValue) {
                                     // Draw drift trail from all previous positions
                                     DrawDriftTrail(bgr24, outWidth, outHeight, reticlePositions);
+                                    // Green circle at start point
+                                    if (reticlePositions.Count > 0) {
+                                        DrawFilledCircle(bgr24, outWidth, outHeight,
+                                            reticlePositions[0].X, reticlePositions[0].Y, 5, 0, 255, 0);
+                                    }
+                                    // Red circle at current (finish) point
+                                    DrawFilledCircle(bgr24, outWidth, outHeight,
+                                        reticleX.Value, reticleY.Value, 5, 0, 0, 255);
                                     // Draw current reticle on top
                                     DrawReticle(bgr24, outWidth, outHeight, reticleX.Value, reticleY.Value);
                                     // Store for future frames
@@ -421,6 +429,28 @@ namespace NINA.Plugin.SeeDrift.Services {
                 if (e2 >= dy) { err += dy; px += sx; }
                 if (e2 <= dx) { err += dx; py += sy; }
                 pixelCount++;
+            }
+        }
+
+        /// <summary>
+        /// Draws a filled circle at (cx, cy) with the given radius and RGB color.
+        /// </summary>
+        private static void DrawFilledCircle(byte[] bgr24, int width, int height,
+            int cx, int cy, int radius, byte r, byte g, byte b) {
+            var rSq = radius * radius;
+            for (var dy = -radius; dy <= radius; dy++) {
+                var py = cy + dy;
+                if (py < 0 || py >= height) continue;
+                for (var dx = -radius; dx <= radius; dx++) {
+                    var px = cx + dx;
+                    if (px < 0 || px >= width) continue;
+                    if (dx * dx + dy * dy <= rSq) {
+                        var idx = (py * width + px) * 3;
+                        bgr24[idx] = b;
+                        bgr24[idx + 1] = g;
+                        bgr24[idx + 2] = r;
+                    }
+                }
             }
         }
 
