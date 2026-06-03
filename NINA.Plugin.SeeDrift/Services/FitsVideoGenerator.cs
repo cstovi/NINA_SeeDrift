@@ -229,7 +229,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var defaultVf = string.IsNullOrEmpty(scaleFilter) ? " -vf \"format=yuv420p\"" : "";
 
             return $"-y -f rawvideo -vcodec rawvideo -s {width}x{height} -pix_fmt bgr24 -r {fps} -i - " +
-                   $"-c:v libx264 -preset {preset} -crf 23 {defaultVf}{vf} \"{outputPath}\"";
+                   $"-c:v libx264 -preset {preset} -crf 33 -tune stillimage{defaultVf}{vf} \"{outputPath}\"";
         }
 
         private static (int width, int height) ComputeOutputDimensions(int nativeWidth, int nativeHeight, int? targetWidth = null) {
