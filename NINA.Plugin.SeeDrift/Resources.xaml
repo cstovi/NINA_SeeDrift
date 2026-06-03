@@ -96,6 +96,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Video preview:" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <CheckBox Grid.Column="1"
+                          HorizontalAlignment="Left"
                           IsChecked="{Binding AutoGenerateVideo}"
                           Content="Auto-generate (embedded FFmpeg)"
                           Foreground="#e2e8f0"/>
