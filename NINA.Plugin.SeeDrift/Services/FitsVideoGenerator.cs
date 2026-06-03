@@ -95,10 +95,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                 ? $",scale={outWidth}:{outHeight}:flags=bilinear"
                 : "";
 
-            // Pixel scale for crosshair positioning (arcsec/pixel, cached from first frame)
+            // Pixel scale and CD matrix for drift reticle positioning
             var pixelScale = firstImage.PixelScaleArcSec ?? DefaultPixelScaleArcSec;
-            SeeDriftLog.Debug($"Using pixel scale {pixelScale:F3} arcsec/px for reticle overlay" +
-                (firstImage.PixelScaleArcSec.HasValue ? " (from FITS header)" : $" (fallback for device)"));
+            var hasCdMatrix = firstImage.HasFullCdMatrix;
+            if (hasCdMatrix) {
+                SeeDriftLog.Debug($"Using full CD matrix for reticle positioning (pixel scale {pixelScale:F3} arcsec/px)");
+            } else {
+                SeeDriftLog.Debug($"Using simplified arcsec→pixel (scale {pixelScale:F3} arcsec/px) — FITS lacks full CD matrix");
+            }
 
             SeeDriftLog.Info($"Starting video generation for target '{targetName}': {totalFrames} frames, {width}x{height} -> {outWidth}x{outHeight}, {FrameRate} fps");
 
@@ -159,11 +163,27 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                             // Draw drift reticle at the arcsec → pixel offset position
                             if (DrawDriftMarker) {
-                                var px = (int)Math.Round(frame.DeltaRaArcSec / pixelScale);
-                                var py = (int)Math.Round(frame.DeltaDecArcSec / pixelScale);
-                                var crosshairX = centerX + px;
-                                var crosshairY = centerY - py; // Dec positive = up in image, but Y=down in buffer
-                                DrawCrosshair(bgr24, outWidth, outHeight, crosshairX, crosshairY);
+                                if (hasCdMatrix && imageData.HasFullCdMatrix) {
+                                    // Full CD matrix transform: handles rotation, flip, scale
+                                    var raDeg = frame.DeltaRaArcSec / 3600.0;
+                                    var decDeg = frame.DeltaDecArcSec / 3600.0;
+                                    var det = imageData.Cd1_1!.Value * imageData.Cd2_2!.Value
+                                            - imageData.Cd1_2!.Value * imageData.Cd2_1!.Value;
+                                    if (Math.Abs(det) > 1e-15) {
+                                        var px = (imageData.Cd2_2!.Value * raDeg - imageData.Cd1_2!.Value * decDeg) / det;
+                                        var py = (-imageData.Cd2_1!.Value * raDeg + imageData.Cd1_1!.Value * decDeg) / det;
+                                        var reticleX = centerX + (int)Math.Round(px);
+                                        var reticleY = centerY + (int)Math.Round(py);
+                                        DrawReticle(bgr24, outWidth, outHeight, reticleX, reticleY);
+                                    }
+                                } else {
+                                    // Simplified: assumes north-up, east-left orientation
+                                    var px = (int)Math.Round(frame.DeltaRaArcSec / pixelScale);
+                                    var py = (int)Math.Round(frame.DeltaDecArcSec / pixelScale);
+                                    var reticleX = centerX + px;
+                                    var reticleY = centerY - py; // Dec positive = up, but Y=down in buffer
+                                    DrawReticle(bgr24, outWidth, outHeight, reticleX, reticleY);
+                                }
                             }
                         }
                     } catch (Exception ex) {
@@ -299,36 +319,40 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         /// <summary>
-        /// Draws a 15px red crosshair (+) on a BGR24 buffer at the specified pixel coordinates.
-        /// Coordinates are clamped to image bounds. Uses bright green so it stands out against
-        /// the dark sky background and doesn't blend with red/blue star colors.
+        /// Draws a 25px white drift reticle (+) on a BGR24 buffer at the specified pixel coordinates.
+        /// Uses a 3×3 pixel block for the crosshair arms so it's clearly visible even at 480p.
+        /// Coordinates are clamped to image bounds.
         /// </summary>
-        private static void DrawCrosshair(byte[] bgr24, int width, int height, int cx, int cy) {
-            const int armLen = 7; // pixels from center to each arm tip
-            const byte r = 0;     // BGR: R channel
-            const byte g = 255;   // BGR: G channel (bright green)
-            const byte b = 0;     // BGR: B channel
+        private static void DrawReticle(byte[] bgr24, int width, int height, int cx, int cy) {
+            const int armLen = 12;     // pixels from center to each arm tip
+            const byte white = 255;    // BGR: all channels = white
 
-            // Vertical arm (x = cx, y from cy-armLen to cy+armLen)
-            for (var dy = -armLen; dy <= armLen; dy++) {
-                var py = cy + dy;
-                if (py < 0 || py >= height) continue;
-                if (cx < 0 || cx >= width) continue;
-                var idx = (py * width + cx) * 3;
-                bgr24[idx]     = b;
-                bgr24[idx + 1] = g;
-                bgr24[idx + 2] = r;
-            }
-
-            // Horizontal arm (y = cy, x from cx-armLen to cx+armLen)
-            for (var dx = -armLen; dx <= armLen; dx++) {
+            // Draw a 3px-thick vertical arm around cx, from cy-armLen to cy+armLen
+            for (var dx = -1; dx <= 1; dx++) {
                 var px = cx + dx;
                 if (px < 0 || px >= width) continue;
-                if (cy < 0 || cy >= height) continue;
-                var idx = (cy * width + px) * 3;
-                bgr24[idx]     = b;
-                bgr24[idx + 1] = g;
-                bgr24[idx + 2] = r;
+                for (var dy = -armLen; dy <= armLen; dy++) {
+                    var py = cy + dy;
+                    if (py < 0 || py >= height) continue;
+                    var idx = (py * width + px) * 3;
+                    bgr24[idx] = white;     // B
+                    bgr24[idx + 1] = white; // G
+                    bgr24[idx + 2] = white; // R
+                }
+            }
+
+            // Draw a 3px-thick horizontal arm around cy, from cx-armLen to cx+armLen
+            for (var dy = -1; dy <= 1; dy++) {
+                var py = cy + dy;
+                if (py < 0 || py >= height) continue;
+                for (var dx = -armLen; dx <= armLen; dx++) {
+                    var px = cx + dx;
+                    if (px < 0 || px >= width) continue;
+                    var idx = (py * width + px) * 3;
+                    bgr24[idx] = white;
+                    bgr24[idx + 1] = white;
+                    bgr24[idx + 2] = white;
+                }
             }
         }
 

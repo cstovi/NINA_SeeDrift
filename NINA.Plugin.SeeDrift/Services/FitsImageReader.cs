@@ -31,6 +31,21 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         /// <summary>Pixel scale in arcseconds per pixel, read from FITS header keywords.</summary>
         public double? PixelScaleArcSec { get; init; }
+
+        /// <summary>CD matrix row 1 column 1 (degrees/pixel), for arcsec→pixel transformation.</summary>
+        public double? Cd1_1 { get; init; }
+
+        /// <summary>CD matrix row 1 column 2 (degrees/pixel).</summary>
+        public double? Cd1_2 { get; init; }
+
+        /// <summary>CD matrix row 2 column 1 (degrees/pixel).</summary>
+        public double? Cd2_1 { get; init; }
+
+        /// <summary>CD matrix row 2 column 2 (degrees/pixel).</summary>
+        public double? Cd2_2 { get; init; }
+
+        /// <summary>True when all four CD matrix elements are available for full WCS transformation.</summary>
+        public bool HasFullCdMatrix => Cd1_1.HasValue && Cd1_2.HasValue && Cd2_1.HasValue && Cd2_2.HasValue;
     }
 
     /// <summary>
@@ -96,12 +111,22 @@ namespace NINA.Plugin.SeeDrift.Services {
             cards.Values.TryGetValue("BAYERPAT", out var bayerPat);
             bayerPat = bayerPat?.Trim('\'', '"', ' ');
 
-            // Pixel scale: try PIXSCALE keyword, then compute from CDELT1 (deg→arcsec)
+            // Full CD matrix for arcsec→pixel transformation (handles rotation, flip, scale)
+            double? cd1_1 = null, cd1_2 = null, cd2_1 = null, cd2_2 = null;
+            if (cards.Values.TryGetValue("CD1_1", out var cds) && double.TryParse(cds, out var c1_1)) cd1_1 = c1_1;
+            if (cards.Values.TryGetValue("CD1_2", out cds) && double.TryParse(cds, out var c1_2)) cd1_2 = c1_2;
+            if (cards.Values.TryGetValue("CD2_1", out cds) && double.TryParse(cds, out var c2_1)) cd2_1 = c2_1;
+            if (cards.Values.TryGetValue("CD2_2", out cds) && double.TryParse(cds, out var c2_2)) cd2_2 = c2_2;
+
+            // Pixel scale from CD matrix determinant (when 2+ elements available), else try PIXSCALE or CDELT
             double? pixelScale = null;
-            if (cards.Values.TryGetValue("PIXSCALE", out var psStr) && double.TryParse(psStr, out var ps)) {
+            if (cd1_1.HasValue && cd2_2.HasValue) {
+                var det = cd1_1.Value * cd2_2.Value - (cd1_2 ?? 0) * (cd2_1 ?? 0);
+                pixelScale = Math.Sqrt(Math.Abs(det)) * 3600.0;
+            } else if (cards.Values.TryGetValue("PIXSCALE", out var psStr) && double.TryParse(psStr, out var ps)) {
                 pixelScale = ps;
-            } else if (cards.Values.TryGetValue("CD1_1", out var cdStr) && double.TryParse(cdStr, out var cd)) {
-                pixelScale = Math.Abs(cd) * 3600.0; // degrees/pixel → arcsec/pixel
+            } else if (cd1_1.HasValue) {
+                pixelScale = Math.Abs(cd1_1.Value) * 3600.0;
             } else if (cards.Values.TryGetValue("CDELT1", out var cdeltStr) && double.TryParse(cdeltStr, out var cdelt)) {
                 pixelScale = Math.Abs(cdelt) * 3600.0;
             }
@@ -126,7 +151,11 @@ namespace NINA.Plugin.SeeDrift.Services {
                 Channels = channels,
                 Data = data,
                 BayerPattern = bayerPat,
-                PixelScaleArcSec = pixelScale
+                PixelScaleArcSec = pixelScale,
+                Cd1_1 = cd1_1,
+                Cd1_2 = cd1_2,
+                Cd2_1 = cd2_1,
+                Cd2_2 = cd2_2,
             };
         }
 
