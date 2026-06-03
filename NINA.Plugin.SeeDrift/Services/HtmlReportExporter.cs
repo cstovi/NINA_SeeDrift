@@ -865,6 +865,19 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("        <p class=\"text-[10px] font-semibold uppercase tracking-wide text-slate-300\">Drift advisory</p>");
             sb.AppendLine("      </div>");
 
+            // Advisory for using both dither types
+            if (risk.HasBothDitherTypes) {
+                sb.AppendLine("      <div class=\"mt-3 rounded-md bg-blue-900/20 border border-blue-700/30 p-2.5\">");
+                sb.AppendLine("        <div class=\"flex items-start gap-2\">");
+                sb.AppendLine("          <span class=\"text-blue-400 text-sm\">ℹ️</span>");
+                sb.AppendLine("          <div class=\"flex-1\">");
+                sb.AppendLine("            <p class=\"text-xs font-semibold text-blue-300\">Both regular NINA dither and SeeDither detected</p>");
+                sb.AppendLine("            <p class=\"mt-1 text-xs text-blue-400/80\">You only need SeeDither — it replaces the built-in DitherAfterExposures. Using both may cause unnecessary corrections.</p>");
+                sb.AppendLine("          </div>");
+                sb.AppendLine("        </div>");
+                sb.AppendLine("      </div>");
+            }
+
             // Sub-tier chips: independent star shape and walking noise ratings.
             if (!string.IsNullOrWhiteSpace(risk.StarShapeStatus) || !string.IsNullOrWhiteSpace(risk.WalkingNoiseStatus)) {
                 sb.AppendLine("      <div class=\"mt-2 flex flex-wrap gap-3\">");
@@ -883,25 +896,29 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             // Star shape section
             if (!string.IsNullOrWhiteSpace(risk.StarShapeStatus) && risk.IntervalCount > 0) {
+                sb.AppendLine("      <p class=\"mt-3 text-xs font-semibold text-slate-400\">Star shape factors:</p>");
                 if (risk.EstimatedDriftPerExposurePixels.HasValue) {
                     var assessment = risk.EstimatedDriftPerExposurePixels.Value < 1.0 ? "excellent"
                         : risk.EstimatedDriftPerExposurePixels.Value < 2.0 ? "acceptable"
                         : "may show elongation";
-                    sb.AppendLine("      <p class=\"mt-3 text-xs font-semibold text-slate-400\">Star shape factors:</p>");
                     sb.AppendLine(
                         $"      <p class=\"mt-1 text-xs text-slate-400\">Per-exposure drift: ~{risk.EstimatedDriftPerExposurePixels.Value:0.#} px ({assessment} for round stars)</p>");
                 } else if (risk.EstimatedDriftPerExposureArcSec.HasValue) {
-                    sb.AppendLine("      <p class=\"mt-3 text-xs font-semibold text-slate-400\">Star shape factors:</p>");
                     sb.AppendLine(
                         $"      <p class=\"mt-1 text-xs text-slate-400\">Per-exposure drift: ~{risk.EstimatedDriftPerExposureArcSec.Value:0.#}″</p>");
+                } else {
+                    sb.AppendLine(
+                        $"      <p class=\"mt-1 text-xs text-slate-500\">Insufficient data — need more frames between dithers to assess per-exposure drift</p>");
                 }
             }
 
             // Walking noise section
             if (!string.IsNullOrWhiteSpace(risk.WalkingNoiseStatus) && risk.IntervalCount > 0) {
                 sb.AppendLine("      <p class=\"mt-3 text-xs font-semibold text-slate-400\">Walking noise factors:</p>");
-                sb.AppendLine(
-                    $"      <p class=\"mt-1 text-xs text-slate-400\">Average drift rate: {risk.NaturalDriftArcSecPerMinute:0.##}″/min{Escape(px)} (during natural imaging, between any corrections)</p>");
+                if (risk.NaturalDriftArcSecPerMinute.HasValue) {
+                    sb.AppendLine(
+                        $"      <p class=\"mt-1 text-xs text-slate-400\">Average drift rate: {risk.NaturalDriftArcSecPerMinute.Value:0.##}″/min{Escape(px)} (during natural imaging, between any corrections)</p>");
+                }
                 if (risk.DitherHeadroomRatio.HasValue && risk.BetweenDitherDriftPixels.HasValue) {
                     var assessment = risk.DitherHeadroomRatio.Value >= 3.0 ? "good"
                         : risk.DitherHeadroomRatio.Value >= 2.0 ? "acceptable"

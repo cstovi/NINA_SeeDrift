@@ -10,6 +10,8 @@ namespace NINA.Plugin.SeeDrift.Services {
 
     internal static class SessionAnalysisService {
 
+        private const int MinNaturalDriftIntervals = 5;
+
         public static TargetAnalysis AnalyzeTarget(
                 string targetName,
                 IReadOnlyList<DriftSample> samples,
@@ -349,15 +351,15 @@ namespace NINA.Plugin.SeeDrift.Services {
             var netDy = intervals.Sum(i => i.Dy);
             var net = Math.Sqrt(netDx * netDx + netDy * netDy);
             var duration = intervals.Sum(i => i.Minutes);
-            var rate = duration > 0 ? path / duration : 0;
+            var rate = intervals.Count >= MinNaturalDriftIntervals && duration > 0 ? path / duration : (double?)null;
             var consistency = path > 0 ? Math.Clamp(net / path, 0.0, 1.0) : 0.0;
             double? pxRate = null;
             var hasScale = TryMedianPlateScale(ordered, out var scale) && scale > 0;
-            if (hasScale)
-                pxRate = rate / scale;
+            if (rate.HasValue && hasScale)
+                pxRate = rate.Value / scale;
             var medianExposureSeconds = MedianExposureSeconds(ordered);
-            var driftPerExposure = medianExposureSeconds.HasValue
-                ? rate * (medianExposureSeconds.Value / 60.0)
+            var driftPerExposure = rate.HasValue && medianExposureSeconds.HasValue
+                ? rate.Value * (medianExposureSeconds.Value / 60.0)
                 : (double?)null;
             var driftPerExposurePx = driftPerExposure.HasValue && hasScale
                 ? driftPerExposure.Value / scale
@@ -392,6 +394,10 @@ namespace NINA.Plugin.SeeDrift.Services {
                 starStatus, walkStatus, walkReason,
                 driftPerExposurePx, driftPerExposure, headroom);
 
+            var hasSeeDither = dithers.Any(d => d.IsSeeDither);
+            var hasRegularDither = dithers.Any(d => !d.IsSeeDither);
+            var hasBothDitherTypes = hasSeeDither && hasRegularDither;
+
             return new DriftRiskSummary {
                 Status = "",
                 Tone = "",
@@ -414,6 +420,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 BetweenDitherDriftPixels = betweenPx,
                 DitherHeadroomRatio = headroom,
                 WalkingNoiseReason = walkReason,
+                HasBothDitherTypes = hasBothDitherTypes,
                 Detail = detail
             };
         }
@@ -551,7 +558,7 @@ namespace NINA.Plugin.SeeDrift.Services {
         }
 
         private static string BuildDriftRiskDetail(
-                int intervalCount, double rate, double consistency,
+                int intervalCount, double? rate, double consistency,
                 string starStatus, string walkStatus, string walkReason,
                 double? perExposurePixels, double? perExposureArcSec, double? headroom) {
             var perSub = perExposurePixels.HasValue
@@ -562,8 +569,11 @@ namespace NINA.Plugin.SeeDrift.Services {
             var head = headroom.HasValue
                 ? FormattableString.Invariant($" Dither headroom {headroom.Value:0.0}×.")
                 : "";
+            var rateStr = rate.HasValue
+                ? FormattableString.Invariant($"{rate.Value:0.##}\"/min")
+                : "rate unknown";
             return FormattableString.Invariant(
-                $"Advisory: {intervalCount} natural-drift intervals; {rate:0.##}\"/min, {consistency:P0} directional, {perSub}.{head} {walkReason}.");
+                $"Advisory: {intervalCount} natural-drift intervals; {rateStr}, {consistency:P0} directional, {perSub}.{head} {walkReason}.");
         }
 
         /// <summary>
@@ -840,7 +850,8 @@ namespace NINA.Plugin.SeeDrift.Services {
                         IsSuspect = suspect,
                         SuspectReason = suspectReason,
                         Assessment = assessment,
-                        Detail = detail
+                        Detail = detail,
+                        IsSeeDither = marker.IsSeeDither
                     };
                 }
             }

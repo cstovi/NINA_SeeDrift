@@ -54,6 +54,7 @@ namespace NINA.Plugin.SeeDrift.Models {
         public string SuspectReason { get; init; } = "";
         public string Assessment { get; init; } = "";
         public string Detail { get; init; } = "";
+        public bool IsSeeDither { get; init; }
     }
 
     public sealed class CenterEventAnalysis {
@@ -86,7 +87,7 @@ namespace NINA.Plugin.SeeDrift.Models {
         public string Tone { get; init; } = "";
         public int IntervalCount { get; init; }
         public double DurationMinutes { get; init; }
-        public double NaturalDriftArcSecPerMinute { get; init; }
+        public double? NaturalDriftArcSecPerMinute { get; init; }
         public double? NaturalDriftPixelsPerMinute { get; init; }
         public double NetNaturalDriftArcSec { get; init; }
         public double DirectionConsistency { get; init; }
@@ -117,6 +118,9 @@ namespace NINA.Plugin.SeeDrift.Models {
 
         /// <summary>One-line reason for the walking-noise sub-tier verdict.</summary>
         public string WalkingNoiseReason { get; init; } = "";
+
+        /// <summary>True if both regular NINA dither (DitherAfterExposures) and SeeDither are detected in the session.</summary>
+        public bool HasBothDitherTypes { get; init; }
     }
 
     public sealed class QualityTimelineSegment {
