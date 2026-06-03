@@ -38,6 +38,12 @@ namespace NINA.Plugin.SeeDrift.Services {
         /// </summary>
         public bool DrawDriftMarker { get; init; } = true;
 
+        /// <summary>
+        /// Fallback pixel scale (arcsec/pixel) used when the FITS header does not
+        /// contain PIXSCALE, CD1_1, or CDELT1. Set per-device model (S50, S30, etc.).
+        /// </summary>
+        public double DefaultPixelScaleArcSec { get; init; } = 2.39;
+
         public FitsVideoGenerator(FFmpegManager ffmpegManager) {
             _ffmpegManager = ffmpegManager ?? throw new ArgumentNullException(nameof(ffmpegManager));
         }
@@ -90,8 +96,9 @@ namespace NINA.Plugin.SeeDrift.Services {
                 : "";
 
             // Pixel scale for crosshair positioning (arcsec/pixel, cached from first frame)
-            var pixelScale = firstImage.PixelScaleArcSec ?? 1.95; // Seestar S50 fallback
-            SeeDriftLog.Debug($"Using pixel scale {pixelScale:F3} arcsec/px for crosshair overlay");
+            var pixelScale = firstImage.PixelScaleArcSec ?? DefaultPixelScaleArcSec;
+            SeeDriftLog.Debug($"Using pixel scale {pixelScale:F3} arcsec/px for reticle overlay" +
+                (firstImage.PixelScaleArcSec.HasValue ? " (from FITS header)" : $" (fallback for device)"));
 
             SeeDriftLog.Info($"Starting video generation for target '{targetName}': {totalFrames} frames, {width}x{height} -> {outWidth}x{outHeight}, {FrameRate} fps");
 

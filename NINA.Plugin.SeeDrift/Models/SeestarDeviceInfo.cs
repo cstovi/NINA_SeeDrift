@@ -10,6 +10,17 @@ namespace NINA.Plugin.SeeDrift.Models {
         public bool IsKnown { get; init; }
         public bool IsMixed { get; init; }
 
+        /// <summary>
+        /// Default pixel scale in arcsec/pixel for this model's native (unbinned) sensor.
+        /// Used as fallback when FITS header does not contain PIXSCALE / CDELT1.
+        /// </summary>
+        public double DefaultPixelScaleArcSec => Model.ToUpperInvariant() switch {
+            "S50" => 2.39,
+            "S30" => 3.99,
+            "S30P" or "S30_PRO" => 3.99,
+            _ => 2.39, // fallback to S50
+        };
+
         public static SeestarDeviceInfo Unknown { get; } = new() {
             DisplayName = "Unknown scope"
         };

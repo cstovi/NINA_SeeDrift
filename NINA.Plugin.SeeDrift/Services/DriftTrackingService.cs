@@ -760,11 +760,14 @@ namespace NINA.Plugin.SeeDrift.Services {
                     }
 
                     try {
+                        var devicePixelScale = batch.SeestarDevice?.DefaultPixelScaleArcSec ?? 2.39;
+
                         var generator = new FitsVideoGenerator(_plugin.FFmpegManager) {
                             FrameRate = _plugin.Settings.VideoFrameRate,
                             EncoderPreset = _plugin.Settings.VideoEncoderPreset,
                             TargetWidth = ParseVideoResolution(_plugin.Settings.VideoResolution),
                             DrawDriftMarker = _plugin.Settings.ShowDriftReticle,
+                            DefaultPixelScaleArcSec = devicePixelScale,
                         };
 
                         SeeDriftLog.Info($"Generating preview video for target '{targetName}' ({frames.Count} frames)...");
