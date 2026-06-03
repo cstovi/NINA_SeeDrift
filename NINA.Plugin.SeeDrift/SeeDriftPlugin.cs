@@ -47,6 +47,9 @@ namespace NINA.Plugin.SeeDrift {
         public SeeDriftSettings Settings { get; }
         public DriftTrackingService DriftTracker { get; }
 
+        /// <summary>FFmpeg manager for optional video generation at report build time.</summary>
+        internal FFmpegManager FFmpegManager { get; } = new();
+
         /// <summary>Concurrency dropdown entries (1 … <see cref="CpuTopology.MaxPlateSolveParallelism"/>).</summary>
         public IReadOnlyList<int> PlateSolveParallelismOptions { get; } =
             Enumerable.Range(1, CpuTopology.MaxPlateSolveParallelism).ToList();
@@ -85,6 +88,7 @@ namespace NINA.Plugin.SeeDrift {
             _discordWebhookUrl = Settings.DiscordWebhookUrl ?? "";
             _alternativeMappingOriginalRoot = Settings.AlternativeImageMappingOriginalRoot ?? "";
             _alternativeMappingAlternativeRoot = Settings.AlternativeImageMappingAlternativeRoot ?? "";
+            _autoGenerateVideo = Settings.AutoGenerateVideo;
             _isInitializing = false;
             RaisePropertyChanged(nameof(TestReportLogFilePath));
             RaisePropertyChanged(nameof(DiscordWebhookUrl));
@@ -830,6 +834,7 @@ namespace NINA.Plugin.SeeDrift {
                 Settings.DiscordWebhookUrl = _discordWebhookUrl;
                 Settings.PlateSolveParallelism = _plateSolveParallelism;
                 Settings.MinExposuresPerTarget = _minExposuresPerTarget;
+                Settings.AutoGenerateVideo = _autoGenerateVideo;
                 Settings.AlternativeImageMappingOriginalRoot = _alternativeMappingOriginalRoot;
                 Settings.AlternativeImageMappingAlternativeRoot = _alternativeMappingAlternativeRoot;
                 Settings.Save();
@@ -922,6 +927,18 @@ namespace NINA.Plugin.SeeDrift {
                 SyncSettingsFromProperties();
             }
         }
+
+        /// <summary>When true, preview MP4 videos are generated at report build time using embedded FFmpeg.</summary>
+        public bool AutoGenerateVideo {
+            get => _autoGenerateVideo;
+            set {
+                if (value == _autoGenerateVideo) return;
+                _autoGenerateVideo = value;
+                RaisePropertyChanged();
+                SyncSettingsFromProperties();
+            }
+        }
+        private bool _autoGenerateVideo;
 
         private void BrowseFolderInto(ref string field, string propertyName) {
             try {

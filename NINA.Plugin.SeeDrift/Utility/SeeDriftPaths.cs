@@ -10,6 +10,9 @@ namespace NINA.Plugin.SeeDrift.Utility {
         public static string ReportLibrary =>
             Path.Combine(AppDataRoot, "Reports");
 
+        public static string ToolsDirectory =>
+            Path.Combine(AppDataRoot, "Tools");
+
         public static string ResolveReportFolder() {
             return Path.GetFullPath(ReportLibrary);
         }

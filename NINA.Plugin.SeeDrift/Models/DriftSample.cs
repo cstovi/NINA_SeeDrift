@@ -25,6 +25,9 @@ namespace NINA.Plugin.SeeDrift.Models {
         /// <summary>Exposure duration in seconds from FITS (<c>EXPTIME</c> / related keywords) when readable.</summary>
         public double? ExposureDurationSeconds { get; init; }
 
+        /// <summary>Full path to the source FITS file on disk.</summary>
+        public string? SourceFilePath { get; init; }
+
         public bool IsPixelPath => CumulativePixelX.HasValue && CumulativePixelY.HasValue;
 
         /// <summary>

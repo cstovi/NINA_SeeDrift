@@ -29,6 +29,23 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Before/after comparison: second saved SeeDrift HTML report.</summary>
         public string CompareAfterReportPath { get; set; } = "";
 
+        // --- Video Preview Generation ---
+
+        /// <summary>Video frame rate in fps (1-60, default 10).</summary>
+        public int VideoFrameRate { get; set; } = 10;
+
+        /// <summary>FFmpeg encoder preset: "ultrafast", "fast", "medium", "slow" (default "fast").</summary>
+        public string VideoEncoderPreset { get; set; } = "fast";
+
+        /// <summary>Output resolution: "native", "1080p", "720p" (default "native").</summary>
+        public string VideoResolution { get; set; } = "native";
+
+        /// <summary>
+        /// If true, generates video preview automatically when a report is created
+        /// (default false — user clicks button to trigger).
+        /// </summary>
+        public bool AutoGenerateVideo { get; set; } = false;
+
         /// <summary>Log path prefix for capture location (e.g. C:\Users\…\N.I.N.A). Used with <see cref="AlternativeImageMappingAlternativeRoot"/>.</summary>
         public string AlternativeImageMappingOriginalRoot { get; set; } = "";
 

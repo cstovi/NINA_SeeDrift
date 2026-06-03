@@ -18,6 +18,20 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <!--
+    FFmpeg binary – download from https://www.gyan.dev/ffmpeg/builds/ (Windows x64 static).
+    Extract ffmpeg.exe and LICENSE (from gyan.dev) into Resources/ via the post-build script or manually.
+    ~70-100 MB embedded; extraction to %LocalAppData%\NINA\SeeDrift\Tools\ on first use.
+  -->
+  <ItemGroup Condition="Exists('$(MSBuildProjectDir)Resources\ffmpeg.exe')">
+    <EmbeddedResource Include="Resources\ffmpeg.exe">
+      <LogicalName>NINA.Plugin.SeeDrift.Resources.ffmpeg.exe</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\LICENSE">
+      <LogicalName>NINA.Plugin.SeeDrift.Resources.LICENSE</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="NINA.Astrometry" Version="3.2.0.9001" />
     <PackageReference Include="NINA.Core" Version="3.2.0.9001" />

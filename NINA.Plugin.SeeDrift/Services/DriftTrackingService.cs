@@ -700,11 +700,65 @@ namespace NINA.Plugin.SeeDrift.Services {
 
                 fullPath = path;
                 SeeDriftLog.Info($"SeeDrift: night report saved → {path}");
+
+                // Generate preview videos at build time if enabled
+                if (_plugin.Settings.AutoGenerateVideo) {
+                    GeneratePreviewVideos(path);
+                }
+
                 return true;
             } catch (Exception ex) {
                 errorMessage = ex.Message;
                 SeeDriftLog.Error($"SeeDrift: failed to write night report: {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Generates preview MP4 videos for each target in the report, using the embedded FFmpeg.
+        /// </summary>
+        private void GeneratePreviewVideos(string reportPath) {
+            if (!_plugin.FFmpegManager.IsAvailable()) {
+                SeeDriftLog.Info("Video preview generation skipped: FFmpeg not available");
+                return;
+            }
+
+            var reportDir = Path.GetDirectoryName(reportPath);
+            if (string.IsNullOrEmpty(reportDir)) return;
+
+            var isMultiTarget = CompletedTargets.Count > 1;
+
+            foreach (var batch in CompletedTargets) {
+                var targetName = batch.Name;
+                if (string.IsNullOrWhiteSpace(targetName)) targetName = "Unknown";
+
+                // Collect ordered FITS paths for this target
+                var fitsPaths = batch.Samples
+                    .Where(s => !string.IsNullOrEmpty(s.SourceFilePath))
+                    .OrderBy(s => s.FrameIndex)
+                    .Select(s => s.SourceFilePath!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (fitsPaths.Count == 0) {
+                    SeeDriftLog.Debug($"No FITS files for target '{targetName}', skipping video");
+                    continue;
+                }
+
+                try {
+                    var generator = new FitsVideoGenerator(_plugin.FFmpegManager) {
+                        FrameRate = _plugin.Settings.VideoFrameRate,
+                        EncoderPreset = _plugin.Settings.VideoEncoderPreset,
+                    };
+
+                    SeeDriftLog.Info($"Generating preview video for target '{targetName}' ({fitsPaths.Count} frames)...");
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    generator.GenerateVideoForTarget(targetName, fitsPaths, reportDir, isMultiTarget);
+                    sw.Stop();
+                    SeeDriftLog.Info($"Preview video for target '{targetName}' completed in {sw.Elapsed.TotalSeconds:F1}s");
+                } catch (Exception ex) {
+                    SeeDriftLog.Warning($"Could not generate preview video for target '{targetName}': {ex.Message}");
+                }
             }
         }
 
@@ -831,6 +885,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 FrameIndex = st.NextFrameIndex++,
                 ExposureStartUtc = utc,
                 FileName = Path.GetFileName(path),
+                SourceFilePath = path,
                 TargetName = label,
                 DeltaRaArcSec = dRa,
                 DeltaDecArcSec = dDec,

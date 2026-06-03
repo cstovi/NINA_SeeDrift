@@ -13,17 +13,17 @@ namespace NINA.Plugin.SeeDrift.Services {
 
     public static class HtmlReportExporter {
 
-        // CDN pins (night HTML is opened offline-capable only after first load; versions documented for reproducibility)
-        private const string CdnHammer = "https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js";
-        private const string CdnChartJs = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js";
-        private const string CdnChartZoom = "https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js";
-        private const string CdnTailwind = "https://cdn.tailwindcss.com";
-
         /// <summary>Fallback SVG motif matching the sequencer icon (axes + drift trace).</summary>
         private const string SeeDriftIconSvgFallback =
             "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"24\" height=\"24\" class=\"shrink-0\" aria-hidden=\"true\" focusable=\"false\">" +
             "<path d=\"M6 18V8H18 M8 15l3-3 3 1 3-4\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>" +
             "</svg>";
+
+        // CDN pins (night HTML is opened offline-capable only after first load; versions documented for reproducibility)
+        private const string CdnHammer = "https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js";
+        private const string CdnChartJs = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js";
+        private const string CdnChartZoom = "https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js";
+        private const string CdnTailwind = "https://cdn.tailwindcss.com";
 
         /// <summary>Embedded PNG logical name — must match <c>EmbeddedResource</c> <c>LogicalName</c> in the csproj.</summary>
         private const string EmbeddedFeaturedImageManifestName = "SeeDriftFeatured.png";
@@ -94,6 +94,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("<head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>");
             sb.AppendLine($"<meta name=\"seedrift-report-kind\" content=\"night\"/><meta name=\"seedrift-generator-version\" content=\"{Escape(CurrentPluginVersion())}\"/><meta name=\"seedrift-report-schema\" content=\"1\"/>");
             sb.AppendLine($"<meta name=\"seedrift-seestar-device\" content=\"{Escape(seestarDevice.DisplayName)}\"/>");
+            sb.AppendLine($"<meta name=\"seedrift-report-dir\" content=\"{Escape(Path.GetDirectoryName(path) ?? "")}\"/>");
             sb.AppendLine($"<title>SeeDrift — Session Log {sessionLogLabel}</title>");
             sb.AppendLine($"<script src=\"{CdnTailwind}\"></script>");
             sb.AppendLine($"<script src=\"{CdnHammer}\"></script>");
@@ -223,6 +224,20 @@ namespace NINA.Plugin.SeeDrift.Services {
                         sb.Append(ditherSegHtml);
                     sb.Append(FormatAnalysisSummaryHtml(analysis));
                     sb.Append(FormatTimelineHtml(analysis));
+
+                    // Video preview button for this target
+                    var videoSectionClass = g < filteredGroups.Count - 1 ? "mt-3" : "mt-3 mb-2";
+                    var isMultiTarget = targets.Count > 1;
+                    var videoFileName = isMultiTarget
+                        ? $"{FitsVideoGenerator.SanitizeFileName(targetName)}_preview.mp4"
+                        : "preview.mp4";
+                    sb.AppendLine($"  <div class=\"{videoSectionClass}\">");
+                    sb.AppendLine($"    <div class=\"video-preview-section\" data-target-name=\"{Escape(targetName)}\" data-video-path=\"{Escape(videoFileName)}\" style=\"display:none;\">");
+                    sb.AppendLine($"      <button class=\"showVideoBtn text-xs rounded border border-slate-600 bg-slate-800/60 px-3 py-1.5 text-slate-300 hover:bg-slate-700/60 hover:text-white\" onclick=\"showVideo('{Escape(targetName)}')\">");
+                    sb.AppendLine("        <span class=\"btnText\">▶ Play Preview Video</span>");
+                    sb.AppendLine("      </button>");
+                    sb.AppendLine("    </div>");
+                    sb.AppendLine("  </div>");
 
                     var visitDatasetsJson = FormatVisitChartDatasetsJson(visitPlan);
                     var edgeJson = FormatEdgeMidpointMarkersJson(visitPlan, grp);
@@ -435,8 +450,104 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("  });");
             sb.AppendLine("})();");
             sb.AppendLine("</script>");
+            // Video player modal (hidden by default)
+            sb.AppendLine(FormatVideoModalHtml());
+
+            sb.AppendLine("<script>");
+            sb.AppendLine("(function(){");
+            sb.AppendLine("  // Probe each section's video file to show/hide the play button");
+            sb.AppendLine("  document.querySelectorAll('.video-preview-section').forEach(function(section) {");
+            sb.AppendLine("    section.style.display = 'block';");
+            sb.AppendLine("    var videoPath = section.getAttribute('data-video-path');");
+            sb.AppendLine("    if (!videoPath) return;");
+            sb.AppendLine("    var probe = document.createElement('video');");
+            sb.AppendLine("    probe.oncanplaythrough = function() {");
+            sb.AppendLine("      // Video file exists and is playable — show the button");
+            sb.AppendLine("    };");
+            sb.AppendLine("    probe.onerror = function() {");
+            sb.AppendLine("      // Video file not found — hide this section");
+            sb.AppendLine("      section.style.display = 'none';");
+            sb.AppendLine("    };");
+            sb.AppendLine("    probe.preload = 'none';");
+            sb.AppendLine("    probe.src = videoPath;");
+            sb.AppendLine("    probe.load();");
+            sb.AppendLine("  });");
+            sb.AppendLine("");
+            sb.AppendLine("  window.showVideo = function(targetName) {");
+            sb.AppendLine("    var section = document.querySelector('[data-target-name=\"' + targetName + '\"]');");
+            sb.AppendLine("    if (!section) return;");
+            sb.AppendLine("    var videoPath = section.getAttribute('data-video-path');");
+            sb.AppendLine("    if (!videoPath) return;");
+            sb.AppendLine("    document.getElementById('videoTargetName').textContent = targetName;");
+            sb.AppendLine("    document.getElementById('videoSource').src = videoPath;");
+            sb.AppendLine("    document.getElementById('videoPlayer').load();");
+            sb.AppendLine("    document.getElementById('videoPlayerModal').style.display = 'flex';");
+            sb.AppendLine("  };");
+            sb.AppendLine("");
+            sb.AppendLine("  window.closeVideoModal = function() {");
+            sb.AppendLine("    document.getElementById('videoPlayerModal').style.display = 'none';");
+            sb.AppendLine("    document.getElementById('videoPlayer').pause();");
+            sb.AppendLine("  };");
+            sb.AppendLine("");
+            sb.AppendLine("  document.addEventListener('keydown', function(ev) {");
+            sb.AppendLine("    if (ev.key === 'Escape') closeVideoModal();");
+            sb.AppendLine("  });");
+            sb.AppendLine("  document.getElementById('videoPlayerModal').addEventListener('click', function(ev) {");
+            sb.AppendLine("    if (ev.target === this) closeVideoModal();");
+            sb.AppendLine("  });");
+            sb.AppendLine("})();");
+            sb.AppendLine("</script>");
             sb.AppendLine("</main></body></html>");
             File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// Writes a JSON file alongside the HTML report that maps target names to their FITS source paths.
+        /// Used by <see cref="VideoHttpService"/> when generating video previews.
+        /// </summary>
+        private static void WriteFitsPathsCompanionFile(string companionPath, IReadOnlyList<DriftTrackingService.CompletedTarget> targets, int minExposuresPerTarget) {
+            try {
+                var reportDir = Path.GetDirectoryName(companionPath);
+                if (string.IsNullOrEmpty(reportDir)) return;
+
+                var targetPaths = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var batch in targets) {
+                    var ordered = batch.Samples.OrderBy(s => s.FrameIndex).ToList();
+                    // Replicate the same grouping logic as the main report
+                    var targetGroups = new Dictionary<string, List<DriftSample>>(StringComparer.OrdinalIgnoreCase);
+                    var orderKeys = new List<string>();
+                    foreach (var s in ordered) {
+                        var key = string.IsNullOrWhiteSpace(s.TargetName) ? "Unknown" : s.TargetName.Trim();
+                        if (!targetGroups.TryGetValue(key, out var list)) {
+                            list = new List<DriftSample>();
+                            targetGroups[key] = list;
+                            orderKeys.Add(key);
+                        }
+                        list.Add(s);
+                    }
+
+                    foreach (var key in orderKeys) {
+                        var grp = targetGroups[key];
+                        if (grp.Count < minExposuresPerTarget) continue;
+
+                        if (!targetPaths.ContainsKey(key)) {
+                            targetPaths[key] = new List<string>(grp.Count);
+                        }
+                        foreach (var sample in grp) {
+                            if (!string.IsNullOrEmpty(sample.SourceFilePath)) {
+                                targetPaths[key].Add(sample.SourceFilePath);
+                            }
+                        }
+                    }
+                }
+
+                var json = System.Text.Json.JsonSerializer.Serialize(targetPaths, new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+                File.WriteAllText(companionPath, json, Encoding.UTF8);
+                SeeDriftLog.Debug($"Wrote FITS paths companion file: {companionPath} ({targetPaths.Count} targets)");
+            } catch (Exception ex) {
+                SeeDriftLog.Warning($"Failed to write FITS paths companion file: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -1195,6 +1306,32 @@ namespace NINA.Plugin.SeeDrift.Services {
 
         private static string Escape(string s) {
             return s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
+        }
+
+        /// <summary>
+        /// Returns the HTML for the video player modal (hidden by default).
+        /// Shared across all targets in the session.
+        /// </summary>
+        private static string FormatVideoModalHtml() {
+            return @"
+<div id=""videoPlayerModal"" class=""fixed inset-0 z-50 items-center justify-center bg-black/80"" style=""display:none;"">
+    <div class=""relative mx-auto w-full max-w-4xl p-4"">
+        <div class=""rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-2xl"">
+            <div class=""mb-3 flex items-center justify-between"">
+                <h3 id=""videoTargetName"" class=""text-base font-semibold text-sky-200""></h3>
+                <button onclick=""closeVideoModal()"" class=""rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"">
+                    <svg class=""h-5 w-5"" fill=""none"" stroke=""currentColor"" viewBox=""0 0 24 24"">
+                        <path stroke-linecap=""round"" stroke-linejoin=""round"" stroke-width=""2"" d=""M6 18L18 6M6 6l12 12""></path>
+                    </svg>
+                </button>
+            </div>
+            <video id=""videoPlayer"" controls autoplay class=""max-h-[80vh] w-full rounded object-contain"">
+                <source id=""videoSource"" src="""" type=""video/mp4"">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    </div>
+</div>";
         }
     }
 }
