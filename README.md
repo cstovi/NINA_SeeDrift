@@ -17,6 +17,13 @@ Measures mount drift for Seestar devices by plate-solving LIGHT frames reference
 
 ## Quick start
 
+### Screenshots
+
+<img width="2069" height="1366" alt="image" src="https://github.com/user-attachments/assets/8158081d-a6dc-43ad-8384-95156630d72b" />
+
+<img width="2041" height="1186" alt="image" src="https://github.com/user-attachments/assets/9c83840b-5536-49b9-b9c4-fb82a06e79ae" />
+
+
 ### Sequencer (recommended)
 Add **SeeDrift Start** before capture and **SeeDrift Stop** when finished. Stop reads the NINA log, plate-solves each LIGHT frame, and appends a drift report to the rolling night HTML. Reports are stored in `%LocalAppData%\NINA\SeeDrift\Reports`.
 
