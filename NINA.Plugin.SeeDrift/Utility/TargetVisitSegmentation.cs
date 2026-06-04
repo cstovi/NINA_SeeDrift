@@ -76,13 +76,31 @@ namespace NINA.Plugin.SeeDrift.Utility {
         t1 = t0.AddSeconds(1);
 
       if (HasSchedulerNewTargetStart(schedulerStarts, t0, t1, targetKey)) {
-        var detail = BuildReturnVisitDetail(missing, seqA, seqB, lightCatalog, batchOrdered, targetKey, prev, cur);
+        // Only classify as ReturnVisit if other targets were imaged in the gap.
+        // A NewTargetStart for the same target with no other targets in the gap
+        // means the scheduler continued the same target after an interruption
+        // (safety pause, etc.) — that is a continuation, not a genuine revisit.
+        var otherDetail2 = BuildOtherTargetDetail(lightCatalog, batchOrdered, seqA, seqB, targetKey, prev, cur);
+        if (!string.IsNullOrEmpty(otherDetail2)) {
+          var detail = BuildReturnVisitDetail(missing, seqA, seqB, lightCatalog, batchOrdered, targetKey, prev, cur);
+          return new ExposureGapAssessment {
+            Kind = ExposureGapKind.ReturnVisit,
+            SequenceFrom = seqA,
+            SequenceTo = seqB,
+            MissingSequenceCount = missing,
+            Detail = detail
+          };
+        }
+        // Continuation of the same target after an interruption — not a true revisit.
+        // The target was re-queued but no other target was imaged in between.
+        // Treat as missing/unsolved to keep the frames in the same visit.
+        var label = FitsFolderImport.FormatBetweenFramesLabel(prev.FileName, prev.FrameIndex, cur.FileName, cur.FrameIndex);
         return new ExposureGapAssessment {
-          Kind = ExposureGapKind.ReturnVisit,
+          Kind = ExposureGapKind.MissingOrUnsolved,
           SequenceFrom = seqA,
           SequenceTo = seqB,
           MissingSequenceCount = missing,
-          Detail = detail
+          Detail = $"Target Scheduler started this target again between {label} (safety interrupt recovery or re-queue). {missing} exposure number(s) between {seqA} and {seqB} are not in the solved trace."
         };
       }
 
