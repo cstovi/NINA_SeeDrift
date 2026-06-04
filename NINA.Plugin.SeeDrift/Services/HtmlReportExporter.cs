@@ -120,7 +120,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine(
                 $"      <p class=\"mt-2 text-sm text-slate-400\">Generated {Escape(DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))} <span class=\"text-slate-500\">(local)</span></p>");
             sb.AppendLine(
-                $"      <p class=\"mt-1 text-xs text-slate-500\">Report version v{Escape(CurrentPluginVersion())} · schema 1</p>");
+                $"      <p class=\"mt-1 text-xs text-slate-500\">Report version v{Escape(CurrentPluginVersion())}</p>");
             sb.AppendLine(
                 $"      <p class=\"mt-1 text-xs text-slate-500\">Scope: <span class=\"text-slate-300\">{Escape(seestarDevice.DisplayName)}</span></p>");
             sb.Append(FormatPageHeaderLogsHtml(targets));
