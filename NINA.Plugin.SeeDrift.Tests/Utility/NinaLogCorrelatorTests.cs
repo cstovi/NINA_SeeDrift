@@ -160,5 +160,84 @@ namespace NINA.Plugin.SeeDrift.Tests.Utility {
                     File.Delete(logPath);
             }
         }
+
+        [Fact]
+        public void Real_night_log_DAE0_filtered_SeeDither_preserved() {
+            var logPath = @"C:\Users\carls\Desktop\20260603-210301-3.2.0.9001.15380-202606.log";
+            if (!File.Exists(logPath))
+                return; // Only runs on machines with this log file
+
+            // Minimal sample to avoid early return in AnnotateWithLogEvents
+            var samples = new List<DriftSample> {
+                new() {
+                    FrameIndex = 1,
+                    ExposureStartUtc = new DateTime(2026, 6, 3, 21, 0, 0, DateTimeKind.Utc),
+                    FileName = "dummy.fits"
+                }
+            };
+
+            NinaLogCorrelator.AnnotateWithLogEvents(samples, out var observations, new[] { logPath });
+
+            // Log contains 361 DAE:0 lines (all filtered) + 71 SeeDither lines (all kept)
+            // = 71 dither triggers expected
+            Assert.Equal(71, observations.ObservedDitherTriggerCount);
+
+            // All 71 SeeDither triggers carry Every: 5 → all cadence values are 5
+            Assert.Equal(71, observations.DitherAfterExposuresFromLog.Count);
+            Assert.All(observations.DitherAfterExposuresFromLog, v => Assert.Equal(5, v));
+        }
+
+        [Fact]
+        public void Real_log_with_Dither_instruction_is_detected() {
+            var logPath = @"C:\Users\carls\Desktop\20260601-103759-3.2.0.9001.15744-202606.log";
+            if (!File.Exists(logPath))
+                return; // Only runs on machines with this log file
+
+            var samples = new List<DriftSample> {
+                new() {
+                    FrameIndex = 1,
+                    ExposureStartUtc = new DateTime(2026, 6, 1, 22, 0, 0, DateTimeKind.Utc),
+                    FileName = "dummy.fits"
+                }
+            };
+
+            NinaLogCorrelator.AnnotateWithLogEvents(samples, out var observations, new[] { logPath });
+
+            // Log contains 141 Dither instruction lines → all should be detected
+            Assert.Equal(141, observations.ObservedDitherTriggerCount);
+
+            // No AfterExposures cadence from instruction lines (not a trigger)
+            Assert.Empty(observations.DitherAfterExposuresFromLog);
+
+            // DitherPulse lines are also parsed (141 DirectGuider lines)
+            Assert.Equal(141, observations.ObservedDitherPulseCount);
+        }
+
+        [Fact]
+        public void DitherAfterExposures_zero_is_filtered_out() {
+            var logPath = Path.Combine(Path.GetTempPath(), "SeeDriftTest_" + Guid.NewGuid().ToString("N") + ".log");
+            var logLines = new[] {
+                "2026-06-03T21:46:30.0000Z|INFO|SequenceTrigger.cs|Run|114|Starting Trigger: DitherAfterExposures, After Exposures: 0",
+                "2026-06-03T21:47:00.0000Z|INFO|SequenceTrigger.cs|Run|114|Starting Trigger: DitherAfterExposures, After Exposures: 5",
+                "2026-06-03T21:50:00.0000Z|INFO|SequenceTrigger.cs|Run|114|Starting Category: SeeDither, Item: SeeDitherAfterExposuresTrigger, Every: 5"
+            };
+            File.WriteAllLines(logPath, logLines);
+
+            try {
+                var samples = new List<DriftSample> {
+                    new() { FrameIndex = 1, ExposureStartUtc = DateTime.Parse("2026-06-03T21:46:00Z"), FileName = "t_0001.fits" },
+                    new() { FrameIndex = 2, ExposureStartUtc = DateTime.Parse("2026-06-03T21:48:00Z"), FileName = "t_0002.fits" },
+                    new() { FrameIndex = 3, ExposureStartUtc = DateTime.Parse("2026-06-03T21:55:00Z"), FileName = "t_0003.fits" }
+                };
+
+                NinaLogCorrelator.AnnotateWithLogEvents(samples, out var observations, new[] { logPath });
+
+                // DAE:0 is filtered → only DAE:5 + SeeDither remain
+                Assert.Equal(2, observations.ObservedDitherTriggerCount);
+            } finally {
+                if (File.Exists(logPath))
+                    File.Delete(logPath);
+            }
+        }
     }
 }

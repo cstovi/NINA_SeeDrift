@@ -98,6 +98,11 @@ namespace NINA.Plugin.SeeDrift.Utility {
             @"Starting\s+Category:\s*SeeDither.*SeeDitherAfterExposuresTrigger",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary>Built-in NINA <c>Dither</c> instruction (used by Target Scheduler et al).</summary>
+        private static readonly Regex RxDitherInstruction = new Regex(
+            @"Starting\s+Category:\s*,\s*Item:\s*Dither\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         /// <summary>
         /// AfterExposures = N (DitherAfterExposures cadence) or EveryExposures = N (CenterAfterDrift cadence)
         /// that some NINA builds emit on or near the <c>Starting Trigger</c> line.
@@ -545,6 +550,15 @@ namespace NINA.Plugin.SeeDrift.Utility {
         }
 
         /// <summary>
+        /// True when the line carries <c>AfterExposures: 0</c> or <c>Every: 0</c>, meaning the sequencer trigger is
+        /// disabled (NINA docs: "keep dither after exposures to 0 to skip the dither completely").
+        /// </summary>
+        private static bool IsAfterExposuresZero(string line) {
+            var m = RxAfterExposuresInline.Match(line);
+            return m.Success && m.Groups[1].Value == "0";
+        }
+
+        /// <summary>
         /// Uses NINA exposure index from file names when both parse; otherwise trace position (<c>FrameIndex + 1</c>).
         /// </summary>
         private static string BetweenFramesHoverLine(DriftSample prev, DriftSample cur) {
@@ -845,12 +859,30 @@ namespace NINA.Plugin.SeeDrift.Utility {
                 }
                 var isSeeDitherTrigger = RxSeeDitherTrigger.IsMatch(line);
                 if (RxTriggerDither.IsMatch(line) || isSeeDitherTrigger) {
+                    // Built-in DitherAfterExposures with AfterExposures: 0 is disabled; skip entirely
+                    // so it doesn't pollute the timeline with fake dither events. SeeDither is unaffected.
+                    if (!isSeeDitherTrigger && IsAfterExposuresZero(line))
+                        continue;
+
                     triggers.Add(new TimedTrigger {
                         UtcTime = ts,
                         Kind = TriggerKind.Dither,
                         Label = isSeeDitherTrigger ? "SeeDither (after exposures)" : "Dither (after exposures)",
                         AfterExposuresFromLog = TryParseAfterExposures(line),
                         IsSeeDither = isSeeDitherTrigger
+                    });
+                    continue;
+                }
+
+                // Built-in NINA Dither instruction (Starting Category: , Item: Dither) used by
+                // Target Scheduler and sequences that add a plain Dither instruction item.
+                if (RxDitherInstruction.IsMatch(line)) {
+                    triggers.Add(new TimedTrigger {
+                        UtcTime = ts,
+                        Kind = TriggerKind.Dither,
+                        Label = "Dither (instruction)",
+                        AfterExposuresFromLog = null,
+                        IsSeeDither = false
                     });
                     continue;
                 }
