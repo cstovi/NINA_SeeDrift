@@ -95,15 +95,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                 ? $",scale={outWidth}:{outHeight}:flags=bilinear"
                 : "";
 
-            // Pixel scale and CD matrix for drift reticle positioning
-            var pixelScale = firstImage.PixelScaleArcSec ?? DefaultPixelScaleArcSec;
-            var hasCdMatrix = firstImage.HasFullCdMatrix;
-            if (hasCdMatrix) {
-                SeeDriftLog.Debug($"Using full CD matrix for reticle positioning (pixel scale {pixelScale:F3} arcsec/px)");
-            } else {
-                SeeDriftLog.Debug($"Using simplified arcsec→pixel (scale {pixelScale:F3} arcsec/px) — FITS lacks full CD matrix");
-            }
-
             SeeDriftLog.Info($"Starting video generation for target '{targetName}': {totalFrames} frames, {width}x{height} -> {outWidth}x{outHeight}, {FrameRate} fps");
 
             // Build and launch FFmpeg process
@@ -138,9 +129,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                 var centerX = outWidth / 2;
                 var centerY = outHeight / 2;
 
-                // Collect reticle positions for the drift trail
-                var reticlePositions = new List<(int X, int Y)>();
-
                 for (var frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
                     cancellationToken.ThrowIfCancellationRequested();
 
@@ -164,45 +152,53 @@ namespace NINA.Plugin.SeeDrift.Services {
                                 bgr24 = ResizeBgr24(bgr24, imageData.Width, imageData.Height, outWidth, outHeight);
                             }
 
-                            // Compute reticle pixel position for this frame
+                            // Per-frame reticle: compute ALL previous frames' positions relative to
+                            // THIS frame's WCS (via existing cumulative deltas) so the green
+                            // start circle tracks frame 1's sky position on the current image.
+                            // After a bad-start slew + correction, the green circle correctly
+                            // appears far from center — the telescope was pointing elsewhere.
                             if (DrawDriftMarker) {
-                                int? reticleX = null;
-                                int? reticleY = null;
+                                var framePixelScale = imageData.PixelScaleArcSec ?? DefaultPixelScaleArcSec;
+                                var frameHasCdMatrix = imageData.HasFullCdMatrix;
+                                var positions = new List<(int X, int Y)>();
 
-                                if (hasCdMatrix && imageData.HasFullCdMatrix) {
-                                    var raDeg = frame.DeltaRaArcSec / 3600.0;
-                                    var decDeg = -frame.DeltaDecArcSec / 3600.0;
-                                    var det = imageData.Cd1_1!.Value * imageData.Cd2_2!.Value
-                                            - imageData.Cd1_2!.Value * imageData.Cd2_1!.Value;
-                                    if (Math.Abs(det) > 1e-15) {
-                                        var px = (imageData.Cd2_2!.Value * raDeg - imageData.Cd1_2!.Value * decDeg) / det;
-                                        var py = (-imageData.Cd2_1!.Value * raDeg + imageData.Cd1_1!.Value * decDeg) / det;
-                                        reticleX = centerX + (int)Math.Round(px);
-                                        reticleY = centerY + (int)Math.Round(py);
+                                for (var k = 0; k <= frameIndex; k++) {
+                                    var relRaArcSec = frames[k].DeltaRaArcSec - frame.DeltaRaArcSec;
+                                    var relDecArcSec = frames[k].DeltaDecArcSec - frame.DeltaDecArcSec;
+
+                                    int rx, ry;
+                                    if (frameHasCdMatrix) {
+                                        var raDeg = relRaArcSec / 3600.0;
+                                        var decDeg = -relDecArcSec / 3600.0;
+                                        var det = imageData.Cd1_1!.Value * imageData.Cd2_2!.Value
+                                                - imageData.Cd1_2!.Value * imageData.Cd2_1!.Value;
+                                        if (Math.Abs(det) > 1e-15) {
+                                            var px = (imageData.Cd2_2!.Value * raDeg - imageData.Cd1_2!.Value * decDeg) / det;
+                                            var py = (-imageData.Cd2_1!.Value * raDeg + imageData.Cd1_1!.Value * decDeg) / det;
+                                            rx = (int)Math.Round(px);
+                                            ry = (int)Math.Round(py);
+                                        } else {
+                                            rx = 0; ry = 0;
+                                        }
+                                    } else {
+                                        rx = (int)Math.Round(relRaArcSec / framePixelScale);
+                                        ry = (int)Math.Round(relDecArcSec / framePixelScale);
                                     }
-                                } else {
-                                    var px = (int)Math.Round(frame.DeltaRaArcSec / pixelScale);
-                                    var py = (int)Math.Round(frame.DeltaDecArcSec / pixelScale);
-                                    reticleX = centerX + px;
-                                    reticleY = centerY + py;
+
+                                    positions.Add((centerX + rx, centerY + ry));
                                 }
 
-                                if (reticleX.HasValue && reticleY.HasValue) {
-                                    // Draw drift trail from all previous positions
-                                    DrawDriftTrail(bgr24, outWidth, outHeight, reticlePositions);
-                                    // Green circle at start point
-                                    if (reticlePositions.Count > 0) {
-                                        DrawFilledCircle(bgr24, outWidth, outHeight,
-                                            reticlePositions[0].X, reticlePositions[0].Y, 5, 0, 255, 0);
-                                    }
-                                    // Red circle at current (finish) point
-                                    DrawFilledCircle(bgr24, outWidth, outHeight,
-                                        reticleX.Value, reticleY.Value, 5, 0, 0, 255);
-                                    // Draw current reticle on top
-                                    DrawReticle(bgr24, outWidth, outHeight, reticleX.Value, reticleY.Value);
-                                    // Store for future frames
-                                    reticlePositions.Add((reticleX.Value, reticleY.Value));
-                                }
+                                // Drift trail connecting all positions (from frame 1 to current)
+                                DrawDriftTrail(bgr24, outWidth, outHeight, positions);
+                                // Green circle at where frame 1's sky position falls on this image
+                                DrawFilledCircle(bgr24, outWidth, outHeight,
+                                    positions[0].X, positions[0].Y, 5, 0, 255, 0);
+                                // Red circle at current frame's own position (always image center)
+                                var cur = positions[frameIndex];
+                                DrawFilledCircle(bgr24, outWidth, outHeight,
+                                    cur.X, cur.Y, 5, 0, 0, 255);
+                                // Reticle crosshair at current position
+                                DrawReticle(bgr24, outWidth, outHeight, cur.X, cur.Y);
                             }
                         }
                     } catch (Exception ex) {
