@@ -202,18 +202,14 @@ namespace NINA.Plugin.SeeDrift.Services {
         private bool FinishWithNoReportableTargets(
                 Stopwatch runStopwatch,
                 string logDetail,
-                string statusReason,
-                string statusHint,
-                string discordSummary,
                 bool postDiscordAfterSave,
                 Action<string, int, int> report) {
             SeeDriftLog.Info($"SeeDrift: no drift report — {logDetail}");
             var dur = RunDurationFormatter.ToReadable(runStopwatch.Elapsed);
-            var completeDetail =
-                $"Complete — no drift report in {dur}. {statusReason} {statusHint}";
+            var completeDetail = $"Complete — no drift report in {dur}.";
             if (postDiscordAfterSave)
                 _plugin.NotifyStopFinishedWithoutReport(
-                    $"SeeDrift — Stop finished with no drift report. {discordSummary}",
+                    "SeeDrift — Stop finished with no drift report.",
                     postDiscordIfConfigured: true);
             report(completeDetail, 100, 100);
             SeeDriftLog.Info($"SeeDrift: run finished with no reportable targets in {dur}.");
@@ -270,8 +266,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
 
             Report(windowStartUtc.HasValue && windowEndUtc.HasValue
-                ? "Reading log(s) for “Saved image to …” lines between Start and Stop…"
-                : "Reading log file for “Saved image to …” lines (large logs can take a bit)…");
+                ? "Reading log(s)…"
+                : "Reading log(s)…");
 
             if (!NinaLogCorrelator.TryCollectSavedImagePathsFromLogs(
                     logFilesToRead,
@@ -293,15 +289,11 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return FinishWithNoReportableTargets(
                     runStopwatch,
                     $"{orderedSaves.Count} saved-light candidates, filesOpened={filesOpenedOk.Count}",
-                    $"Found {orderedSaves.Count} saved-light path line(s) in {filesOpenedOk.Count} log file(s) (need ≥2).",
-                    "Check NINA log level includes SaveToDisk lines and that Start→Stop covered the session.",
-                    $"Found {orderedSaves.Count} saved-light path line(s) in {filesOpenedOk.Count} log file(s) (need ≥2). " +
-                    "Check NINA log level includes SaveToDisk / “Saved image to …” lines and that Start→Stop covered the session.",
                     postDiscordAfterSave,
                     Report);
             }
 
-            Report($"Found {orderedSaves.Count} saved paths — checking FITS headers (LIGHT vs calibration)…");
+            Report($"Found {orderedSaves.Count} saved paths.");
 
             var windowed = FitsFolderImport.BuildEntriesFromLogSaveOrder(
                 orderedSaves,
@@ -318,10 +310,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return FinishWithNoReportableTargets(
                     runStopwatch,
                     $"{windowed.Count} LIGHT frames after FITS filter",
-                    $"Only {windowed.Count} LIGHT frame(s) after FITS filter (need ≥2).",
-                    "Paths may be missing, wrong type, or not classified as LIGHT in FITS headers.",
-                    $"Only {windowed.Count} LIGHT frame(s) after FITS filter (need ≥2). " +
-                    "Paths may be missing, wrong type, or not classified as LIGHT in FITS headers.",
                     postDiscordAfterSave,
                     Report);
             }
@@ -332,8 +320,7 @@ namespace NINA.Plugin.SeeDrift.Services {
                 SeeDriftLog.Info(
                     $"SeeDrift: skipping plate solve — no FITS OBJECT has ≥{minExpTarget} LIGHT frames (best target={maxLightsAnyTarget}).");
                 Report(
-                    $"Skipping plate solve — no target has {minExpTarget}+ LIGHT frames in this log (best target has {maxLightsAnyTarget}). " +
-                    "Lower Minimum exposures per target or capture more frames.");
+                    $"Skipping plate solve — no target has {minExpTarget}+ LIGHT frames in this log.");
 
                 string? presolveNightPath = null;
                 string? presolveNightErr = null;
@@ -353,19 +340,15 @@ namespace NINA.Plugin.SeeDrift.Services {
                 });
 
                 if (presolveNightErr != null) {
-                    Report(
-                        $"Stopped — could not save night HTML: {presolveNightErr}. " +
-                        "Check %LocalAppData%\\NINA\\SeeDrift\\Reports and %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log.");
+                Report(
+                    $"Stopped — could not save night HTML: {presolveNightErr}.");
                     SeeDriftLog.Error($"SeeDrift: night HTML save failed (pre-solve skip path) — {presolveNightErr}");
                     return false;
                 }
 
                 var dur = RunDurationFormatter.ToReadable(runStopwatch.Elapsed);
                 var completeDetail =
-                    $"Complete — night report saved in {dur}. No target in this run had at least {minExpTarget} LIGHT frame(s) for any FITS target " +
-                    $"(best target: {maxLightsAnyTarget}); plate solving was skipped. " +
-                    "Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
-                    $"{presolveNightPath}";
+                    $"Complete — night report saved in {dur}. No target in this run had at least {minExpTarget} LIGHT frame(s) for any FITS target.";
                 _plugin.NotifyNightReportSaved(presolveNightPath!, completeDetail, false, sourceLogsForBatch);
                 if (postDiscordAfterSave)
                     _plugin.NotifyStopFinishedWithoutReport(
@@ -533,10 +516,6 @@ namespace NINA.Plugin.SeeDrift.Services {
                 return FinishWithNoReportableTargets(
                     runStopwatch,
                     $"{built.Count} plate-solved frames",
-                    $"Only {built.Count} frame(s) plate-solved successfully (need ≥2).",
-                    "Check your NINA plate-solve profile and FITS readability.",
-                    $"Only {built.Count} frame(s) plate-solved successfully (need ≥2). " +
-                    "Check your NINA plate-solve profile and FITS readability.",
                     postDiscordAfterSave,
                     Report);
             }
@@ -589,8 +568,7 @@ namespace NINA.Plugin.SeeDrift.Services {
 
             if (nightSaveError != null) {
                 Report(
-                    $"Stopped — could not save night HTML: {nightSaveError}. " +
-                    "Check %LocalAppData%\\NINA\\SeeDrift\\Reports and %LocalAppData%\\NINA\\SeeDrift\\SeeDrift.log.");
+                    $"Stopped — could not save night HTML: {nightSaveError}.");
                 SeeDriftLog.Error($"SeeDrift: night HTML save failed after successful solve — {nightSaveError}");
                 return false;
             }
@@ -598,9 +576,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             var elapsedReadable = RunDurationFormatter.ToReadable(runStopwatch.Elapsed);
             if (skipLogCorrelation) {
                 var msgSkip =
-                    $"Complete — night report saved in {elapsedReadable}. No target in this run had at least {minExpTarget} solved exposure(s) for any FITS target " +
-                    $"(best target: {maxSolvedPerTarget}). Lower Minimum exposures per target in Plugins → SeeDrift, or capture more frames per target. " +
-                    $"{nightSavedPath}";
+                    $"Complete — night report saved in {elapsedReadable}. No target in this run had at least {minExpTarget} solved exposure(s).";
                 _plugin.NotifyNightReportSaved(nightSavedPath!, msgSkip, postDiscordAfterSave, sourceLogsForBatch);
                 Report(msgSkip, 100, 100);
             } else {
