@@ -376,6 +376,25 @@ namespace NINA.Plugin.SeeDrift.Utility {
 
                 observations = BuildSessionLogObservations(samples, triggers, pulses, centerDriftLines);
 
+                // Parse SeeDither slew timings from ordered log entries (start: "Dithering by RA=…" → end: "SlewToCoordinatesAsync returned: True")
+                DateTime? pendingSeeDitherStart = null;
+                foreach (var entry in seeDitherEntries.OrderBy(e => e.UtcTime)) {
+                    if (entry.Message.StartsWith("Dithering by RA=", StringComparison.Ordinal)) {
+                        pendingSeeDitherStart = entry.UtcTime;
+                    } else if (entry.Message.StartsWith("SlewToCoordinatesAsync returned", StringComparison.Ordinal) && pendingSeeDitherStart.HasValue) {
+                        var dur = (entry.UtcTime - pendingSeeDitherStart.Value).TotalSeconds;
+                        observations.SeeDitherTimings.Add(new SeeDitherTiming {
+                            StartUtc = pendingSeeDitherStart.Value,
+                            EndUtc = entry.UtcTime,
+                            DurationSeconds = Math.Round(dur, 3)
+                        });
+                        pendingSeeDitherStart = null;
+                    }
+                }
+                if (observations.SeeDitherTimings.Count > 0) {
+                    SeeDriftLog.Debug($"SeeDrift: parsed {observations.SeeDitherTimings.Count} SeeDither timing pair(s) from log");
+                }
+
                 if (triggers.Count == 0) {
                     SeeDriftLog.Debug("SeeDrift: log correlator — no Starting Trigger lines in date window");
                     return (CountJumpsWithNextFrameLogInterval(samples), true, 0, CountSequencerEdges(samples), 0, 0);

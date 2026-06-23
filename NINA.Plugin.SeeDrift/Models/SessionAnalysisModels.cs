@@ -13,6 +13,13 @@ namespace NINA.Plugin.SeeDrift.Models {
     /// Used by <c>SessionAnalysisService</c> to build the run-wide "Session settings used" panel.
     /// All lists may be empty when nothing was captured for that signal.
     /// </summary>
+    /// <summary>A measured SeeDither slew: time from start (Dithering by RA=…) to completion (SlewToCoordinatesAsync returned: True).</summary>
+    public sealed class SeeDitherTiming {
+        public DateTime StartUtc { get; init; }
+        public DateTime EndUtc { get; init; }
+        public double DurationSeconds { get; init; }
+    }
+
     public sealed class SessionLogObservations {
         /// <summary>Configured CenterAfterDrift threshold (arc-minutes) — Y in <c>Drift: X / Y arc minutes</c>.</summary>
         public List<double> CenterAfterDriftThresholdArcMin { get; init; } = new();
@@ -38,6 +45,9 @@ namespace NINA.Plugin.SeeDrift.Models {
         public int ObservedCenterEvaluationCount { get; init; }
         public int ObservedDitherTriggerCount { get; init; }
         public int ObservedDitherPulseCount { get; init; }
+
+        /// <summary>SeeDither slew timings (start→end pairs from <c>[SeeDither] Dithering by RA=…</c> → <c>SlewToCoordinatesAsync returned: True</c>).</summary>
+        public List<SeeDitherTiming> SeeDitherTimings { get; init; } = new();
     }
 
     public sealed class DitherEventAnalysis {

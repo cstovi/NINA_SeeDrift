@@ -162,6 +162,8 @@ namespace NINA.Plugin.SeeDrift.Services {
             if (sequencerSettings != null)
                 sb.Append(FormatSessionSettingsHtml(sequencerSettings));
 
+            sb.Append(FormatSeeDitherSessionPerformanceHtml(targets));
+
             for (var t = 0; t < targets.Count; t++) {
                 var batch = targets[t];
                 var samples = batch.Samples;
@@ -812,6 +814,74 @@ namespace NINA.Plugin.SeeDrift.Services {
             sb.AppendLine("        </div>");
             sb.AppendLine("      </details>");
             sb.AppendLine("    </div>");
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Renders a session-wide collapsible "SeeDither performance" section showing individual slew
+        /// durations parsed from NINA logs. Aggregates across all batches in the report.
+        /// Returns empty string when no SeeDither timings were found.
+        /// </summary>
+        private static string FormatSeeDitherSessionPerformanceHtml(IReadOnlyList<DriftTrackingService.CompletedTarget> targets) {
+            var allTimings = targets
+                .SelectMany(t => t.LogObservations?.SeeDitherTimings ?? Enumerable.Empty<SeeDitherTiming>())
+                .OrderBy(t => t.StartUtc)
+                .ToList();
+
+            if (allTimings.Count == 0)
+                return "";
+
+            var total = allTimings.Sum(t => t.DurationSeconds);
+            var avg = total / allTimings.Count;
+            var min = allTimings.Min(t => t.DurationSeconds);
+            var max = allTimings.Max(t => t.DurationSeconds);
+            var totalTs = TimeSpan.FromSeconds(total);
+
+            var sb = new StringBuilder();
+            sb.AppendLine("<section class=\"mb-10\">");
+            sb.AppendLine("  <details class=\"rounded-lg border border-slate-800 bg-slate-900/40\">");
+            sb.AppendLine("    <summary class=\"flex cursor-pointer items-baseline justify-between gap-3 p-4 marker:text-sky-300 hover:bg-slate-900/60\">");
+            sb.AppendLine("      <h2 class=\"text-base font-semibold text-sky-200\">SeeDither performance <span class=\"ml-2 text-[11px] font-normal normal-case text-slate-400\">(click to expand)</span></h2>");
+            sb.AppendLine($"      <span class=\"text-[10px] uppercase tracking-wide text-slate-500\">{allTimings.Count} operation{(allTimings.Count == 1 ? "" : "s")} · avg {avg:0.0} s · total {totalTs.Hours}h {totalTs.Minutes}m {totalTs.Seconds}s</span>");
+            sb.AppendLine("    </summary>");
+            sb.AppendLine("    <div class=\"border-t border-slate-800 px-4 pb-4 pt-3\">");
+            sb.AppendLine("      <p class=\"text-xs text-slate-500\">Timings for each SeeDither slew: from the <span class=\"font-mono text-slate-400\">Dithering by RA=…</span> log line to the matching <span class=\"font-mono text-slate-400\">SlewToCoordinatesAsync returned: True</span>. Slower slews may indicate network latency or mount congestion.</p>");
+            sb.AppendLine("      <div class=\"mt-3 overflow-x-auto\">");
+            sb.AppendLine("        <table class=\"min-w-full table-fixed divide-y divide-slate-700 text-left text-xs\">");
+            sb.AppendLine("          <thead class=\"bg-slate-900/80 text-sky-300\">");
+            sb.AppendLine("            <tr>");
+            sb.AppendLine("              <th class=\"w-10 px-3 py-2 font-medium\">#</th>");
+            sb.AppendLine("              <th class=\"w-auto px-3 py-2 font-medium\">Start (local)</th>");
+            sb.AppendLine("              <th class=\"w-auto px-3 py-2 font-medium\">End (local)</th>");
+            sb.AppendLine("              <th class=\"w-24 px-3 py-2 text-right font-medium\">Duration</th>");
+            sb.AppendLine("            </tr>");
+            sb.AppendLine("          </thead>");
+            sb.AppendLine("          <tbody class=\"divide-y divide-slate-800 bg-slate-950/30 text-slate-300\">");
+
+            for (var i = 0; i < allTimings.Count; i++) {
+                var t = allTimings[i];
+                var startLocal = t.StartUtc.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+                var endLocal = t.EndUtc.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+                var rowClass = i % 2 == 0 ? "" : " bg-slate-900/20";
+                sb.AppendLine($"            <tr class=\"{rowClass}\">");
+                sb.AppendLine($"              <td class=\"px-3 py-2 text-slate-500\">{i + 1}</td>");
+                sb.AppendLine($"              <td class=\"px-3 py-2 font-mono text-[11px]\">{Escape(startLocal)}</td>");
+                sb.AppendLine($"              <td class=\"px-3 py-2 font-mono text-[11px]\">{Escape(endLocal)}</td>");
+                sb.AppendLine($"              <td class=\"px-3 py-2 text-right font-mono text-[11px] text-amber-200\">{t.DurationSeconds:0.000} s</td>");
+                sb.AppendLine("            </tr>");
+            }
+
+            sb.AppendLine("          </tbody>");
+            sb.AppendLine("        </table>");
+            sb.AppendLine("      </div>");
+            sb.AppendLine("      <div class=\"mt-3 grid gap-3 text-xs text-slate-500 sm:grid-cols-3\">");
+            sb.AppendLine($"        <div><span class=\"text-slate-400\">Fastest:</span> {min:0.000} s</div>");
+            sb.AppendLine($"        <div><span class=\"text-slate-400\">Slowest:</span> {max:0.000} s</div>");
+            sb.AppendLine($"        <div><span class=\"text-slate-400\">Total slew time:</span> {totalTs.Hours}h {totalTs.Minutes}m {totalTs.Seconds}s</div>");
+            sb.AppendLine("      </div>");
+            sb.AppendLine("    </div>");
+            sb.AppendLine("  </details>");
+            sb.AppendLine("</section>");
             return sb.ToString();
         }
 
