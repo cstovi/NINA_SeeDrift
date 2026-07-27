@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using Newtonsoft.Json;
 using NINA.Core.Utility;
 using NINA.Plugin.SeeDrift.Utility;
@@ -62,25 +63,83 @@ namespace NINA.Plugin.SeeDrift {
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "SeeDrift", "settings.json");
 
+        private static readonly object SettingsFileLock = new();
+        private const int SettingsIoAttempts = 5;
+        private const int SettingsIoRetryDelayMs = 50;
+
         public static SeeDriftSettings Load() {
-            try {
-                if (File.Exists(SettingsPath)) {
-                    var s = JsonConvert.DeserializeObject<SeeDriftSettings>(File.ReadAllText(SettingsPath)) ?? new SeeDriftSettings();
-                    try {
-                        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-                        File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(s, Formatting.Indented));
-                    } catch (Exception ex) { Logger.Warning($"[SeeDrift] Settings rewrite failed: {ex.Message}"); }
-                    return s;
+            lock (SettingsFileLock) {
+                try {
+                    if (File.Exists(SettingsPath)) {
+                        return JsonConvert.DeserializeObject<SeeDriftSettings>(ReadAllTextWithRetry(SettingsPath))
+                            ?? new SeeDriftSettings();
+                    }
+                } catch (Exception ex) {
+                    Logger.Warning($"[SeeDrift] Settings load failed: {ex.Message}");
                 }
-            } catch (Exception ex) { Logger.Warning($"[SeeDrift] Settings load failed: {ex.Message}"); }
-            return new SeeDriftSettings();
+
+                return new SeeDriftSettings();
+            }
         }
 
         public void Save() {
+            lock (SettingsFileLock) {
+                string? tempPath = null;
+                try {
+                    var settingsDirectory = Path.GetDirectoryName(SettingsPath)!;
+                    Directory.CreateDirectory(settingsDirectory);
+
+                    var json = JsonConvert.SerializeObject(this, Formatting.Indented);
+                    tempPath = Path.Combine(settingsDirectory, $"settings.{Guid.NewGuid():N}.tmp");
+                    File.WriteAllText(tempPath, json);
+
+                    ReplaceSettingsFileWithRetry(tempPath);
+                    tempPath = null;
+                } catch (Exception ex) {
+                    Logger.Warning($"[SeeDrift] Settings save failed: {ex.Message}");
+                } finally {
+                    TryDeleteTempFile(tempPath);
+                }
+            }
+        }
+
+        private static string ReadAllTextWithRetry(string path) => RetrySettingsIo(() => File.ReadAllText(path));
+
+        private static void ReplaceSettingsFileWithRetry(string tempPath) => RetrySettingsIo(() => {
+            if (File.Exists(SettingsPath)) {
+                File.Replace(tempPath, SettingsPath, null);
+            } else {
+                File.Move(tempPath, SettingsPath);
+            }
+        });
+
+        private static T RetrySettingsIo<T>(Func<T> action) {
+            for (var attempt = 1; ; attempt++) {
+                try {
+                    return action();
+                } catch (IOException) when (attempt < SettingsIoAttempts) {
+                    Thread.Sleep(SettingsIoRetryDelayMs);
+                } catch (UnauthorizedAccessException) when (attempt < SettingsIoAttempts) {
+                    Thread.Sleep(SettingsIoRetryDelayMs);
+                }
+            }
+        }
+
+        private static void RetrySettingsIo(Action action) => RetrySettingsIo(() => {
+            action();
+            return true;
+        });
+
+        private static void TryDeleteTempFile(string? tempPath) {
+            if (string.IsNullOrEmpty(tempPath) || !File.Exists(tempPath)) {
+                return;
+            }
+
             try {
-                Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-                File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(this, Formatting.Indented));
-            } catch (Exception ex) { Logger.Warning($"[SeeDrift] Settings save failed: {ex.Message}"); }
+                File.Delete(tempPath);
+            } catch {
+                // Best effort cleanup only. A failed save must not mask the original settings I/O warning.
+            }
         }
     }
 }

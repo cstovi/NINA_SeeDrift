@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.0.0] — 2026-07-27
+
+### Fixed
+
+- **Settings startup contention:** `SeeDriftSettings.Load()` is now read-only and no longer rewrites `settings.json` during NINA/plugin startup bursts. Settings reads/writes are serialized and transient file access collisions are retried.
+- **Settings writes:** `Save()` now writes to a temporary file and atomically replaces `settings.json`, with best-effort cleanup of failed temp files.
+- **Build warnings:** Replaced obsolete NINA `RelayCommand` usages with `CommunityToolkit.Mvvm.Input.RelayCommand` and fixed the xUnit collection-size analyzer warning.
+
 ## [1.0.0.0] — 2026-06-03
 
 ### Added

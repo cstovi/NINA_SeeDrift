@@ -85,7 +85,7 @@ namespace NINA.Plugin.SeeDrift.Tests.Utility {
 
             // No return visit despite scheduler start — no other targets in the gap
             Assert.Empty(plan.ReturnVisitBoundaryEdges);
-            Assert.Equal(1, plan.Visits.Count);
+            Assert.Single(plan.Visits);
             Assert.Equal(ExposureGapKind.MissingOrUnsolved, plan.GapAssessments[1].Kind);
             Assert.Contains("safety interrupt", plan.GapAssessments[1].Detail, StringComparison.OrdinalIgnoreCase);
         }
