@@ -104,6 +104,23 @@ namespace NINA.Plugin.SeeDrift.Utility {
         };
       }
 
+      // Copied-log replay: the log may carry TargetScheduler-NewTargetStart only once near the
+      // sequence start and then TargetScheduler-TargetStart per capture, so requiring a matching
+      // NewTargetStart at every return boundary is too strict. The saved-image log is
+      // authoritative: other target(s) between the same-target sequences prove a genuine revisit.
+      var otherInGap = SummarizeOtherTargetsInGap(lightCatalog, batchOrdered, seqA, seqB, targetKey, prev, cur);
+      if (!string.IsNullOrEmpty(otherInGap)) {
+        var label = FitsFolderImport.FormatBetweenFramesLabel(prev.FileName, prev.FrameIndex, cur.FileName, cur.FrameIndex);
+        return new ExposureGapAssessment {
+          Kind = ExposureGapKind.ReturnVisit,
+          SequenceFrom = seqA,
+          SequenceTo = seqB,
+          MissingSequenceCount = missing,
+          Detail = FormattableString.Invariant(
+            $"Saved-image log shows other target(s) imaged between {label}: {otherInGap} Exposure numbering continued ({missing} counter step(s) between {seqA} and {seqB}) with other target(s) in between — not missing frames for this target.")
+        };
+      }
+
       var sameTargetLogged = CountCatalogInRange(lightCatalog, seqA, seqB, targetKey, sameTarget: true);
       if (sameTargetLogged > 0) {
         return new ExposureGapAssessment {
@@ -116,16 +133,13 @@ namespace NINA.Plugin.SeeDrift.Utility {
         };
       }
 
-      var otherDetail = BuildOtherTargetDetail(lightCatalog, batchOrdered, seqA, seqB, targetKey, prev, cur);
       return new ExposureGapAssessment {
         Kind = ExposureGapKind.MissingOrUnsolved,
         SequenceFrom = seqA,
         SequenceTo = seqB,
         MissingSequenceCount = missing,
-        Detail = string.IsNullOrEmpty(otherDetail)
-          ? FormattableString.Invariant(
-            $"{missing} exposure number(s) between {seqA} and {seqB} are not in the solved trace (no Target Scheduler NewTargetStart in logs for this interval).")
-          : otherDetail
+        Detail = FormattableString.Invariant(
+          $"{missing} exposure number(s) between {seqA} and {seqB} are not in the solved trace (no Target Scheduler NewTargetStart in logs for this interval).")
       };
     }
 
@@ -196,14 +210,21 @@ namespace NINA.Plugin.SeeDrift.Utility {
       var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
       if (catalog != null) {
         foreach (var row in catalog) {
-          if (!row.ExposureSequence.HasValue)
-            continue;
-          var seq = row.ExposureSequence.Value;
-          if (seq <= seqA || seq >= seqB)
-            continue;
           var name = Normalize(row.TargetName);
           if (string.Equals(name, targetKey, StringComparison.OrdinalIgnoreCase))
             continue;
+          if (row.ExposureSequence.HasValue) {
+            // Exposure-number range is authoritative when the file name exposes the number.
+            var seq = row.ExposureSequence.Value;
+            if (seq <= seqA || seq >= seqB)
+              continue;
+          } else if (row.ExposureUtc <= prev.ExposureStartUtc || row.ExposureUtc >= cur.ExposureStartUtc) {
+            // Copied/remapped datasets may have saved-image file names that expose no exposure
+            // number; the saved-image log timestamp inside the gap is still authoritative
+            // other-target evidence, even when the intervening target's solved frames are
+            // absent from the solved trace (batchOrdered).
+            continue;
+          }
           counts.TryGetValue(name, out var c);
           counts[name] = c + 1;
         }

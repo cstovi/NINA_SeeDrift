@@ -37,7 +37,7 @@ namespace NINA.Plugin.SeeDrift.Services {
             FillAssessedDitherIntervalStats(analysis);
             FillRealizedDitherStats(analysis);
             analysis.Centers.AddRange(BuildCenterAnalyses(ordered));
-            analysis.Timeline.AddRange(BuildTimeline(ordered, analysis));
+            analysis.Timeline.AddRange(BuildTimeline(ordered, boundarySet, analysis));
             return analysis;
         }
 
@@ -903,12 +903,26 @@ namespace NINA.Plugin.SeeDrift.Services {
             }
         }
 
-        private static IEnumerable<QualityTimelineSegment> BuildTimeline(IReadOnlyList<DriftSample> ordered, TargetAnalysis analysis) {
+        private static IEnumerable<QualityTimelineSegment> BuildTimeline(IReadOnlyList<DriftSample> ordered, HashSet<int>? returnVisitBoundaryEdges, TargetAnalysis analysis) {
             if (ordered.Count < 2)
                 yield break;
             for (var i = 1; i < ordered.Count; i++) {
                 var prev = ordered[i - 1];
                 var cur = ordered[i];
+                // A return-visit boundary edge i is the cross-visit/away gap (samples[i-1] -> samples[i]).
+                // Emit it as an explicit gap segment so the report timeline renders a visible separation
+                // between visits instead of painting a false continuous imaging span across the gap.
+                if (returnVisitBoundaryEdges != null && returnVisitBoundaryEdges.Contains(i)) {
+                    yield return new QualityTimelineSegment {
+                        StartUtc = prev.ExposureStartUtc,
+                        EndUtc = cur.ExposureStartUtc,
+                        Label = "gap",
+                        Tone = "gap",
+                        Detail = FormattableString.Invariant(
+                            $"Return visit gap — Frame {prev.FrameIndex + 1}->{cur.FrameIndex + 1}: other target(s) imaged between visits.")
+                    };
+                    continue;
+                }
                 GetAnchoredPoint(ordered, prev, out var x0, out var y0);
                 GetAnchoredPoint(ordered, cur, out var x1, out var y1);
                 var step = Math.Sqrt(Math.Pow(x1 - x0, 2) + Math.Pow(y1 - y0, 2));

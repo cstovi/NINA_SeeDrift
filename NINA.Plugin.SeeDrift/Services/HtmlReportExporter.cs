@@ -1045,13 +1045,17 @@ namespace NINA.Plugin.SeeDrift.Services {
                             ? "bg-purple-500/80"
                             : seg.Tone == "center"
                                 ? "bg-pink-500/80"
-                                : "bg-sky-500/80";
+                                : seg.Tone == "gap"
+                                    ? "bg-slate-700/40"
+                                    : "bg-sky-500/80";
                 sb.AppendLine(
                     $"        <span class=\"{cls}\" style=\"width:{pct.ToString("0.###", CultureInfo.InvariantCulture)}%\" title=\"{Escape(seg.Label)}: {Escape(seg.Detail)}\"></span>");
             }
             sb.AppendLine("      </div>");
             sb.AppendLine("      <div class=\"mt-2 flex flex-wrap gap-2 text-xs\">");
             foreach (var g in analysis.Timeline.GroupBy(s => s.Label)) {
+                if (string.Equals(g.Key, "gap", StringComparison.OrdinalIgnoreCase))
+                    continue; // gap segments separate visits; not a quality category
                 var tone = g.First().Tone;
                 var cls = tone == "good"
                     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"

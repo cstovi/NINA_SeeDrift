@@ -117,5 +117,35 @@ namespace NINA.Plugin.SeeDrift.Tests.Services {
             Assert.True(analysis.DriftRisk.WorstWindowDriftPixels is >= 5.0);
             Assert.True(analysis.Dithers.Count(d => !d.IsSuspect) >= 2);
         }
+
+        [Fact]
+        public void Timeline_MarksReturnVisitBoundaryAsGapNotImaging() {
+            var samples = new List<DriftSample>();
+            for (var i = 0; i < 6; i++)
+                samples.Add(Frame(i, i * 2.0, 0));
+
+            var plan = new TargetVisitPlan {
+                Visits = new List<IReadOnlyList<DriftSample>> {
+                    samples.Take(4).ToList(),
+                    samples.Skip(4).ToList()
+                },
+                ReturnVisitBoundaryEdges = new List<int> { 4 }
+            };
+
+            var withoutPlan = SessionAnalysisService.AnalyzeTarget("timeline-no-boundary", samples);
+            Assert.Equal(samples.Count - 1, withoutPlan.Timeline.Count);
+            Assert.DoesNotContain(withoutPlan.Timeline, s => s.Tone == "gap");
+
+            var analysis = SessionAnalysisService.AnalyzeTarget("timeline-with-boundary", samples, plan);
+            // Same segment count as the no-boundary case: the boundary edge is a gap segment, not skipped.
+            Assert.Equal(samples.Count - 1, analysis.Timeline.Count);
+            var boundary = analysis.Timeline.Single(s =>
+                s.StartUtc == samples[3].ExposureStartUtc && s.EndUtc == samples[4].ExposureStartUtc);
+            Assert.Equal("gap", boundary.Tone);
+            Assert.Equal("gap", boundary.Label);
+            // No imaging/quality segment may bridge the return-visit boundary.
+            Assert.DoesNotContain(analysis.Timeline,
+                s => s.Tone != "gap" && s.StartUtc == samples[3].ExposureStartUtc && s.EndUtc == samples[4].ExposureStartUtc);
+        }
     }
 }

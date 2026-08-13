@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.11.0.0] — 2026-08-13
+
+### Fixed
+
+- **Return visits from copied-log reports:** Manual reports generated from copied NINA logs with remapped FITS paths now reconstruct target revisits from the saved-image target order, so sequences such as `Panel 3 → Panel 2 → Panel 1 → Panel 3` are reported as separate visits even when Target Scheduler only logs `TargetScheduler-NewTargetStart` once at sequence start.
+- **Return-visit timeline gaps:** Session quality timelines now render an explicit gap at return-visit boundaries instead of visually joining the end of one visit to the start of the next.
+- **Return-visit drift timeline bridge:** Per-target analysis no longer treats the away interval between visits as a continuous imaging segment for drift/timeline summaries.
+
 ## [1.10.0.0] — 2026-07-27
 
 ### Fixed
