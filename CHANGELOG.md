@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.12.0.0] — 2026-08-14
+
+### Fixed
+
+- **Settings load failure protection:** If an existing `settings.json` cannot be read or deserialized, SeeDrift now refuses to save defaults back over it. This prevents transient startup file access or corrupt-read failures from silently clearing persisted settings such as the Discord webhook URL.
+
 ## [1.11.0.0] — 2026-08-13
 
 ### Fixed

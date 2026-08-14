@@ -7,6 +7,19 @@ using NINA.Plugin.SeeDrift.Utility;
 
 namespace NINA.Plugin.SeeDrift {
 
+    /// <summary>Where a <see cref="SeeDriftSettings"/> instance's values came from — controls whether it may be persisted.</summary>
+    internal enum SettingsLoadState {
+
+        /// <summary>No settings file on disk; fresh defaults that may be saved (creates the file).</summary>
+        MissingFile,
+
+        /// <summary>Successfully read/deserialized from the existing settings file; normal saves allowed.</summary>
+        Loaded,
+
+        /// <summary>settings.json exists but could not be read/deserialized; defaults must never overwrite it.</summary>
+        LoadFailed
+    }
+
     public class SeeDriftSettings {
 
         /// <summary>Run report: path to a NINA .log file (Saved image to … lines).</summary>
@@ -59,9 +72,22 @@ namespace NINA.Plugin.SeeDrift {
         /// <summary>Secondary root when FITS were moved (e.g. P:\Astro\Home).</summary>
         public string AlternativeImageMappingAlternativeRoot { get; set; } = "";
 
-        private static string SettingsPath => Path.Combine(
+        private SettingsLoadState _loadState = SettingsLoadState.Loaded;
+
+        /// <summary>True when saving this instance cannot clobber real settings (no file yet, or a successful load).</summary>
+        internal bool CanPersist => _loadState != SettingsLoadState.LoadFailed;
+
+        /// <summary>Where this instance's values came from (diagnostics / tests).</summary>
+        internal SettingsLoadState LoadState => _loadState;
+
+        private void SetLoadState(SettingsLoadState state) => _loadState = state;
+
+        private static string SettingsPath => SettingsPathOverride ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA", "SeeDrift", "settings.json");
+
+        /// <summary>Test hook: overrides the settings file location (null in production).</summary>
+        internal static string? SettingsPathOverride { get; set; }
 
         private static readonly object SettingsFileLock = new();
         private const int SettingsIoAttempts = 5;
@@ -71,18 +97,41 @@ namespace NINA.Plugin.SeeDrift {
             lock (SettingsFileLock) {
                 try {
                     if (File.Exists(SettingsPath)) {
-                        return JsonConvert.DeserializeObject<SeeDriftSettings>(ReadAllTextWithRetry(SettingsPath))
-                            ?? new SeeDriftSettings();
+                        var settings = JsonConvert.DeserializeObject<SeeDriftSettings>(ReadAllTextWithRetry(SettingsPath));
+                        if (settings != null) {
+                            settings.SetLoadState(SettingsLoadState.Loaded);
+                            return settings;
+                        }
+
+                        // The file exists but holds no usable settings document — defaults must not overwrite it.
+                        return UnpersistableDefaults();
                     }
                 } catch (Exception ex) {
                     Logger.Warning($"[SeeDrift] Settings load failed: {ex.Message}");
+                    return UnpersistableDefaults();
                 }
 
-                return new SeeDriftSettings();
+                // No settings file yet — fresh defaults may be saved to create it on first use.
+                var fresh = new SeeDriftSettings();
+                fresh.SetLoadState(SettingsLoadState.MissingFile);
+                return fresh;
             }
         }
 
+        /// <summary>Defaults for an existing-but-unreadable settings file — marked so <see cref="Save"/> refuses to overwrite it.</summary>
+        private static SeeDriftSettings UnpersistableDefaults() {
+            var settings = new SeeDriftSettings();
+            settings.SetLoadState(SettingsLoadState.LoadFailed);
+            return settings;
+        }
+
         public void Save() {
+            if (!CanPersist) {
+                Logger.Warning(
+                    "[SeeDrift] Settings save skipped: settings.json exists but could not be loaded, so defaults were not written over it. Repair or delete the file to re-enable saving.");
+                return;
+            }
+
             lock (SettingsFileLock) {
                 string? tempPath = null;
                 try {
