@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.13.0.0] — 2026-08-18
+
+### Added
+
+- **Plugin-manager zip packaging:** The release workflow now produces a versioned zip (NINA plugin manager format) plus SHA256 sidecar, enabling installation via NINA's plugin manager.
+
 ## [1.12.0.0] — 2026-08-14
 
 ### Fixed
