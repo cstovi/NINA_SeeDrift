@@ -10,6 +10,19 @@ Measures mount drift for Seestar devices by plate-solving LIGHT frames reference
 
 ## Install
 
+### Plugin repository (recommended)
+
+Install SeeDrift from the combined See plugin repository:
+
+1. Open NINA **Options**.
+2. Go to **General**.
+3. In **Plugin Repositories**, click **+** and paste `https://cstovi.github.io/NINA_SeePlugins`.
+4. Open **Plugins**, install SeeDrift, then restart NINA if prompted.
+
+### Manual DLL install
+
+Manual install is an alternative if you prefer not to use the repository:
+
 1. `dotnet build -c Release`
 2. Copy `NINA.Plugin.SeeDrift.dll` from `bin\Release\net8.0-windows\` to:
    `%LOCALAPPDATA%\NINA\Plugins\3.0.0\SeeDrift\`
